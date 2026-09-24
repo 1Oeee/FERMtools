@@ -1,0 +1,128 @@
+# Bygger store-paketet på varje push, och publicerar till Chrome Web Store
+# när en tagg som v0.13 pushas. Taggen måste stämma med manifest.json.
+#
+# Kräver (Settings → Secrets and variables → Actions):
+#   secrets.CWS_SERVICE_ACCOUNT_JSON  nyckel-JSON för servicekontot
+#   vars.CWS_PUBLISHER_ID             utgivar-ID från Developer Dashboard
+#   vars.CWS_EXTENSION_ID             tilläggets ID i Chrome Web Store
+
+name: Release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Kontrollera version
+        id: check
+        run: |
+          version=$(jq -r .version manifest.json)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "manifest.json: $version"
+
+          if ! [[ "$version" =~ ^[0-9]+(\.[0-9]+){0,3}$ ]]; then
+            echo "::error file=manifest.json::Chrome kräver 1–4 heltal med punkter, fick '$version'"
+            exit 1
+          fi
+
+          changelog=$(grep -m1 -oP '^## \K[0-9.]+' CHANGELOG.md)
+          if [[ "$changelog" != "$version" ]]; then
+            echo "::error file=CHANGELOG.md::Översta posten är $changelog, manifest.json säger $version"
+            exit 1
+          fi
+
+          if [[ "$GITHUB_REF" == refs/tags/* && "${GITHUB_REF_NAME#v}" != "$version" ]]; then
+            echo "::error::Taggen $GITHUB_REF_NAME stämmer inte med manifest.json ($version)"
+            exit 1
+          fi
+
+          if [[ $(jq '.icons["128"] // empty' manifest.json) == "" ]]; then
+            echo "::warning file=manifest.json::Ingen 128px-ikon i manifest.json — Chrome Web Store kräver en"
+          fi
+
+      - name: Bygg paket
+        # Bara det tillägget laddar. spike/ och Projekt tree/ hör inte hemma i butiken.
+        # tests/ följer med eftersom inställningarna länkar dit.
+        run: |
+          mkdir -p dist
+          paths=(manifest.json src tests)
+          [[ -d icons ]] && paths+=(icons)
+          zip -r -X "dist/aidtune-${{ steps.check.outputs.version }}.zip" "${paths[@]}"
+          unzip -l dist/*.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aidtune-${{ steps.check.outputs.version }}
+          path: dist/*.zip
+
+  publish:
+    needs: package
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment: chrome-web-store
+    env:
+      ITEM: publishers/${{ vars.CWS_PUBLISHER_ID }}/items/${{ vars.CWS_EXTENSION_ID }}
+      API: https://chromewebstore.googleapis.com
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: aidtune-${{ needs.package.outputs.version }}
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.CWS_SERVICE_ACCOUNT_JSON }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/chromewebstore
+
+      - name: Ladda upp
+        env:
+          TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: |
+          res=$(curl -sS --fail-with-body -X POST \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/zip" \
+            --data-binary @"aidtune-${{ needs.package.outputs.version }}.zip" \
+            "$API/upload/v2/$ITEM:upload")
+          echo "$res" | jq .
+
+          state=$(echo "$res" | jq -r .uploadState)
+          for i in $(seq 1 30); do
+            [[ "$state" != "IN_PROGRESS" ]] && break
+            sleep 10
+            state=$(curl -sS --fail-with-body -H "Authorization: Bearer $TOKEN" \
+              "$API/v2/$ITEM:fetchStatus" | tee /dev/stderr | jq -r '.lastAsyncUploadState // .uploadState')
+          done
+
+          if [[ "$state" != "SUCCEEDED" ]]; then
+            echo "::error::Uppladdningen slutade i läget $state"
+            exit 1
+          fi
+
+      - name: Skicka till granskning
+        env:
+          TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: |
+          curl -sS --fail-with-body -X POST \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"publishType":"DEFAULT_PUBLISH"}' \
+            "$API/v2/$ITEM:publish" | jq .
+
+      - name: GitHub-release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: aidtune-${{ needs.package.outputs.version }}.zip
+          generate_release_notes: true

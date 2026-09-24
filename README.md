@@ -279,6 +279,33 @@ text ska formlerna ge tillbaka ungefär dess gråskala. Ändrar någon på ett s
 och glömmer det andra byter sidan utseende när den flyttar mellan portalen och
 en egen flik — och då faller det testet.
 
+## Publicering
+
+`.github/workflows/release.yml` bygger store-paketet — `manifest.json`, `src/`,
+`tests/` och `icons/` — på varje push till `main`, och kontrollerar att
+versionen i `manifest.json` stämmer med översta posten i `CHANGELOG.md`.
+
+En ny version går ut så här:
+
+1. Höj `version` i `manifest.json` och skriv posten i `CHANGELOG.md`.
+2. `git tag v0.13 && git push --tags`
+
+Taggen laddar upp paketet till Chrome Web Store, skickar det till granskning
+och lägger zip-filen på en GitHub-release. Taggen måste stämma med
+`manifest.json`, annars stoppas körningen.
+
+Första versionen laddas upp för hand i Developer Dashboard — API:et kan bara
+uppdatera ett tillägg som redan finns. Workflowet behöver sedan:
+
+| Namn | Typ | Innehåll |
+| --- | --- | --- |
+| `CWS_SERVICE_ACCOUNT_JSON` | secret | Nyckel-JSON för ett servicekonto med Chrome Web Store API påslaget, tillagt under **Account** i Developer Dashboard |
+| `CWS_PUBLISHER_ID` | variable | Utgivar-ID från Developer Dashboard |
+| `CWS_EXTENSION_ID` | variable | Tilläggets ID |
+
+Publiceringen körs i miljön `chrome-web-store`. Lägg ett krav på godkännande
+där om en tagg inte ensam ska räcka för att skicka ut en version.
+
 ## Säkerhet
 
 ### Vad som sparas, var, och hur länge
