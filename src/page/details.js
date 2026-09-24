@@ -67,16 +67,23 @@ async function copy(text, button) {
  * Intune öppnas i fliken vi redan står i — en ny flik vore bara dubbelt.
  * Ligger AidTune över portalens yta fälls sidan undan på köpet, annars hade
  * bladet hamnat bakom den.
+ *
+ * Helst just den portalflik sidan ligger i: med flera tenanter öppna står
+ * en annan portalflik kanske i en annan kund, och där finns inte gruppen.
  */
 function openInIntuneTab(url) {
-  chrome.tabs.query({ url: "https://intune.microsoft.com/*" }, (tabs) => {
-    if (chrome.runtime.lastError || !tabs?.length) {
-      chrome.tabs.create({ url });
-      return;
-    }
-    chrome.tabs.update(tabs[0].id, { url, active: true });
-    chrome.windows.update(tabs[0].windowId, { focused: true });
-    showPortal();
+  chrome.tabs.getCurrent((current) => {
+    void chrome.runtime.lastError;
+    chrome.tabs.query({ url: "https://intune.microsoft.com/*" }, (tabs) => {
+      if (chrome.runtime.lastError || !tabs?.length) {
+        chrome.tabs.create({ url });
+        return;
+      }
+      const tab = tabs.find((t) => t.id === current?.id) ?? tabs[0];
+      chrome.tabs.update(tab.id, { url, active: true });
+      chrome.windows.update(tab.windowId, { focused: true });
+      showPortal();
+    });
   });
 }
 

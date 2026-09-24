@@ -22,6 +22,9 @@ function isAllowed(url) {
   }
 }
 
+/** Felkod när token saknas — anroparen avgör vad det betyder, inte texten. */
+export const NO_TOKEN = "aidtune:no-token";
+
 export class GraphError extends Error {
   constructor(message, { status = 0, code = null, url = null, body = null } = {}) {
     super(message);
@@ -82,7 +85,7 @@ export function createGraphClient(getToken) {
 
     for (let attempt = 0; ; attempt++) {
       const token = await getToken();
-      if (!token) throw new GraphError("Ingen giltig token", { url });
+      if (!token) throw new GraphError("Ingen giltig token", { url, code: NO_TOKEN });
 
       let response;
       try {

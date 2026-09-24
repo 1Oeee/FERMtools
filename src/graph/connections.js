@@ -4,7 +4,7 @@
 // de går ut, och att ingen märker det förrän något slutar fungera. Därför är
 // utgångsdatum det enda som sorterar här — alltid det som löper ut först.
 
-import { fetchSource, runSequentially, readable } from "./source.js";
+import { fetchSource, runSequentially, readable, isMissingToken } from "./source.js";
 
 /** @type {Array<{key, kind, label, capability, url, single?, params?}>} */
 export const SOURCES = [
@@ -97,13 +97,12 @@ const byExpiry = (a, b) => {
 };
 
 /**
- * @param {ReturnType<import("./client.js").createGraphClient>} graphClient
- * @param {ReturnType<import("./client.js").createGraphClient>} intuneClient
+ * @param {import("./source.js").Clients} clients
  */
-export async function fetchConnections(graphClient, intuneClient, onProgress = null) {
+export async function fetchConnections(clients, onProgress = null) {
   const results = await runSequentially(SOURCES, (source) => {
     onProgress?.(source.key);
-    return fetchSource(source, graphClient, intuneClient);
+    return fetchSource(source, clients);
   });
 
   const items = [];
@@ -116,7 +115,8 @@ export async function fetchConnections(graphClient, intuneClient, onProgress = n
         label: source.label,
         capability: source.capability,
         ok: false,
-        error: readable(error)
+        error: readable(error),
+        missingToken: isMissingToken(error)
       });
       continue;
     }

@@ -12,7 +12,7 @@
 // Varje källa hämtas för sig. Faller en av dem degraderar bara den
 // datakällan, och sidan berättar vad som saknas.
 
-import { fetchSource, runSequentially, readable } from "./source.js";
+import { fetchSource, runSequentially, readable, isMissingToken } from "./source.js";
 
 /** @type {Array<{key: string, kind: "config"|"app", label: string, url: string, optional?: boolean}>} */
 export const SOURCES = [
@@ -73,11 +73,10 @@ function bucketFor(byGroup, groupId) {
 }
 
 /**
- * @param {ReturnType<import("./client.js").createGraphClient>} graphClient
- * @param {ReturnType<import("./client.js").createGraphClient>} intuneClient
+ * @param {import("./source.js").Clients} clients
  * @param {(key: string, count: number) => void} [onProgress]
  */
-export async function fetchAssignments(graphClient, intuneClient, onProgress = null) {
+export async function fetchAssignments(clients, onProgress = null) {
   /** @type {Map<string, {configs: any[], apps: any[], excludedBy: any[]}>} */
   const byGroup = new Map();
   /** Tilldelningar som träffar alla — de hör inte hemma som plupp på en gren. */
@@ -88,12 +87,7 @@ export async function fetchAssignments(graphClient, intuneClient, onProgress = n
   const vppApps = [];
 
   const results = await runSequentially(SOURCES, (source) =>
-    fetchSource(
-      source,
-      graphClient,
-      intuneClient,
-      onProgress ? (n) => onProgress(source.key, n) : null
-    )
+    fetchSource(source, clients, onProgress ? (n) => onProgress(source.key, n) : null)
   );
 
   for (const result of results) {
@@ -105,7 +99,8 @@ export async function fetchAssignments(graphClient, intuneClient, onProgress = n
         label: source.label,
         ok: false,
         optional: Boolean(source.optional),
-        error: readable(error)
+        error: readable(error),
+        missingToken: isMissingToken(error)
       });
       continue;
     }
