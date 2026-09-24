@@ -150,6 +150,35 @@ try {
       `${jumpOk ? ` (${picked}: ${panel.title})` : `\n    ${JSON.stringify({ picked, panel, landed })}`}`
   );
 
+  // Och tillbaka: ett gruppnamn i ett fynd ska öppna trädet, fälla ut vägen
+  // dit, välja gruppen och blinka raden. Vagn 1 ligger fyra nivåer ner.
+  const linkText = await page.evaluate(`(() => {
+    const link = [...document.querySelectorAll(".module-pane:not([hidden]) .group-link")]
+      .find((a) => a.textContent.endsWith("iPads - Vagn 1"));
+    link?.click();
+    return link?.textContent ?? null;
+  })()`);
+  await sleep(300);
+  const back = await page.evaluate(`(() => {
+    const row = document.querySelector(".module-pane:not([hidden]) .row.selected");
+    return {
+      active: document.querySelector(".tab.active")?.textContent,
+      selected: row?.querySelector(".name")?.textContent ?? null,
+      flashing: Boolean(row?.classList.contains("flash")),
+      depth: row ? Number(row.style.getPropertyValue("--depth")) : null,
+      detail: document.querySelector(".tree-details .d-groupname")?.textContent ?? null
+    };
+  })()`);
+
+  const backOk = Boolean(
+    linkText && back.active === "Träd" && back.selected?.endsWith(linkText) && back.flashing && back.detail === back.selected
+  );
+  if (!backOk) failures += 1;
+  console.log(
+    `${backOk ? "✓" : "✗"} gruppnamn i Hälsokontroll → vald och blinkande rad i trädet` +
+      `${backOk ? ` (${back.selected}, nivå ${back.depth})` : `\n    ${JSON.stringify({ linkText, back })}`}`
+  );
+
   page.close();
 } catch (e) {
   failures += 1;

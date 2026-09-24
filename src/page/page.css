@@ -360,8 +360,19 @@ button.linklike:hover {
 
 /* Fyndet man kom från trädet för att titta på. Gult, tre gånger. Samma gula
    i båda temana: det ska synas, inte smälta in. */
-.health-findings li.flash {
+.health-findings li.flash,
+.row.flash {
   animation: health-flash 0.55s ease-in-out 3;
+}
+
+/* Gruppnamn i fyndens text: länkar till trädet, men ska läsas som text. */
+button.linklike.group-link {
+  display: inline;
+  padding: 0;
+  font: inherit;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
 }
 
 @keyframes health-flash {
@@ -376,7 +387,8 @@ button.linklike:hover {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .health-findings li.flash {
+  .health-findings li.flash,
+  .row.flash {
     animation: none;
     background: rgba(255, 200, 0, 0.45);
     color: #1b1a19;

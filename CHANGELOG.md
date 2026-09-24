@@ -37,6 +37,11 @@ Hälsokontroll: tilldelningarna granskas mot regler för rätt och fel.
 - **Detaljpanelen visar gruppens fynd först**, kort: kontrollens namn och
   första meningen av förklaringen. **Visa i Hälsokontroll →** byter flik,
   fäller ut kontrollen, rullar fram fyndet och blinkar det gult tre gånger.
+- **Gruppnamnen i Hälsokontroll är länkar till trädet.** Ett klick byter
+  flik, nollställer sök och filter som kunde gömma gruppen, fäller ut vägen
+  dit, väljer gruppen och blinkar raden gult — samma blinkning åt båda hållen.
+  Borttagna grupper och grupper utanför prefixet står kvar som text; de har
+  ingen rad att gå till. Licensfynden namnger nu också grupperna de gäller.
 - **Hälsokontrollen räknas ut en gång**, i sidans skal, och delas av trädet
   och fliken. Den hämtas efter trädet och blockerar det inte — trädet syns
   direkt och markeringarna fylls i när de är klara.

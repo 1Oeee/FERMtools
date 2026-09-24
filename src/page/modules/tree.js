@@ -360,6 +360,65 @@ function wireEvents() {
   });
 }
 
+// --- Visa en grupp -------------------------------------------------------
+
+/**
+ * En väg från en rot ner till gruppen, via första föräldern på varje nivå.
+ * En grupp med flera föräldrar visas på flera ställen — en räcker för att
+ * visa den. null för grupper utan hierarki.
+ */
+function pathTo(forest, id) {
+  const roots = new Set(forest.roots);
+  const chain = [id];
+  const seen = new Set(chain);
+  while (!roots.has(chain[0])) {
+    const parent = (forest.parentsOf.get(chain[0]) ?? []).find((p) => !seen.has(p));
+    if (!parent) return null;
+    chain.unshift(parent);
+    seen.add(parent);
+  }
+  return chain;
+}
+
+function flashRow(row) {
+  row.scrollIntoView({ block: "center" });
+  row.classList.remove("flash");
+  void row.offsetWidth; // starta om animationen om samma rad blinkar igen
+  row.classList.add("flash");
+  row.addEventListener("animationend", () => row.classList.remove("flash"), { once: true });
+}
+
+/**
+ * Fäll ut vägen till gruppen, välj den och blinka raden. Sök och filter
+ * nollställs — de kan annars gömma just den grupp man bad om att få se.
+ */
+function reveal(groupId) {
+  if (!ctx.data) return;
+  const built = build(ctx.data);
+  if (!built.forest.nodeById.has(groupId)) return;
+
+  state.query = "";
+  state.filterKey = "";
+  if (ui.search) ui.search.value = "";
+
+  const chain = pathTo(built.forest, groupId);
+  let key = groupId;
+  if (chain) {
+    for (let i = 1; i < chain.length; i++) state.expanded.add(chain.slice(0, i).join("/"));
+    key = chain.join("/");
+  } else {
+    state.looseOpen = true;
+  }
+
+  state.selectedId = groupId;
+  draw();
+
+  const row =
+    ui.rows.querySelector(`.row[data-key="${CSS.escape(key)}"]`) ??
+    ui.rows.querySelector(`.row[data-id="${CSS.escape(groupId)}"]`);
+  if (row) flashRow(row);
+}
+
 // --- Modulen -------------------------------------------------------------
 
 export const treeModule = {
@@ -386,5 +445,10 @@ export const treeModule = {
   update(context) {
     ctx = context;
     draw();
+  },
+
+  /** Visa en viss grupp — används när man klickar på ett gruppnamn i Hälsokontroll. */
+  focus(groupId) {
+    reveal(groupId);
   }
 };

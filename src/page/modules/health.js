@@ -44,7 +44,56 @@ function renderSummary({ counts }) {
   return box;
 }
 
-function renderFound(check) {
+/**
+ * Gruppnamn som de står i fyndens text: utan prefix, precis som reglerna
+ * skriver dem. Bara grupper som finns i trädet — en borttagen grupp, eller en
+ * utanför prefixet, har ingen rad att gå till.
+ */
+function groupLabels() {
+  const prefix = ctx.settings?.prefix ?? "";
+  const labels = new Map();
+  for (const g of ctx.data?.groups ?? []) {
+    const name = g.displayName ?? "";
+    labels.set(g.id, prefix && name.startsWith(prefix) ? name.slice(prefix.length) : name);
+  }
+  return labels;
+}
+
+/**
+ * Fyndets text, med gruppernas namn som länkar till trädet. Längsta namnet
+ * först, så att "Söderskolan - Enheter" inte klyvs av en träff på en kortare
+ * grupp med samma början.
+ */
+function findingText(finding, labels) {
+  const names = [...new Set(finding.groups)]
+    .map((id) => [id, labels.get(id)])
+    .filter(([, name]) => name)
+    .sort((a, b) => b[1].length - a[1].length);
+
+  let parts = [finding.text];
+  for (const [id, name] of names) {
+    parts = parts.flatMap((part) => {
+      if (typeof part !== "string" || !part.includes(name)) return [part];
+      return part.split(name).flatMap((piece, i) => (i ? [{ id, name }, piece] : [piece]));
+    });
+  }
+
+  const fragment = document.createDocumentFragment();
+  for (const part of parts) {
+    if (typeof part === "string") {
+      if (part) fragment.append(part);
+      continue;
+    }
+    const link = el("button", "linklike group-link", part.name);
+    link.type = "button";
+    link.title = "Visa gruppen i trädet";
+    link.addEventListener("click", () => ctx.openGroup(part.id));
+    fragment.append(link);
+  }
+  return fragment;
+}
+
+function renderFound(check, labels) {
   const tone = TONE[check.severity];
   const box = el("details", "subtree health-check");
   box.dataset.check = check.id;
@@ -65,7 +114,8 @@ function renderFound(check) {
   const list = el("ul", "health-findings");
   check.findings.forEach((finding, index) => {
     if (index >= MAX_FINDINGS && index !== focusIndex) return;
-    const li = el("li", null, finding.text);
+    const li = el("li");
+    li.append(findingText(finding, labels));
     li.dataset.ref = `${check.id}#${index}`;
     list.append(li);
   });
@@ -144,7 +194,8 @@ function draw() {
   const found = analysis.checks
     .filter((c) => c.status === "found")
     .sort((a, b) => order[a.severity] - order[b.severity] || b.findings.length - a.findings.length);
-  for (const check of found) body.append(renderFound(check));
+  const labels = groupLabels();
+  for (const check of found) body.append(renderFound(check, labels));
 
   const ok = analysis.checks.filter((c) => c.status === "ok");
   if (ok.length) body.append(renderPlain("Rätt", ok, { mark: "✓", className: "exp-ok", text: (c) => c.right }));

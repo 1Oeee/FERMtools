@@ -46,7 +46,10 @@ const state = {
   // Hälsokontrollen delas av flikarna: trädet markerar grupperna, fliken
   // visar hela listan. Räknas ut här, en gång, i stället för i varje flik.
   health: emptyHealth(),
-  /** Ett fynd som Hälsokontroll-fliken ska visa och blinka när den kommer fram. */
+  /**
+   * Något en flik ska visa och blinka när den kommer fram: ett fynd i
+   * Hälsokontroll, eller en grupp i trädet. { module, target }
+   */
   pendingFocus: null
 };
 
@@ -100,6 +103,7 @@ function moduleContext(module) {
     health: state.health,
     reloadHealth: (options) => loadHealth(options),
     openFinding,
+    openGroup,
     setStatus: (text) => {
       if (isActive()) renderStatus(text);
     },
@@ -151,9 +155,10 @@ async function showModule(id) {
     state.mounted.add(module.id);
   }
 
-  if (state.pendingFocus && module.focus) {
-    module.focus(state.pendingFocus);
+  if (state.pendingFocus?.module === module.id && module.focus) {
+    const { target } = state.pendingFocus;
     state.pendingFocus = null;
+    module.focus(target);
   }
 
   try {
@@ -171,8 +176,14 @@ function refreshActive() {
 
 /** Från ett fynd i trädet till samma fynd i Hälsokontroll-fliken. */
 function openFinding(ref) {
-  state.pendingFocus = ref;
+  state.pendingFocus = { module: "health", target: ref };
   showModule("health");
+}
+
+/** Och tillbaka: från ett gruppnamn i Hälsokontroll till gruppen i trädet. */
+function openGroup(groupId) {
+  state.pendingFocus = { module: "tree", target: groupId };
+  showModule("tree");
 }
 
 function computeHealth() {

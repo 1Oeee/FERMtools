@@ -239,7 +239,8 @@ Felen syns också i **Träd**. Varje grupp får en romb bredvid prickarna:
 
 Klicka på gruppen så står fynden först i detaljpanelen, kort. **Visa i
 Hälsokontroll →** tar dig till fyndet i fliken, där det blinkar gult tre
-gånger.
+gånger. Åt andra hållet är gruppnamnen i Hälsokontroll länkar: ett klick
+fäller ut trädet ner till gruppen, väljer den och blinkar raden.
 
 ## På sidan
 

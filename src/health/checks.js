@@ -266,9 +266,11 @@ export const CHECKS = [
         }
 
         if (need <= item.totalLicenses) return [];
+        const targets = [...new Set(required.map((a) => ctx.nameOf(a.groupId)))];
+        const via = targets.length > 3 ? `${targets.slice(0, 3).join(", ")} och ${targets.length - 3} till` : targets.join(", ");
         return [
           finding(
-            `${item.name}: ${item.totalLicenses} licenser, ${atLeast(need, capped)} obligatoriska mottagare. ` +
+            `${item.name}: ${item.totalLicenses} licenser, ${atLeast(need, capped)} obligatoriska mottagare via ${via}. ` +
               "De som inte får licens får ett installationsfel.",
             { groups: required.map((a) => a.groupId), items: [item.id] }
           )
