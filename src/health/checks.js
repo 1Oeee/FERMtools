@@ -799,6 +799,68 @@ export const CHECKS = [
   }
 ];
 
+const RANK = { bad: 0, warn: 1, info: 2 };
+
+/** Den allvarligaste av två nivåer. */
+export const worse = (a, b) => (!a ? b : !b ? a : RANK[a] <= RANK[b] ? a : b);
+
+/**
+ * Fynden per grupp, för trädet. `direct` är fynd som pekar på gruppen själv;
+ * `below` säger att något är fel längre ner i grenen, så att det syns även
+ * när grenen är ihopfälld. Bara fel och varningar sprids uppåt — tips om
+ * nästling och dubbletter skulle färga halva trädet.
+ *
+ * Varje fynd får en `ref`, `kontroll#index`, som Hälsokontroll-fliken hittar
+ * det med.
+ *
+ * @param {ReturnType<typeof analyse>} analysis
+ * @param {Map<string, string[]>} parentsOf
+ */
+export function findingsByGroup(analysis, parentsOf) {
+  const direct = new Map();
+
+  for (const check of analysis?.checks ?? []) {
+    if (check.status !== "found") continue;
+    check.findings.forEach((finding, index) => {
+      for (const groupId of new Set(finding.groups)) {
+        const list = direct.get(groupId) ?? [];
+        list.push({
+          ref: `${check.id}#${index}`,
+          checkId: check.id,
+          index,
+          severity: check.severity,
+          title: check.title,
+          text: finding.text
+        });
+        direct.set(groupId, list);
+      }
+    });
+  }
+
+  for (const list of direct.values()) list.sort((a, b) => RANK[a.severity] - RANK[b.severity]);
+
+  const below = new Map();
+  for (const [groupId, list] of direct) {
+    const serious = list.filter((f) => f.severity !== "info");
+    if (!serious.length) continue;
+
+    const seen = new Set();
+    const stack = [...(parentsOf.get(groupId) ?? [])];
+    while (stack.length) {
+      const parent = stack.pop();
+      if (seen.has(parent)) continue;
+      seen.add(parent);
+      const entry = below.get(parent) ?? { severity: null, count: 0 };
+      entry.severity = worse(entry.severity, serious[0].severity);
+      entry.count += serious.length;
+      below.set(parent, entry);
+      stack.push(...(parentsOf.get(parent) ?? []));
+    }
+  }
+
+  return { direct, below };
+}
+
 /**
  * Kör alla kontroller.
  * @returns {{ checks: Array<{id, title, severity, right, status: "ok"|"found"|"unknown", findings: Finding[]}>,

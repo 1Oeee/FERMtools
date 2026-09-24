@@ -117,6 +117,39 @@ try {
     console.log(`${ok ? "✓" : "✗"} → ${label}${ok ? "" : `\n    ${JSON.stringify(s)}`}`);
   }
 
+  // Från en markerad grupp i trädet, via detaljpanelen, till fyndet i
+  // Hälsokontroll — som ska blinka.
+  await page.evaluate(`[...document.querySelectorAll(".tab")].find((t) => t.textContent === "Träd")?.click()`);
+  await sleep(900);
+  const picked = await page.evaluate(`(() => {
+    const row = document.querySelector('.module-pane:not([hidden]) .row:has(.dot.health.direct)');
+    row?.click();
+    return row?.querySelector(".name")?.textContent ?? null;
+  })()`);
+  await sleep(400);
+  const panel = await page.evaluate(`(() => {
+    const issue = document.querySelector(".tree-details .d-issue");
+    return issue ? { title: issue.querySelector("strong").textContent, count: document.querySelectorAll(".tree-details .d-issue").length } : null;
+  })()`);
+  await page.evaluate(`document.querySelector(".tree-details .d-issue-link")?.click()`);
+  await sleep(300);
+  const landed = await page.evaluate(`(() => {
+    const flash = document.querySelector(".module-pane:not([hidden]) li.flash");
+    return {
+      active: document.querySelector(".tab.active")?.textContent,
+      flashing: Boolean(flash),
+      check: flash?.closest("details")?.querySelector(".subtree-name")?.textContent ?? null,
+      open: flash?.closest("details")?.open ?? false
+    };
+  })()`);
+
+  const jumpOk = Boolean(picked && panel && landed.active === "Hälsokontroll" && landed.flashing && landed.open && landed.check === panel.title);
+  if (!jumpOk) failures += 1;
+  console.log(
+    `${jumpOk ? "✓" : "✗"} markering i trädet → detaljpanel → blinkande fynd i Hälsokontroll` +
+      `${jumpOk ? ` (${picked}: ${panel.title})` : `\n    ${JSON.stringify({ picked, panel, landed })}`}`
+  );
+
   page.close();
 } catch (e) {
   failures += 1;

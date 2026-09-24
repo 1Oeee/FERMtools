@@ -30,6 +30,16 @@ Hälsokontroll: tilldelningarna granskas mot regler för rätt och fel.
 - **Demotenantens facit är testfall.** Varje inlagt fel anger vilken kontroll
   som ska hitta det, och testerna kräver att den gör det. En liten, välskött
   tenant kräver åt andra hållet att ingenting flaggas.
+- **Felen syns i trädet.** Med hälsokontrollen påslagen får varje grupp en
+  romb bredvid tilldelningarnas prickar: fylld röd för fel, gul för varning,
+  grå för sådant att titta på — och en ram när något är fel längre ner i
+  grenen, så att det syns även när grenen är ihopfälld.
+- **Detaljpanelen visar gruppens fynd först**, kort: kontrollens namn och
+  första meningen av förklaringen. **Visa i Hälsokontroll →** byter flik,
+  fäller ut kontrollen, rullar fram fyndet och blinkar det gult tre gånger.
+- **Hälsokontrollen räknas ut en gång**, i sidans skal, och delas av trädet
+  och fliken. Den hämtas efter trädet och blockerar det inte — trädet syns
+  direkt och markeringarna fylls i när de är klara.
 
 Rättat:
 

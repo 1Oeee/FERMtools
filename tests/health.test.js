@@ -3,7 +3,7 @@
 // måttstocken för det första; en liten, välskött tenant för det andra.
 
 import { test, assert } from "./tree.test.js";
-import { analyse } from "../src/health/checks.js";
+import { analyse, findingsByGroup } from "../src/health/checks.js";
 import { createDemoClient } from "../src/demo/client.js";
 import { MISTAKES } from "../src/demo/tenant.js";
 import { fetchGroups, fetchChildEdges, fetchComposition, lookupGroups } from "../src/graph/groups.js";
@@ -141,6 +141,30 @@ test("hälsa: licenser räknas per grupp, inte per tilldelning", () => {
   input.assignments.push({ itemId: "Pages", target: "group", groupId: "vagn", intent: "required", deviceLicensing: true });
   const check = analyse(input).checks.find((c) => c.id === "licence-overcommit");
   assert.equal(check.status, "ok", "30 enheter ryms i 40 licenser");
+});
+
+test("hälsa: fynden hamnar på sina grupper, och fel syns uppåt i grenen", () => {
+  const input = tidyTenant();
+  input.assignments.push({ itemId: "GeoGebra", target: "group", groupId: "vagn", intent: "required", deviceLicensing: false });
+  const analysis = analyse(input);
+  const parentsOf = new Map([["vagn", ["ipads"]]]);
+  const { direct, below } = findingsByGroup(analysis, parentsOf);
+
+  const onCart = direct.get("vagn") ?? [];
+  assert.ok(onCart.some((f) => f.checkId === "user-licence-to-devices"), "fyndet ligger på vagnen");
+  assert.equal(onCart[0].severity, "bad", "allvarligast först");
+  assert.ok(/^user-licence-to-devices#\d+$/.test(onCart.find((f) => f.checkId === "user-licence-to-devices").ref), "ref pekar på kontroll och index");
+  assert.equal(below.get("ipads")?.severity, "bad", "föräldern får en markering för grenen");
+  assert.notOk(below.has("vagn"), "gruppen själv markeras inte som 'längre ner'");
+});
+
+test("hälsa: tips sprids inte uppåt i grenen", () => {
+  const analysis = {
+    checks: [{ id: "deep-nesting", status: "found", severity: "info", title: "Djup nästling", findings: [{ text: "x", groups: ["child"], items: [] }] }]
+  };
+  const { direct, below } = findingsByGroup(analysis, new Map([["child", ["parent"]]]));
+  assert.equal(direct.get("child")?.length, 1, "tipset ligger på gruppen");
+  assert.notOk(below.has("parent"), "men inte på föräldern");
 });
 
 test("hälsa: utan medlemsdata blir de kontrollerna okända, inte gröna", () => {

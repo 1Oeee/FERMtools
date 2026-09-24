@@ -324,8 +324,11 @@ button.linklike:hover {
   margin-right: 6px;
 }
 
-.health-check summary .subtree-when {
-  margin-left: 8px;
+/* Markering, rubrik till vänster, antal till höger — inte rubriken centrerad
+   mellan de två, som space-between annars ger med tre barn. */
+.health-check > summary .subtree-name {
+  flex: 1;
+  text-align: left;
 }
 
 .health-right {
@@ -347,6 +350,133 @@ button.linklike:hover {
 .health-findings.plain {
   list-style: none;
   padding-left: 0;
+}
+
+.health-findings li {
+  border-radius: 3px;
+  padding: 1px 4px;
+  margin-left: -4px;
+}
+
+/* Fyndet man kom från trädet för att titta på. Gult, tre gånger. Samma gula
+   i båda temana: det ska synas, inte smälta in. */
+.health-findings li.flash {
+  animation: health-flash 0.55s ease-in-out 3;
+}
+
+@keyframes health-flash {
+  0%,
+  100% {
+    background: transparent;
+  }
+  50% {
+    background: rgba(255, 200, 0, 0.55);
+    color: #1b1a19;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .health-findings li.flash {
+    animation: none;
+    background: rgba(255, 200, 0, 0.45);
+    color: #1b1a19;
+  }
+}
+
+/* Hälsokontrollens markering i trädet: en romb, inte en prick. */
+.dot.health {
+  border-radius: 1px;
+  width: 7px;
+  height: 7px;
+  transform: rotate(45deg);
+  margin: 0 1px;
+}
+
+.dot.health.direct.bad {
+  background: var(--bad);
+  border-color: var(--bad);
+}
+
+.dot.health.direct.warn {
+  background: var(--warn);
+  border-color: var(--warn);
+}
+
+.dot.health.direct.info {
+  background: var(--muted);
+  border-color: var(--muted);
+}
+
+.dot.health.below.bad {
+  border-color: var(--bad);
+}
+
+.dot.health.below.warn {
+  border-color: var(--warn);
+}
+
+/* Detaljpanelens fynd. */
+.d-issue {
+  margin: 6px 0 8px;
+  padding: 6px 8px;
+  border-left: 3px solid var(--muted);
+  border-radius: 3px;
+  background: var(--card);
+  font-size: 12px;
+}
+
+.d-issue.bad {
+  border-left-color: var(--bad);
+}
+
+.d-issue.warn {
+  border-left-color: var(--warn);
+}
+
+.d-issue-head {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.d-issue-mark {
+  font-weight: 700;
+  width: 10px;
+  text-align: center;
+}
+
+.d-issue-mark.bad {
+  color: var(--bad);
+}
+
+.d-issue-mark.warn {
+  color: var(--warn);
+}
+
+.d-issue-mark.info {
+  color: var(--muted);
+}
+
+.d-issue-text {
+  margin: 3px 0 4px 16px;
+}
+
+.d-issue-link {
+  margin-left: 16px;
+  font-size: 12px;
+}
+
+.d-issue-below {
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.d-issue-below.bad {
+  color: var(--bad);
+}
+
+.d-issue-below.warn {
+  color: var(--warn);
 }
 
 .notice-details summary {

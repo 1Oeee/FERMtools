@@ -8,6 +8,8 @@ import { treeModule } from "./modules/tree.js";
 import { connectionsModule } from "./modules/connections.js";
 import { reportsModule } from "./modules/reports.js";
 import { healthModule } from "./modules/health.js";
+import { analyse, findingsByGroup } from "../health/checks.js";
+import { buildForest } from "../tree/build.js";
 
 const MODULES = [treeModule, connectionsModule, healthModule, reportsModule];
 
@@ -40,8 +42,17 @@ const state = {
   // sig dyker upp igen i stället för att tystas.
   dismissed: new Set(),
   // Demotenantens facit. Laddas bara när demoläget är på.
-  demoMistakes: []
+  demoMistakes: [],
+  // Hälsokontrollen delas av flikarna: trädet markerar grupperna, fliken
+  // visar hela listan. Räknas ut här, en gång, i stället för i varje flik.
+  health: emptyHealth(),
+  /** Ett fynd som Hälsokontroll-fliken ska visa och blinka när den kommer fram. */
+  pendingFocus: null
 };
+
+function emptyHealth() {
+  return { payload: null, analysis: null, index: null, loading: false, error: null };
+}
 
 /** Facit hämtas ur samma fil som demodatat, så de kan inte glida isär. */
 async function loadDemoMistakes() {
@@ -86,6 +97,9 @@ function moduleContext(module) {
     settings: state.settings,
     tokenStatus: state.tokenStatus,
     send,
+    health: state.health,
+    reloadHealth: (options) => loadHealth(options),
+    openFinding,
     setStatus: (text) => {
       if (isActive()) renderStatus(text);
     },
@@ -137,11 +151,72 @@ async function showModule(id) {
     state.mounted.add(module.id);
   }
 
+  if (state.pendingFocus && module.focus) {
+    module.focus(state.pendingFocus);
+    state.pendingFocus = null;
+  }
+
   try {
     await chrome.storage.local.set({ activeModule: id });
   } catch {
     /* strunt samma */
   }
+}
+
+/** Rita om fliken som är framme, om den redan är uppsatt. */
+function refreshActive() {
+  const module = activeModule();
+  if (state.mounted.has(module.id)) module.update?.(moduleContext(module));
+}
+
+/** Från ett fynd i trädet till samma fynd i Hälsokontroll-fliken. */
+function openFinding(ref) {
+  state.pendingFocus = ref;
+  showModule("health");
+}
+
+function computeHealth() {
+  const payload = state.health.payload;
+  if (!payload || !state.data) {
+    state.health.analysis = null;
+    state.health.index = null;
+    return;
+  }
+
+  state.health.analysis = analyse({
+    groups: state.data.groups,
+    edges: state.data.edges,
+    items: state.data.items ?? [],
+    assignments: state.data.assignmentDetails ?? [],
+    composition: payload.composition,
+    outside: payload.outside,
+    deleted: payload.deleted ?? undefined,
+    connections: payload.connections,
+    prefix: state.settings?.prefix ?? ""
+  });
+  const { parentsOf } = buildForest(state.data.groups, state.data.edges);
+  state.health.index = findingsByGroup(state.health.analysis, parentsOf);
+}
+
+/**
+ * Underlaget för hälsokontrollen hämtas efter trädet och blockerar det inte —
+ * trädet syns direkt, markeringarna fylls i när de är klara.
+ */
+async function loadHealth({ force = false } = {}) {
+  if (!state.settings?.healthCheck || !state.data) return;
+
+  state.health.loading = true;
+  state.health.error = null;
+  refreshActive();
+
+  const response = await send({ type: "health", force });
+
+  state.health.loading = false;
+  if (!response?.ok) state.health.error = response?.error ?? "Servicearbetaren svarade inte.";
+  else state.health.payload = response.data;
+
+  computeHealth();
+  refreshActive();
 }
 
 /** En modul som inte är framme ska ritas om nästa gång den visas. */
@@ -449,10 +524,13 @@ async function load({ force = false } = {}) {
   state.needsPortal = false;
   state.data = response.data;
   invalidateModules();
+  // Nytt träd: gamla fynd räknas om mot det direkt, nya medlemmar hämtas efter.
+  computeHealth();
 
   await loadDemoMistakes();
   renderNotices();
   await showModule(state.activeId);
+  loadHealth({ force });
 }
 
 // --- Meddelanden från servicearbetaren -----------------------------------
@@ -489,6 +567,7 @@ chrome.runtime.onMessage.addListener((message) => {
     state.settings = message.settings;
     state.tokenStatus = message.status;
     state.data = null;
+    state.health = emptyHealth();
     renderTokens();
     load({ force: true });
     return;

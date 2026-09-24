@@ -85,9 +85,55 @@ function openInNewTab(url) {
   chrome.tabs.create({ url });
 }
 
+const MARK = { bad: "✗", warn: "!", info: "i" };
+const SHORT = 170;
+
+/** Första meningen, eller en avkortning vid ett ordslut. Hela texten finns i fliken. */
+function shorten(text) {
+  const sentence = text.match(/^.+?[.!?](?=\s|$)/)?.[0] ?? text;
+  if (sentence.length <= SHORT) return sentence;
+  const cut = sentence.slice(0, SHORT);
+  return `${cut.slice(0, cut.lastIndexOf(" ")) || cut} …`;
+}
+
+/**
+ * Gruppens fynd i hälsokontrollen, kort. Varje fynd länkar till sin post i
+ * Hälsokontroll-fliken, där hela förklaringen står.
+ */
+function healthSection(health) {
+  const box = el("div", "d-health");
+  const findings = health.findings ?? [];
+  box.append(section("Hälsokontroll", findings.length || undefined));
+
+  if (!findings.length) {
+    box.append(
+      el("div", "d-empty", health.loading && !health.ready ? "Kontrollerar …" : "Inga fel på den här gruppen.")
+    );
+    if (health.below) {
+      box.append(el("div", `d-issue-below ${health.below.severity}`, `${health.below.count} fynd längre ner i grenen.`));
+    }
+    return box;
+  }
+
+  for (const finding of findings) {
+    const item = el("div", `d-issue ${finding.severity}`);
+    const head = el("div", "d-issue-head");
+    head.append(el("span", `d-issue-mark ${finding.severity}`, MARK[finding.severity]), el("strong", null, finding.title));
+    item.append(head);
+    item.append(el("div", "d-issue-text", shorten(finding.text)));
+
+    const link = el("button", "linklike d-issue-link", "Visa i Hälsokontroll →");
+    link.type = "button";
+    link.addEventListener("click", () => health.onOpen(finding.ref));
+    item.append(link);
+    box.append(item);
+  }
+  return box;
+}
+
 /**
  * @param {HTMLElement} container
- * @param {{ forest, flags, assignments, selectedId, onPick, requestMembers }} ctx
+ * @param {{ forest, flags, assignments, selectedId, onPick, requestMembers, health? }} ctx
  */
 export function renderDetails(container, ctx) {
   const { forest, assignments, selectedId, onPick, requestMembers } = ctx;
@@ -128,6 +174,9 @@ export function renderDetails(container, ctx) {
   body.append(el("div", "d-kind", describeGroup(group)));
 
   if (group.description) body.append(el("div", "d-desc", group.description));
+
+  // Fel först: det är det man vill se när man klickat på en markerad grupp.
+  if (ctx.health) body.append(healthSection(ctx.health));
 
   if (isDynamic(group)) {
     body.append(section("Medlemsregel"));

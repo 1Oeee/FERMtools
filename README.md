@@ -228,6 +228,19 @@ Wi-Fi-profiler, cirkulära medlemskap, kioskläge på stora grupper, överlappan
 uppdateringsringar, plattformar utan efterlevnadsprincip och anslutningar som
 går ut inom 30 dagar.
 
+Felen syns också i **Träd**. Varje grupp får en romb bredvid prickarna:
+
+| Romb | Betyder |
+| --- | --- |
+| ◆ röd | fel på gruppen |
+| ◆ gul | varning på gruppen |
+| ◆ grå | något att titta på |
+| ◇ röd/gul | fel eller varning längre ner i grenen |
+
+Klicka på gruppen så står fynden först i detaljpanelen, kort. **Visa i
+Hälsokontroll →** tar dig till fyndet i fliken, där det blinkar gult tre
+gånger.
+
 ## På sidan
 
 - **Behörighetsraden** högst upp visar vad *den aktiva fliken* behöver — inte

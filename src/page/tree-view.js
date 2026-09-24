@@ -194,6 +194,30 @@ function dot(kind, direct, below) {
   return span;
 }
 
+const SEVERITY_LABEL = { bad: "fel", warn: "varning", info: "att titta på" };
+
+/**
+ * Hälsokontrollens markering: en romb, så att den inte förväxlas med
+ * tilldelningarnas prickar. Fylld = något är fel på gruppen själv, ram = något
+ * är fel längre ner i grenen.
+ */
+function healthDot(direct, below) {
+  const span = document.createElement("span");
+  const severity = direct?.[0]?.severity ?? below?.severity ?? null;
+  const state = direct?.length ? "direct" : below ? "below" : "none";
+  span.className = `dot health ${state}${severity ? ` ${severity}` : ""}`;
+
+  if (state === "direct") {
+    span.title =
+      direct.length === 1
+        ? `Hälsokontroll, ${SEVERITY_LABEL[severity]}: ${direct[0].title}`
+        : `Hälsokontroll: ${direct.length} fynd, värst: ${direct[0].title}`;
+  } else if (state === "below") {
+    span.title = `Hälsokontroll: ${below.count} fynd längre ner i grenen`;
+  }
+  return span;
+}
+
 function highlight(name, query) {
   const fragment = document.createDocumentFragment();
   const needle = query.trim().toLocaleLowerCase("sv");
@@ -221,7 +245,7 @@ function highlight(name, query) {
  * @param {HTMLElement} container
  * @param {Row[]} rows
  */
-export function renderRows(container, rows, { forest, flags, selectedId, query = "" }) {
+export function renderRows(container, rows, { forest, flags, selectedId, query = "", health = null }) {
   const fragment = document.createDocumentFragment();
 
   for (const row of rows) {
@@ -278,6 +302,8 @@ export function renderRows(container, rows, { forest, flags, selectedId, query =
       dot("config", f?.configDirect, f?.configBelow),
       dot("app", f?.appDirect, f?.appBelow)
     );
+    // Bara när hälsokontrollen är på — annars ska raden se ut som förut.
+    if (health) dots.append(healthDot(health.direct.get(row.id), health.below.get(row.id)));
     el.append(dots);
 
     fragment.append(el);

@@ -181,7 +181,8 @@ function drawTree(built) {
     forest: built.forest,
     flags: built.flags,
     selectedId: state.selectedId,
-    query: state.query
+    query: state.query,
+    health: healthIndex()
   });
   ui.rows.append(host);
 
@@ -234,7 +235,8 @@ function drawLoose(built, include) {
       forest: built.forest,
       flags: built.flags,
       selectedId: state.selectedId,
-      query: state.query
+      query: state.query,
+      health: healthIndex()
     }
   );
 
@@ -242,12 +244,30 @@ function drawLoose(built, include) {
   ui.rows.append(box);
 }
 
+/**
+ * Hälsokontrollens fynd per grupp, eller null när kontrollen är avslagen.
+ * Medan den körs första gången finns ett tomt index, så att raderna får sin
+ * plats för markeringen direkt och inte hoppar när resultatet kommer.
+ */
+function healthIndex() {
+  if (!ctx.settings?.healthCheck) return null;
+  return ctx.health?.index ?? { direct: new Map(), below: new Map() };
+}
+
 function drawDetails(built) {
+  const index = healthIndex();
   renderDetails(ui.details, {
     forest: built.forest,
     flags: built.flags,
     assignments: built.assignments,
     selectedId: state.selectedId,
+    health: index && {
+      findings: index.direct.get(state.selectedId) ?? [],
+      below: index.below.get(state.selectedId) ?? null,
+      loading: Boolean(ctx.health?.loading),
+      ready: Boolean(ctx.health?.index),
+      onOpen: (ref) => ctx.openFinding(ref)
+    },
     onPick: select,
     requestMembers: (groupId) => ctx.send({ type: "members", groupId }),
     collapsed: state.detailsCollapsed,

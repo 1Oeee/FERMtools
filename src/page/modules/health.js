@@ -1,12 +1,14 @@
 // Hälsokontroll: tilldelningarna granskade mot regler för rätt och fel.
 //
-// Reglerna står i src/health/checks.js och körs här, i sidan, över trädets
-// data och det servicearbetaren hämtat utöver det — vad varje grupp innehåller,
-// och vilka okända grupper som är borttagna. Fel står först, sorterade på hur
-// allvarliga de är. Det som är rätt står sist, så att man ser att det kollats.
+// Reglerna står i src/health/checks.js. Sidans skal kör dem och delar
+// resultatet med trädet, som markerar grupperna; här visas hela listan. Fel
+// står först, sorterade på hur allvarliga de är. Det som är rätt står sist, så
+// att man ser att det kollats.
+//
+// Ett klick på "Visa i Hälsokontroll" i trädets detaljpanel landar här via
+// focus(): kontrollen fälls ut, fyndet rullas fram och blinkar gult tre gånger.
 
 import { el } from "../dom.js";
-import { analyse } from "../../health/checks.js";
 
 /** Så många fynd per kontroll ritas; resten sammanfattas. */
 const MAX_FINDINGS = 100;
@@ -18,37 +20,14 @@ const TONE = {
 };
 
 const state = {
-  health: null,
-  loading: false,
-  error: null,
   /** Öppna/stängda kontroller, så att en omritning inte fäller ihop dem. */
   open: new Map(),
-  /** Senaste analysen, och vad den gjordes på. Omräknas bara när datat byts. */
-  result: null,
-  resultFor: null
+  /** Fynd som ska visas och blinka så fort det finns ritat. */
+  focus: null
 };
 
 let ctx = null;
 let host = null;
-
-function result() {
-  const key = [ctx.data, state.health];
-  if (state.resultFor?.[0] === key[0] && state.resultFor?.[1] === key[1]) return state.result;
-
-  state.result = analyse({
-    groups: ctx.data?.groups ?? [],
-    edges: ctx.data?.edges ?? [],
-    items: ctx.data?.items ?? [],
-    assignments: ctx.data?.assignmentDetails ?? [],
-    composition: state.health?.composition ?? [],
-    outside: state.health?.outside ?? [],
-    deleted: state.health?.deleted ?? undefined,
-    connections: state.health?.connections ?? null,
-    prefix: ctx.settings?.prefix ?? ""
-  });
-  state.resultFor = key;
-  return state.result;
-}
 
 function renderSummary({ counts }) {
   const problems = counts.bad + counts.warn;
@@ -56,11 +35,7 @@ function renderSummary({ counts }) {
   const box = el("div", `headline ${tone}`);
   box.append(el("div", "headline-label", "Hälsokontroll"));
   box.append(
-    el(
-      "div",
-      "headline-name",
-      problems ? `${counts.bad} fel och ${counts.warn} varningar` : "Inga fel hittade"
-    )
+    el("div", "headline-name", problems ? `${counts.bad} fel och ${counts.warn} varningar` : "Inga fel hittade")
   );
   const parts = [`${counts.ok} kontroller rätt`];
   if (counts.info) parts.push(`${counts.info} att titta på`);
@@ -72,6 +47,7 @@ function renderSummary({ counts }) {
 function renderFound(check) {
   const tone = TONE[check.severity];
   const box = el("details", "subtree health-check");
+  box.dataset.check = check.id;
   box.open = state.open.get(check.id) ?? check.severity !== "info";
   box.addEventListener("toggle", () => state.open.set(check.id, box.open));
 
@@ -83,8 +59,16 @@ function renderFound(check) {
 
   box.append(el("div", "health-right", `Så ska det vara: ${check.right}`));
 
+  // Ett fynd man letar efter ritas alltid, även om det ligger bortom taket.
+  const focusIndex = state.focus?.startsWith(`${check.id}#`) ? Number(state.focus.split("#")[1]) : -1;
+
   const list = el("ul", "health-findings");
-  for (const f of check.findings.slice(0, MAX_FINDINGS)) list.append(el("li", null, f.text));
+  check.findings.forEach((finding, index) => {
+    if (index >= MAX_FINDINGS && index !== focusIndex) return;
+    const li = el("li", null, finding.text);
+    li.dataset.ref = `${check.id}#${index}`;
+    list.append(li);
+  });
   box.append(list);
 
   const rest = check.findings.length - MAX_FINDINGS;
@@ -117,9 +101,27 @@ const REASON = {
   connections: "anslutningarna kunde inte hämtas"
 };
 
+/** Rulla fram fyndet och blinka det. Returnerar false om det inte är ritat än. */
+function applyFocus() {
+  if (!state.focus || !host) return false;
+  const target = host.querySelector(`li[data-ref="${CSS.escape(state.focus)}"]`);
+  if (!target) return false;
+
+  state.focus = null;
+  target.scrollIntoView({ block: "center" });
+  // Klassen tas bort och sätts igen, så att blinkningen startar om även när
+  // man klickar på samma fynd två gånger.
+  target.classList.remove("flash");
+  void target.offsetWidth;
+  target.classList.add("flash");
+  target.addEventListener("animationend", () => target.classList.remove("flash"), { once: true });
+  return true;
+}
+
 function draw() {
   if (!host) return;
   const body = el("div", "module-pad");
+  const health = ctx.health ?? {};
 
   if (!ctx.data) {
     body.append(el("div", "d-empty", "Trädet behöver hämtas innan hälsokontrollen kan köras."));
@@ -127,15 +129,15 @@ function draw() {
     return;
   }
 
-  if (state.error) body.append(el("div", "notice bad", `Underlaget kunde inte hämtas helt: ${state.error}`));
+  if (health.error) body.append(el("div", "notice bad", `Underlaget kunde inte hämtas helt: ${health.error}`));
 
-  if (state.loading && !state.health) {
-    body.append(el("div", "d-empty", "Läser vad varje grupp innehåller …"));
+  const analysis = health.analysis;
+  if (!analysis) {
+    body.append(el("div", "d-empty", health.loading ? "Läser vad varje grupp innehåller …" : "Ingen hälsokontroll körd än."));
     host.replaceChildren(body);
     return;
   }
 
-  const analysis = result();
   body.append(renderSummary(analysis));
 
   const order = { bad: 0, warn: 1, info: 2 };
@@ -145,9 +147,7 @@ function draw() {
   for (const check of found) body.append(renderFound(check));
 
   const ok = analysis.checks.filter((c) => c.status === "ok");
-  if (ok.length) {
-    body.append(renderPlain("Rätt", ok, { mark: "✓", className: "exp-ok", text: (c) => c.right }));
-  }
+  if (ok.length) body.append(renderPlain("Rätt", ok, { mark: "✓", className: "exp-ok", text: (c) => c.right }));
 
   const unknown = analysis.checks.filter((c) => c.status === "unknown");
   if (unknown.length) {
@@ -156,7 +156,7 @@ function draw() {
         mark: "?",
         className: "exp-unknown",
         text: (c) => {
-          if (!state.health?.composition?.length) return REASON.composition;
+          if (!health.payload?.composition?.length) return REASON.composition;
           if (c.id === "deleted-target") return REASON.lookup;
           if (c.id === "expiring-connections") return REASON.connections;
           return "underlag saknas";
@@ -165,31 +165,17 @@ function draw() {
     );
   }
 
-  const failed = state.health?.failedComposition ?? 0;
+  const failed = health.payload?.failedComposition ?? 0;
   ctx.setFooter(
     `${analysis.checks.length} kontroller · ${ctx.data.groups?.length ?? 0} grupper` +
       (failed ? ` · ${failed} grupp(er) gick inte att läsa` : "") +
-      (state.health?.fetchedAt
-        ? ` · hämtat ${new Date(state.health.fetchedAt).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" })}`
+      (health.payload?.fetchedAt
+        ? ` · hämtat ${new Date(health.payload.fetchedAt).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" })}`
         : "")
   );
 
   host.replaceChildren(body);
-}
-
-async function load({ force = false } = {}) {
-  state.loading = true;
-  state.error = null;
-  draw();
-
-  const response = await ctx.send({ type: "health", force });
-
-  state.loading = false;
-  ctx.setStatus(null);
-  if (!response?.ok) state.error = response?.error ?? "Servicearbetaren svarade inte.";
-  else state.health = response.data;
-
-  draw();
+  applyFocus();
 }
 
 export const healthModule = {
@@ -202,8 +188,9 @@ export const healthModule = {
   async mount(node, context) {
     ctx = context;
     host = node;
-    state.health = null;
-    await load();
+    draw();
+    // Skalet hämtar efter trädet. Har det inte hunnit, eller misslyckats, be om det här.
+    if (!ctx.health?.analysis && !ctx.health?.loading) await ctx.reloadHealth();
   },
 
   update(context) {
@@ -213,6 +200,13 @@ export const healthModule = {
 
   refresh(context) {
     ctx = context;
-    return load({ force: true });
+    return ctx.reloadHealth({ force: true });
+  },
+
+  /** Visa ett visst fynd: fäll ut dess kontroll, rulla fram det och blinka. */
+  focus(ref) {
+    state.focus = ref;
+    state.open.set(ref.split("#")[0], true);
+    draw();
   }
 };
