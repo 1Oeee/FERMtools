@@ -72,6 +72,15 @@ Removing the extension deletes everything it stored.
 Demo mode uses a fictional tenant bundled with the extension. It makes no
 network requests.
 
+## Audit it yourself
+
+AidTune is open source. Don't take this policy on trust — read the code:
+https://github.com/1Oeee/FERMtools. Token handling is in
+`src/background/token.js` (request headers) and `src/content/token-scan.js`
+(portal storage scan); the requests it makes are in `src/graph/`. The package
+on the Chrome Web Store is built from this repository by the workflow in
+`.github/workflows/release.yml`.
+
 ## Contact
 
 Questions: jobb@nicedesign.se

@@ -651,7 +651,8 @@ onShown(() => {
 
 // --- Welcome and consent -------------------------------------------------
 
-const POLICY_URL = "https://github.com/1Oeee/FERMtools/blob/main/PRIVACY.md";
+const REPO_URL = "https://github.com/1Oeee/FERMtools";
+const POLICY_URL = `${REPO_URL}/blob/main/PRIVACY.md`;
 
 /** Until the user has chosen, nothing reads the portal's tokens. Demo needs no consent. */
 const needsConsent = () => Boolean(state.settings) && !state.settings.consent && !state.settings.demo;
@@ -702,13 +703,22 @@ function renderConsent() {
   }
   card.append(list);
 
-  const link = el("a", null, "Read the full privacy policy");
-  link.href = POLICY_URL;
-  link.target = "_blank";
-  link.rel = "noopener";
-  const linkRow = el("p", "hint");
-  linkRow.append(link);
-  card.append(linkRow);
+  const audit = el("p", "hint");
+  const anchor = (text, href) => {
+    const a = el("a", null, text);
+    a.href = href;
+    a.target = "_blank";
+    a.rel = "noopener";
+    return a;
+  };
+  audit.append(
+    "You don't have to take our word for it. AidTune is open source — please audit the code yourself: ",
+    anchor("view it on GitHub", REPO_URL),
+    " (token handling is in src/background/token.js and src/content/token-scan.js), or ",
+    anchor("read the full privacy policy", POLICY_URL),
+    "."
+  );
+  card.append(audit);
 
   const actions = el("div", "consent-actions");
   const allow = el("button", "primary", "Allow and use with my tenant");

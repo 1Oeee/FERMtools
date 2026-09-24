@@ -40,7 +40,8 @@ Intune, and as a fallback scans the portal's browser storage for those tokens.
 It then makes read-only requests to Microsoft with them (GETs, batched through Graph's $batch endpoint), so it can read
 whatever your account can read there. Tokens stay in memory. Nothing is sent
 anywhere except to Microsoft: no analytics, no tracking, no server of ours.
-It never changes anything in your tenant. Full details in the privacy policy.
+It never changes anything in your tenant. AidTune is open source, so you can audit
+the code yourself: https://github.com/1Oeee/FERMtools. Full details in the privacy policy.
 
 AidTune is an independent project and is not affiliated with or endorsed by
 Microsoft. Microsoft, Intune and Entra are trademarks of Microsoft Corporation.
