@@ -6,12 +6,12 @@ import { embedded, showPortal, closePage, onShown, onTheme } from "./embed.js";
 import { applyPortalTheme } from "./theme.js";
 import { treeModule } from "./modules/tree.js";
 import { connectionsModule } from "./modules/connections.js";
-import { reportsModule } from "./modules/reports.js";
 import { healthModule } from "./modules/health.js";
 import { analyse, findingsByGroup } from "../health/checks.js";
 import { buildForest } from "../tree/build.js";
 
-const MODULES = [treeModule, connectionsModule, healthModule, reportsModule];
+// reportsModule is not listed until the Excel export is built.
+const MODULES = [treeModule, connectionsModule, healthModule];
 
 /** Moduler med en `setting` visas bara när den inställningen är på. */
 const availableModules = () => MODULES.filter((m) => !m.setting || state.settings?.[m.setting]);

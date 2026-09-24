@@ -103,11 +103,10 @@ try {
   const expect = {
     Tree: (s) => s.rows > 0,
     Connections: (s) => /Expires first|Fetch/.test(s.content),
-    "Health check": (s) => /errors and/.test(s.content),
-    Reports: (s) => /Excel export/.test(s.content)
+    "Health check": (s) => /errors and/.test(s.content)
   };
 
-  const route = ["Connections", "Tree", "Connections", "Reports", "Health check", "Tree", "Health check", "Reports", "Tree"];
+  const route = ["Connections", "Tree", "Connections", "Health check", "Tree", "Health check", "Tree"];
   for (const label of route) {
     await page.evaluate(`[...document.querySelectorAll(".tab")].find((t) => t.textContent === ${JSON.stringify(label)})?.click()`);
     await sleep(label === "Health check" ? 2500 : 900);

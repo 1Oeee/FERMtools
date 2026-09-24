@@ -210,7 +210,7 @@ The page is divided into tabs. The active tab is remembered between visits.
 | **Tree** | Groups, Apps, Configuration | Built. Group structure, markers, search, filter, details panel. |
 | **Connections** | Apps, Configuration, Connections | Built. VPP tokens, Apple ADE/DEP, Android enrollment and APNS in three subtrees, sorted by what expires first. Licences per VPP token: total, used and free, filterable and searchable. |
 | **Health check** | Groups, Apps, Configuration | Built, turned on in the settings. 27 rules for what is right and wrong in the assignments — see below. |
-| **Reports** | Groups, Apps, Devices | Not built. Excel export per group with devices, serial numbers, users, inventory and apps. A custom xlsx writer with no dependencies. |
+| _Reports (hidden)_ | Groups, Apps, Devices | Not built. Excel export per group with devices, serial numbers, users, inventory and apps. A custom xlsx writer with no dependencies. |
 
 Tree and details sit side by side, and wide views like report tables and VPP
 lists get the room they need. It was the width of the side panel that once forced
