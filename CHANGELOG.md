@@ -8,9 +8,17 @@ Versionen står i `manifest.json` och ska alltid stämma med översta posten hä
 
 Demoläge: AidTune går att använda utan tenant.
 
-- **En påhittad skola hos Contoso** med nästlade grupper, appar, profiler,
-  settings catalog, compliance, VPP-licenser och anslutningar som går ut.
+- **En påhittad kommun, Contoso,** med fyra grundskolor och två gymnasier:
+  runt 270 grupper i flera nivåer, 44 appar för iPad, Windows, Android och
+  webb, 30 profiler och policyer, fyra VPP-tokens och anslutningar som går ut.
   Slås på under inställningarna. Inget anrop lämnar webbläsaren.
+- **23 inlagda fel** av det slag som ser rätt ut i portalen: användarlicens
+  till iPad-vagnar, "tillgänglig" till enhetsgrupper, fler mottagare än
+  licenser, iOS-appar till Windows, användargrupper undantagna från
+  enhetstilldelningar, en tom dynamisk grupp med stavfel i regeln, en
+  tilldelning till en borttagen grupp, kioskläge på elevdatorer med flera.
+  Felen bärs av Graphs egna fält — licenstyp, avsikt, plattform, och om en
+  grupp innehåller användare eller enheter. Facit står i demonotisen på sidan.
 - **Den riktiga hämtkedjan körs.** Demot byter bara ut Graph-klienten, så
   `groups.js`, `assignments.js`, `connections.js`, cachen och sidan är samma
   kod som mot en riktig tenant. Det är sidan som provas, inte en genväg förbi den.

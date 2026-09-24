@@ -48,9 +48,14 @@ Entra: nej, se nedan.
 
 Ingen tenant att prova mot? Slå på **Demoläge** under inställningarna
 (`chrome://extensions` → AidTune → Tilläggsalternativ). Då visar sidan en
-påhittad skola hos Contoso — grupper, tilldelningar, VPP-licenser och
-anslutningar — utan inloggning och utan att något anrop lämnar webbläsaren.
-Ikonen i verktygsfältet öppnar sidan i en egen flik om ingen portal är öppen.
+påhittad kommun, Contoso, med sex skolor och runt 270 grupper — tilldelningar,
+VPP-licenser och anslutningar — utan inloggning och utan att något anrop
+lämnar webbläsaren. Ikonen i verktygsfältet öppnar sidan i en egen flik om
+ingen portal är öppen.
+
+Tenanten är rörig med flit. Ett tjugotal fel är inlagda — användarlicens till
+iPad-vagnar, "tillgänglig" till enhetsgrupper, fler mottagare än licenser,
+överlappande uppdateringsringar och liknande. Demonotisen på sidan har facit.
 
 Demot byter bara ut Graph-klienten. Hämtning, tolkning, cache och sida är
 samma kod som mot en riktig tenant, så det som fungerar i demot fungerar i

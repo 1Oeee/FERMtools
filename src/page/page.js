@@ -34,8 +34,21 @@ const state = {
   mounted: new Set(),
   // Lästa notiser. Nyckeln innehåller texten, så ett meddelande som ändrar
   // sig dyker upp igen i stället för att tystas.
-  dismissed: new Set()
+  dismissed: new Set(),
+  // Demotenantens facit. Laddas bara när demoläget är på.
+  demoMistakes: []
 };
+
+/** Facit hämtas ur samma fil som demodatat, så de kan inte glida isär. */
+async function loadDemoMistakes() {
+  if (!state.tokenStatus?.demo || state.demoMistakes.length) return;
+  try {
+    const { MISTAKES } = await import("../demo/tenant.js");
+    state.demoMistakes = MISTAKES.map(({ title, where, why }) => ({ title, where, why }));
+  } catch {
+    /* utan facit visas bara notisen */
+  }
+}
 
 // Sidan ser likadan ut på båda ställena den kan stå. Skillnaden är vilka
 // knappar som betyder något: krysset stänger bara något som ligger över
@@ -219,8 +232,14 @@ function renderNotices() {
       key: "demo",
       tone: "info",
       text:
-        "Demoläge: skolan, grupperna och tilldelningarna här är påhittade. " +
+        "Demoläge: Contoso kommun, dess skolor, grupper och tilldelningar är påhittade. " +
         "Ingenting hämtas från någon tenant.",
+      details: state.demoMistakes.length
+        ? {
+            summary: `Inlagda fel att leta efter (${state.demoMistakes.length})`,
+            items: state.demoMistakes
+          }
+        : null,
       action: { label: "Stäng av i inställningarna", run: () => chrome.runtime.openOptionsPage() }
     });
   }
@@ -314,6 +333,19 @@ function renderNotices() {
     row.append(close);
     node.append(row);
 
+    if (n.details) {
+      const box = el("details", "notice-details");
+      box.append(el("summary", null, n.details.summary));
+      const list = el("ol", "notice-list");
+      for (const item of n.details.items) {
+        const li = el("li");
+        li.append(el("strong", null, item.title), el("div", "notice-where", item.where), el("div", null, item.why));
+        list.append(li);
+      }
+      box.append(list);
+      node.append(box);
+    }
+
     if (n.action) {
       const button = el("button", "secondary small", n.action.label);
       button.type = "button";
@@ -380,6 +412,7 @@ async function load({ force = false } = {}) {
   state.data = response.data;
   invalidateModules();
 
+  await loadDemoMistakes();
   renderNotices();
   await showModule(state.activeId);
 }
