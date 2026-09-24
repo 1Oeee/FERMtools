@@ -891,12 +891,13 @@ footer {
   display: none;
 }
 
-/* Löpande text ska inte bli längre än den går att läsa, hur bred skärmen än är. */
+/* Löpande text ska inte bli längre än den går att läsa, hur bred skärmen än är.
+   Begränsningen sitter på innehållet (via högerpadding), inte på ytan — annars
+   hamnar rullningslisten mitt på skärmen i stället för vid fönsterkanten. */
 .module-pad {
   flex: 1;
   min-height: 0;
-  max-width: 1000px;
-  padding: 14px;
+  padding: 14px max(14px, calc(100% - 1000px)) 14px 14px;
   overflow: auto;
 }
 
