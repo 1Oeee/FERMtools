@@ -4,7 +4,10 @@
 
 const TTL_MS = 15 * 60 * 1000;
 
+// Nyckeln kan vara null när ingen tenant är känd. Då cachas ingenting —
+// och get(null) hade dessutom lämnat ut hela lagringen.
 export async function readCache(key) {
+  if (!key) return null;
   try {
     const stored = await chrome.storage.session.get(key);
     const entry = stored?.[key];
@@ -17,6 +20,7 @@ export async function readCache(key) {
 }
 
 export async function writeCache(key, data) {
+  if (!key) return;
   try {
     await chrome.storage.session.set({ [key]: { ...data, savedAt: Date.now() } });
   } catch {
@@ -27,6 +31,17 @@ export async function writeCache(key, data) {
 export async function clearCache(key) {
   try {
     await chrome.storage.session.remove(key);
+  } catch {
+    /* strunt samma */
+  }
+}
+
+/** Rensa alla poster vars nyckel börjar med `prefix` — alla tenanters cache. */
+export async function clearCachePrefix(prefix) {
+  try {
+    const all = await chrome.storage.session.get(null);
+    const keys = Object.keys(all ?? {}).filter((key) => key.startsWith(prefix));
+    if (keys.length) await chrome.storage.session.remove(keys);
   } catch {
     /* strunt samma */
   }

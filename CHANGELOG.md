@@ -4,6 +4,38 @@ Versionsstandard: `0.1`, `0.2`, `0.3` … Ett steg per levererad omgång.
 Versionen står i `manifest.json` och ska alltid stämma med översta posten här.
 `1.0` när tillägget är stabilt nog att användas dagligen utan förbehåll.
 
+## 0.13 — 2026-09-24
+
+Tenanter hålls isär. Den som arbetar åt flera kunder med flera portalflikar
+öppna kunde förut få trädet ur en tenant och plupparna ur en annan, och se
+förra kundens träd i upp till en kvart efter ett byte.
+
+- **Varje val av token sker inom en tenant.** Poolen håller tokens från alla
+  tenanter, men gruppträd, pluppar och Connections hämtas alltid med tokens
+  från samma tenant. Token utan tenant används inte.
+- **Sidan följer sin egen portalflik.** Vilken tenant fliken står i avgörs av
+  trafiken den skickar. Tokens som inte täcker något vi använder — profilbild,
+  kataloglista — flyttar den inte, och portalens kvarglömda lagring väger
+  lättare än riktig trafik.
+- **Tenantens namn i sidhuvudet**, och byter fliken tenant hämtas sidan om.
+- **Cache, inlärda Intune-adresser och portalsidor sparas per tenant.** De
+  gamla, gemensamma posterna städas bort vid uppdateringen och lärs om.
+- **Öppna i Intune** och behörighetsknapparna använder portalfliken sidan
+  ligger i, inte vilken portalflik som helst.
+- **Servicearbetaren svarar alltid**, även när ett handtag kastar. Förut
+  väntade sidan förgäves.
+- **Testsidan går att köra från inställningarna igen.** Den stod på "Kör …"
+  eftersom tilläggets CSP stoppade dess inline-script.
+
+Städat:
+
+- Content scriptet avkodar inte längre tokens själv och har ingen egen lista
+  över målgrupper — servicearbetaren avgör allt. Gissningen av Intunes
+  målgrupp är snävare: kända id:n eller en https-adress under
+  `manage.microsoft.com`.
+- Saknad token känns igen på en felkod, inte på feltexten.
+- `spike/` och `Projekt tree/` ligger nu under `docs/`.
+
 ## 0.12 — 2026-09-18
 
 AidTune flyttar in i portalen: sidopanelen är borta, och i stället ligger en

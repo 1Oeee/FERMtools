@@ -53,7 +53,7 @@ jobs:
           fi
 
       - name: Bygg paket
-        # Bara det tillägget laddar. spike/ och Projekt tree/ hör inte hemma i butiken.
+        # Bara det tillägget laddar. docs/ (med spike/) hör inte hemma i butiken.
         # tests/ följer med eftersom inställningarna länkar dit.
         run: |
           mkdir -p dist

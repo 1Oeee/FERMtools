@@ -1,20 +1,32 @@
 // Service-workern gör tre saker: håller token, hämtar data från Graph och
 // svarar på frågor från sidan. Trädbygget ligger medvetet i sidan, där det
 // kan testas som rena funktioner.
+//
+// Allt sker inom en tenant i taget. Sidan i en portalflik visar den tenant
+// fliken står i; sidan i en egen flik visar den portalen senast talade med.
+// Tokens, cache och inlärda adresser blandas aldrig mellan tenanter.
 
 import { PortalTokenSource, INTUNE } from "./token.js";
 import { GROUP_SCOPES, INTUNE_SCOPES } from "../common/jwt.js";
+import { cacheKey } from "../common/tenant.js";
 import {
   classify,
   remember as rememberEndpoint,
-  capabilityForSource
+  capabilityForSource,
+  LEGACY_KEY as LEGACY_ENDPOINTS_KEY
 } from "../graph/endpoints.js";
-import { pathFor, rememberPath } from "./paths.js";
-import { createGraphClient } from "../graph/client.js";
+import { pathFor, rememberPath, LEGACY_KEY as LEGACY_PATHS_KEY } from "./paths.js";
+import { createGraphClient, GraphError, NO_TOKEN } from "../graph/client.js";
 import { fetchGroups, fetchChildEdges, fetchMembers } from "../graph/groups.js";
 import { fetchAssignments } from "../graph/assignments.js";
 import { fetchConnections } from "../graph/connections.js";
-import { readCache, writeCache, clearCache, readSettings, writeSettings } from "./cache.js";
+import {
+  readCache,
+  writeCache,
+  clearCachePrefix,
+  readSettings,
+  writeSettings
+} from "./cache.js";
 
 // Vilka flikar är Intune-portalen? Tokens läses bara ur dessa.
 //
@@ -38,15 +50,51 @@ chrome.tabs.query({ url: "https://intune.microsoft.com/*" }).then(
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.url !== undefined || changeInfo.status === "complete") trackTab(tab);
 });
-chrome.tabs.onRemoved.addListener((tabId) => portalTabs.delete(tabId));
 
 const tokens = new PortalTokenSource();
 tokens.start((tabId) => portalTabs.has(tabId));
 
-// Lär av portalens egna anrop: dels var Intunes backend ligger i den här
-// tenanten, dels vilka sidor i portalen som matar oss med vilken token.
+chrome.tabs.onRemoved.addListener((tabId) => {
+  portalTabs.delete(tabId);
+  tokens.forgetTab(tabId);
+});
 
-/** Senast vi slog upp en fliks adress per förmåga. Undviker onödiga anrop. */
+// Före 0.13 sparades inlärda adresser och cache utan tenant. De kan ha
+// blandat ihop kunder och läses inte längre — städa bort dem.
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.storage.local.remove([LEGACY_ENDPOINTS_KEY, LEGACY_PATHS_KEY]).catch(() => {});
+  chrome.storage.session.remove(["tree-data", "connections-data"]).catch(() => {});
+});
+
+// --- Vilken tenant? ------------------------------------------------------
+
+/**
+ * Tenanten en fråga gäller, just nu. Sidan i en portalflik följer sin egen
+ * flik och ingen annan — hellre inget svar än en annan kunds data. Sidan i en
+ * egen flik har ingen portal omkring sig och följer den senaste trafiken.
+ */
+function tenantNow(sender) {
+  const tab = sender?.tab;
+  if (tab?.id !== undefined && PORTAL_URL.test(tab.url ?? "")) return tokens.tenantOf(tab.id);
+  return tokens.currentTenant();
+}
+
+/** Som `tenantNow`, men ber portalen om ett omtag och väntar en stund först. */
+async function tenantFor(sender) {
+  const now = tenantNow(sender);
+  if (now) return now;
+
+  await requestRescan();
+  await tokens.waitFor(async () => Boolean(tenantNow(sender)));
+  return tenantNow(sender);
+}
+
+// --- Lär av portalens egna anrop -----------------------------------------
+
+// Dels var Intunes backend ligger i varje tenant, dels vilka sidor i portalen
+// som matar oss med vilken token.
+
+/** Senast vi slog upp en fliks adress per tenant och förmåga. */
 const pathLearnedAt = new Map();
 const LEARN_INTERVAL_MS = 60_000;
 
@@ -54,57 +102,72 @@ const LEARN_INTERVAL_MS = 60_000;
  * En token dök upp från en portalflik. Spara den flikens adress som vägen
  * till de förmågor token faktiskt täcker — så slipper vi gissa bladnamn.
  */
-function learnPaths(capabilities, tabId) {
-  if (tabId < 0 || !capabilities.length) return; // vårt eget anrop, inte en flik
+function learnPaths(tenant, capabilities, tabId) {
+  if (!tenant || tabId < 0 || !capabilities.length) return; // vårt eget anrop, inte en flik
 
   const now = Date.now();
-  const due = capabilities.filter((name) => now - (pathLearnedAt.get(name) ?? 0) >= LEARN_INTERVAL_MS);
+  const due = capabilities.filter(
+    (name) => now - (pathLearnedAt.get(`${tenant}:${name}`) ?? 0) >= LEARN_INTERVAL_MS
+  );
   if (!due.length) return;
-  for (const name of due) pathLearnedAt.set(name, now);
+  for (const name of due) pathLearnedAt.set(`${tenant}:${name}`, now);
 
   chrome.tabs
     .get(tabId)
-    .then((tab) => rememberPath(due, tab?.url))
+    .then((tab) => rememberPath(tenant, due, tab?.url))
     .catch(() => {
       // Fliken kan ha stängts under tiden.
     });
 }
 
-tokens.onAccepted(({ capabilities, tabId }) => learnPaths(capabilities, tabId));
+tokens.onAccepted(({ capabilities, tabId, tenant }) => learnPaths(tenant, capabilities, tabId));
 
 // Portalens anrop mot Intunes backend lär oss både var tjänsten ligger och
-// vilket blad som når den.
+// vilket blad som når den. Fliken måste ha visat vilken tenant den står i —
+// annars vet vi inte vems adressen är, och då sparar vi den inte.
 chrome.webRequest.onBeforeRequest.addListener(
   (details) => {
     const key = classify(details.url);
     if (!key) return;
-    rememberEndpoint(key, details.url);
+    const tenant = tokens.tenantOf(details.tabId);
+    if (!tenant) return;
+    rememberEndpoint(tenant, key, details.url);
     const capability = capabilityForSource(key);
-    if (capability) learnPaths([capability], details.tabId);
+    if (capability) learnPaths(tenant, [capability], details.tabId);
   },
   { urls: ["https://*.manage.microsoft.com/*"] }
 );
 
-// Tre klienter, tre behov. Portalen har olika Graph-tokens för katalog och
-// för device management, och en helt egen token mot Intunes backend.
-const graphGroups = createGraphClient(() => tokens.getGraphToken(GROUP_SCOPES));
-const graphApps = createGraphClient(() => tokens.getGraphToken(INTUNE_SCOPES));
-const intuneBackend = createGraphClient(() => tokens.getToken(INTUNE));
+// --- Klienter ------------------------------------------------------------
+
+/**
+ * Tre klienter, tre behov — alla bundna till samma tenant. Portalen har olika
+ * Graph-tokens för katalog och för device management, och en helt egen token
+ * mot Intunes backend.
+ */
+function clientsFor(tenant) {
+  return {
+    tenant,
+    groups: createGraphClient(() => tokens.getGraphToken(GROUP_SCOPES, tenant)),
+    graph: createGraphClient(() => tokens.getGraphToken(INTUNE_SCOPES, tenant)),
+    intune: createGraphClient(() => tokens.getToken(INTUNE, tenant))
+  };
+}
 
 const CACHE_KEY = "tree-data";
 const CONNECTIONS_KEY = "connections-data";
 
-/** Var i portalen användaren senast befann sig, enligt content scriptet. */
-let portalBlade = null;
-
-/** En hämtning i taget — sidan kan öppnas flera gånger under tiden. */
-let inFlight = null;
+/** En hämtning i taget per tenant — sidan kan öppnas flera gånger under tiden. */
+const inFlight = new Map();
+const connectionsInFlight = new Map();
 
 function broadcast(message) {
   chrome.runtime.sendMessage(message, () => void chrome.runtime.lastError);
 }
 
-tokens.onChange((status) => broadcast({ type: "token-changed", status }));
+// Bara en signal. Varje sida frågar själv efter läget, eftersom sidor i
+// olika portalflikar kan stå i olika tenanter.
+tokens.onChange(() => broadcast({ type: "token-changed" }));
 
 /** Be öppna portalflikar att leta igenom sin lagring på nytt. */
 async function requestRescan() {
@@ -128,13 +191,13 @@ async function requestRescan() {
  * Graph-token är nödvändig — utan den finns inget träd. Intune-token är
  * frivillig: saknas den faller plupparna bort, men trädet står kvar.
  */
-async function ensureTokens() {
+async function ensureTokens(tenant) {
   // Trädet behöver katalogbehörigheter. Plupparna kan komma antingen från en
   // Graph-token med DeviceManagement-behörigheter eller från Intunes backend.
-  const haveGroups = async () => Boolean(await tokens.getGraphToken(GROUP_SCOPES));
+  const haveGroups = async () => Boolean(await tokens.getGraphToken(GROUP_SCOPES, tenant));
   const haveApps = async () =>
-    Boolean(await tokens.getGraphToken(INTUNE_SCOPES)) ||
-    Boolean(await tokens.getToken(INTUNE));
+    Boolean(await tokens.getGraphToken(INTUNE_SCOPES, tenant)) ||
+    Boolean(await tokens.getToken(INTUNE, tenant));
 
   if ((await haveGroups()) && (await haveApps())) return;
 
@@ -147,29 +210,51 @@ async function ensureTokens() {
   ]);
 }
 
-async function loadTree({ force = false } = {}) {
+/** Tenantens namn, så man ser vems träd man tittar på. Hämtas en gång. */
+const tenantNames = new Map();
+
+async function tenantName(clients) {
+  if (tenantNames.has(clients.tenant)) return tenantNames.get(clients.tenant);
+  try {
+    const orgs = await clients.groups.getAll("/v1.0/organization?$select=id,displayName");
+    const name = orgs.find((o) => o.id === clients.tenant)?.displayName ?? null;
+    tenantNames.set(clients.tenant, name);
+    return name;
+  } catch {
+    // Saknar token behörighet visas tenantens id i stället — inget fel.
+    return null;
+  }
+}
+
+const noTenant = () => new GraphError("Ingen giltig token", { code: NO_TOKEN });
+
+async function loadTree(tenant, { force = false } = {}) {
+  if (!tenant) throw noTenant();
+
   const settings = await readSettings();
+  const key = cacheKey(CACHE_KEY, tenant);
 
   if (!force) {
-    const cached = await readCache(CACHE_KEY);
+    const cached = await readCache(key);
     if (cached && cached.prefix === settings.prefix) return cached;
   }
 
-  if (inFlight) return inFlight;
+  if (inFlight.has(tenant)) return inFlight.get(tenant);
 
-  inFlight = (async () => {
+  const run = (async () => {
     const progress = (stage, detail) => broadcast({ type: "progress", stage, detail });
+    const clients = clientsFor(tenant);
 
-    await ensureTokens();
+    await ensureTokens(tenant);
 
     progress("groups", 0);
-    const groups = await fetchGroups(graphGroups, settings.prefix, (n) =>
+    const groups = await fetchGroups(clients.groups, settings.prefix, (n) =>
       progress("groups", n)
     );
 
     progress("edges", 0);
     const { edges, failed } = await fetchChildEdges(
-      graphGroups,
+      clients.groups,
       groups.map((g) => g.id),
       (done, total) => progress("edges", `${done}/${total}`)
     );
@@ -177,7 +262,7 @@ async function loadTree({ force = false } = {}) {
     progress("assignments", 0);
     let assignmentData = { byGroup: new Map(), global: [], sources: [] };
     try {
-      assignmentData = await fetchAssignments(graphApps, intuneBackend, (key, n) =>
+      assignmentData = await fetchAssignments(clients, (key, n) =>
         progress("assignments", { key, n })
       );
     } catch (e) {
@@ -189,6 +274,8 @@ async function loadTree({ force = false } = {}) {
 
     // chrome.runtime-meddelanden JSON-serialiseras, så Map måste plattas ut.
     const payload = {
+      tenant,
+      tenantName: await tenantName(clients),
       prefix: settings.prefix,
       groups,
       edges: [...edges.entries()],
@@ -201,53 +288,76 @@ async function loadTree({ force = false } = {}) {
       fetchedAt: Date.now()
     };
 
-    await writeCache(CACHE_KEY, payload);
+    await writeCache(key, payload);
     return { ...payload, savedAt: Date.now() };
   })();
 
+  inFlight.set(tenant, run);
   try {
-    return await inFlight;
+    return await run;
   } finally {
-    inFlight = null;
+    inFlight.delete(tenant);
   }
 }
 
-/** En hämtning i taget även här — Connections kan öppnas om och om igen. */
-let connectionsInFlight = null;
+async function loadConnections(tenant, { force = false } = {}) {
+  if (!tenant) throw noTenant();
 
-async function loadConnections({ force = false } = {}) {
+  const key = cacheKey(CONNECTIONS_KEY, tenant);
+
   if (!force) {
-    const cached = await readCache(CONNECTIONS_KEY);
+    const cached = await readCache(key);
     if (cached) return cached;
   }
 
-  if (connectionsInFlight) return connectionsInFlight;
+  if (connectionsInFlight.has(tenant)) return connectionsInFlight.get(tenant);
 
-  connectionsInFlight = (async () => {
-    await ensureTokens();
+  const run = (async () => {
+    await ensureTokens(tenant);
 
-    const data = await fetchConnections(graphApps, intuneBackend, (key) =>
-      broadcast({ type: "progress", stage: "connections", detail: key })
+    const data = await fetchConnections(clientsFor(tenant), (source) =>
+      broadcast({ type: "progress", stage: "connections", detail: source })
     );
 
     // VPP-licenserna kommer ur apparna trädet redan hämtat — inga extra anrop.
-    const tree = await readCache(CACHE_KEY);
-    const payload = { ...data, vppApps: tree?.vppApps ?? [], haveTreeData: Boolean(tree) };
+    const tree = await readCache(cacheKey(CACHE_KEY, tenant));
+    const payload = {
+      ...data,
+      tenant,
+      vppApps: tree?.vppApps ?? [],
+      haveTreeData: Boolean(tree)
+    };
 
-    await writeCache(CONNECTIONS_KEY, payload);
+    await writeCache(key, payload);
     return payload;
   })();
 
+  connectionsInFlight.set(tenant, run);
   try {
-    return await connectionsInFlight;
+    return await run;
   } finally {
-    connectionsInFlight = null;
+    connectionsInFlight.delete(tenant);
   }
+}
+
+/**
+ * Portalfliken att skicka någonstans. Helst den sidan ligger i, annars en
+ * som står i samma tenant — en flik i fel tenant ger ett blad som inte hittar
+ * något.
+ */
+async function portalTabFor(sender, tenant) {
+  const tabs = await chrome.tabs.query({ url: "https://intune.microsoft.com/*" });
+  return (
+    tabs.find((tab) => tab.id === sender?.tab?.id) ??
+    tabs.find((tab) => tenant && tokens.tenantOf(tab.id) === tenant) ??
+    tabs[0] ??
+    null
+  );
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const handlers = {
-    status: async () => tokens.describe(),
+    status: async () => tokens.describe(tenantNow(sender)),
 
     // Content scriptet vet inte vilken sort det hittat — null låter
     // tokenkällan avgöra utifrån målgruppen.
@@ -256,16 +366,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // portalen: garantin ska stå i koden, inte bara vara underförstådd.
     "token-from-page": async () => {
       if (!PORTAL_URL.test(sender?.tab?.url ?? "")) return { accepted: false };
-      return { accepted: tokens.offer(message.token, null, "portalens sessionStorage") };
+      return {
+        accepted: tokens.offer(message.token, {
+          source: "portalens lagring",
+          tabId: sender.tab.id
+        })
+      };
     },
 
     "portal-blade": async () => {
-      portalBlade = message.blade;
-
       // Står användaren på grupplistan är det överväldigande sannolikt att
       // trädet är det de vill se. Värm cachen så sidan öppnas ifylld.
-      if ((portalBlade === "all-groups" || portalBlade === "groups") && (await tokens.getToken())) {
-        loadTree().catch(() => {
+      const blade = message.blade;
+      const tenant = tenantNow(sender);
+      if (
+        (blade === "all-groups" || blade === "groups") &&
+        tenant &&
+        (await tokens.getGraphToken(GROUP_SCOPES, tenant))
+      ) {
+        loadTree(tenant).catch(() => {
           // Misslyckas förhämtningen får sidan visa felet när den öppnas.
         });
       }
@@ -274,12 +393,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     },
 
     "open-path": async () => {
-      const url = await pathFor(message.capability ?? "groups");
+      const tenant = tenantNow(sender);
+      const url = await pathFor(tenant, message.capability ?? "groups");
 
-      const tabs = await chrome.tabs.query({ url: "https://intune.microsoft.com/*" });
-      if (tabs.length) {
-        await chrome.tabs.update(tabs[0].id, { url, active: true });
-        await chrome.windows.update(tabs[0].windowId, { focused: true });
+      const tab = await portalTabFor(sender, tenant);
+      if (tab) {
+        await chrome.tabs.update(tab.id, { url, active: true });
+        await chrome.windows.update(tab.windowId, { focused: true });
       } else {
         await chrome.tabs.create({ url });
       }
@@ -292,7 +412,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     tree: async () => {
       try {
-        return { ok: true, data: await loadTree({ force: Boolean(message.force) }) };
+        const tenant = await tenantFor(sender);
+        return { ok: true, data: await loadTree(tenant, { force: Boolean(message.force) }) };
       } catch (e) {
         return { ok: false, error: e.message ?? String(e), status: e.status ?? 0 };
       }
@@ -300,7 +421,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     connections: async () => {
       try {
-        return { ok: true, data: await loadConnections({ force: Boolean(message.force) }) };
+        const tenant = await tenantFor(sender);
+        return {
+          ok: true,
+          data: await loadConnections(tenant, { force: Boolean(message.force) })
+        };
       } catch (e) {
         return { ok: false, error: e.message ?? String(e) };
       }
@@ -308,9 +433,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     members: async () => {
       try {
+        const tenant = await tenantFor(sender);
+        if (!tenant) throw noTenant();
         // Hämtas långt efter trädet, så token kan ha hunnit gå ur tiden.
-        await ensureTokens();
-        return { ok: true, ...(await fetchMembers(graphGroups, message.groupId)) };
+        await ensureTokens(tenant);
+        return { ok: true, ...(await fetchMembers(clientsFor(tenant).groups, message.groupId)) };
       } catch (e) {
         return { ok: false, error: e.message ?? String(e) };
       }
@@ -320,7 +447,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     "save-settings": async () => {
       const next = await writeSettings(message.patch ?? {});
-      await clearCache(CACHE_KEY); // prefixet styr urvalet — cachen är ogiltig
+      // Prefixet styr urvalet — cachen är ogiltig i alla tenanter.
+      await clearCachePrefix(`${CACHE_KEY}:`);
       return next;
     }
   };
@@ -328,7 +456,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const handler = handlers[message?.type];
   if (!handler) return false;
 
-  handler().then(sendResponse);
+  // Ett handtag som kastar ska ändå svara. Annars väntar sidan förgäves och
+  // felet försvinner som ett ohanterat löfte.
+  handler()
+    .catch((e) => ({ ok: false, error: e?.message ?? String(e) }))
+    .then(sendResponse);
   return true; // svaret kommer asynkront
 });
 

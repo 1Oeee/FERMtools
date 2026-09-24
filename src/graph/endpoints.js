@@ -13,8 +13,16 @@
 //      redan påhängda.
 //   2. Portalens egen trafik, avläst med webRequest av servicearbetaren.
 //      Fungerar även när Graph inte skulle returnera något användbart fel.
+//
+// Adresserna sparas per tenant. Två kunder kan ligga i olika regioner, och en
+// adress lärd i den ena ska aldrig anropas med den andras token.
 
-const KEY = "intune-endpoints";
+import { forTenant, withEntries } from "../common/tenant.js";
+
+// Ny nyckel sedan 0.13: den gamla höll en enda uppsättning för alla tenanter
+// och kan ha blandat ihop dem. Den läses inte, och städas bort vid uppdatering.
+const KEY = "intune-endpoints-by-tenant";
+export const LEGACY_KEY = "intune-endpoints";
 
 const PATTERNS = [
   ["apps", /\/deviceAppManagement\/mobileApps$/i],
@@ -112,12 +120,12 @@ async function readAll() {
 }
 
 /**
- * Lägg undan adressen för en datakälla. Vi sparar bas och api-version var för
- * sig, så att våra egna frågeparametrar kan sättas på oberoende av vilka
- * portalen råkade använda.
+ * Lägg undan adressen för en datakälla i en tenant. Vi sparar bas och
+ * api-version var för sig, så att våra egna frågeparametrar kan sättas på
+ * oberoende av vilka portalen råkade använda.
  */
-export async function remember(key, url) {
-  if (!isIntuneBackend(url)) return null;
+export async function remember(tenant, key, url) {
+  if (!tenant || !isIntuneBackend(url)) return null;
 
   let base;
   let apiVersion;
@@ -134,7 +142,7 @@ export async function remember(key, url) {
 
   try {
     const all = await readAll();
-    await chrome.storage.local.set({ [KEY]: { ...all, [key]: entry } });
+    await chrome.storage.local.set({ [KEY]: withEntries(all, tenant, { [key]: entry }) });
   } catch {
     // Kan inte spara — vi kan fortfarande använda adressen den här gången.
   }
@@ -142,9 +150,9 @@ export async function remember(key, url) {
   return entry;
 }
 
-export async function recall(key) {
-  const all = await readAll();
-  return all[key] ?? null;
+export async function recall(tenant, key) {
+  if (!tenant) return null;
+  return forTenant(await readAll(), tenant)[key] ?? null;
 }
 
 /** Bygg ihop en adress av en inlärd bas och de parametrar vi behöver. */

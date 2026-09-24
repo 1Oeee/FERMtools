@@ -10,6 +10,7 @@
 // så fyra samtidiga svep kan märkas som seghet för andra administratörer.
 
 import { urlFromError, recall, remember, buildUrl } from "./endpoints.js";
+import { GraphError, NO_TOKEN } from "./client.js";
 
 const PAUSE_MS = 250;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -33,14 +34,28 @@ export function readable(error) {
   return text.length > 300 ? `${text.slice(0, 300)}…` : text;
 }
 
-const MISSING_TOKEN =
-  "Portalens Intune-token saknas. Öppna sidan knappen ovan pekar på, så fångar vi den.";
+/** Felkod när reservvägen saknar Intune-token. Sidan erbjuder då en knapp. */
+export const MISSING_INTUNE_TOKEN = "aidtune:missing-intune-token";
+
+/** Rätt fel att visa för en källa som saknar token — oavsett hur texten lyder. */
+export const isMissingToken = (error) => error?.code === MISSING_INTUNE_TOKEN;
+
+/**
+ * Klienterna en hämtning går genom, alla bundna till samma tenant.
+ *
+ * @typedef {{
+ *   graph: ReturnType<import("./client.js").createGraphClient>,
+ *   intune: ReturnType<import("./client.js").createGraphClient>,
+ *   tenant: string
+ * }} Clients
+ */
 
 /**
  * @param {{key: string, url: string, single?: boolean, params?: object}} source
+ * @param {Clients} clients
  * @returns {Promise<{ items: any[], via: "graph"|"intune" }>}
  */
-export async function fetchSource(source, graphClient, intuneClient, onPage = null) {
+export async function fetchSource(source, { graph, intune, tenant }, onPage = null) {
   const pull = async (client, url) => {
     // En singleton (APNS-certifikatet) är ett objekt, inte en lista.
     if (source.single) {
@@ -51,25 +66,30 @@ export async function fetchSource(source, graphClient, intuneClient, onPage = nu
   };
 
   try {
-    return { items: await pull(graphClient, source.url), via: "graph" };
+    return { items: await pull(graph, source.url), via: "graph" };
   } catch (graphError) {
     // Saknas datakällan helt är det inte ett fel att falla tillbaka på.
     if (graphError.status === 404) return { items: [], via: "graph" };
 
     let url = urlFromError(graphError);
-    if (!url) url = buildUrl(await recall(source.key), source.params ?? {});
+    if (!url) url = buildUrl(await recall(tenant, source.key), source.params ?? {});
     if (!url) throw graphError;
 
     let items;
     try {
-      items = await pull(intuneClient, url);
+      items = await pull(intune, url);
     } catch (intuneError) {
-      if (/Ingen giltig token/i.test(intuneError.message)) throw new Error(MISSING_TOKEN);
+      if (intuneError.code === NO_TOKEN) {
+        throw new GraphError(
+          "Portalens Intune-token saknas. Öppna sidan knappen ovan pekar på, så fångar vi den.",
+          { code: MISSING_INTUNE_TOKEN }
+        );
+      }
       if (intuneError.status === 404) return { items: [], via: "intune" };
       throw intuneError;
     }
 
-    await remember(source.key, url);
+    await remember(tenant, source.key, url);
     return { items, via: "intune" };
   }
 }

@@ -12,6 +12,7 @@ const MODULES = [treeModule, connectionsModule, reportsModule];
 
 const ui = {
   tokens: document.getElementById("tokens"),
+  tenant: document.getElementById("tenant"),
   tabs: document.getElementById("tabs"),
   status: document.getElementById("status"),
   notices: document.getElementById("notices"),
@@ -175,6 +176,31 @@ function renderTokens() {
   if (lacking.length && status?.pool?.length) ui.tokens.append(renderPool(status.pool));
 }
 
+// --- Tenant --------------------------------------------------------------
+
+// Den som arbetar i flera tenanter ska alltid se vems träd som visas. Namnet
+// kommer med datan; saknas det duger tenantens id.
+function renderTenant() {
+  const data = state.data;
+  if (!data?.tenant) {
+    ui.tenant.hidden = true;
+    return;
+  }
+  ui.tenant.hidden = false;
+  ui.tenant.textContent = data.tenantName ?? data.tenant;
+  ui.tenant.title = `Tenant: ${data.tenantName ? `${data.tenantName} · ` : ""}${data.tenant}`;
+}
+
+/**
+ * Står portalfliken nu i en annan tenant än den datan kom från? Då ska datan
+ * bytas ut direkt — att visa den förra kundens träd under den nya är värre
+ * än att visa ingenting.
+ */
+function tenantChanged() {
+  const now = state.tokenStatus?.tenant;
+  return Boolean(now && state.data?.tenant && now !== state.data.tenant);
+}
+
 function renderPool(pool) {
   const box = el("details", "pool");
   box.append(el("summary", null, `Tokens vi sett (${pool.length})`));
@@ -188,7 +214,8 @@ function renderPool(pool) {
         "span",
         "d-src",
         `${held.kind} · ${held.covers.length ? held.covers.join(", ") : "inga kända förmågor"}` +
-          ` · ${Math.floor(held.secondsLeft / 60)} min`
+          ` · ${Math.floor(held.secondsLeft / 60)} min` +
+          (held.otherTenant ? ` · annan tenant (${held.tenant})` : "")
       )
     );
     list.append(li);
@@ -242,7 +269,7 @@ function renderNotices() {
   }
 
   for (const [reason, list] of byReason) {
-    const missingIntuneToken = /Intune-token saknas/i.test(reason);
+    const missingIntuneToken = list.some((s) => s.missingToken);
     notices.push({
       key: `source:${list.map((s) => s.key).join(",")}:${reason}`,
       tone: list.every((s) => s.optional) ? "warn" : "bad",
@@ -357,6 +384,15 @@ async function load({ force = false } = {}) {
     state.error = state.needsPortal
       ? status.hint
       : (response?.error ?? "Servicearbetaren svarade inte.");
+
+    // Står fliken inte längre i den tenant datan kom från får den gamla
+    // datan inte ligga kvar bakom felet — det vore förra kundens träd.
+    if (state.data && status?.tenant !== state.data.tenant) {
+      state.data = null;
+      invalidateModules();
+    }
+    renderTenant();
+
     renderStatus(null);
     renderNotices();
     // Modulen ska ändå upp, så ytan inte står tom bakom notisen.
@@ -367,6 +403,7 @@ async function load({ force = false } = {}) {
   state.needsPortal = false;
   state.data = response.data;
   invalidateModules();
+  renderTenant();
 
   renderNotices();
   await showModule(state.activeId);
@@ -374,29 +411,40 @@ async function load({ force = false } = {}) {
 
 // --- Meddelanden från servicearbetaren -----------------------------------
 
+// Signalen bär inget läge: sidor i olika portalflikar kan stå i olika
+// tenanter, så var och en frågar efter sitt eget.
+async function onTokenChanged() {
+  const hadApps = state.tokenStatus?.capabilities?.apps?.have;
+  await refreshTokens();
+  const status = state.tokenStatus;
+
+  // Moduler som visar behörighetsläge ska följa med direkt.
+  const module = activeModule();
+  if (state.mounted.has(module.id)) module.update?.(moduleContext());
+
+  if (state.loading) return;
+
+  if (tenantChanged()) {
+    load();
+    return;
+  }
+
+  if (state.error && !state.data) {
+    load();
+    return;
+  }
+
+  // Kom app-token efter att trädet redan laddats utan pluppar? Hämta om
+  // tilldelningarna, annars står trädet grått tills någon trycker ⟳.
+  const missingAssignments = (state.data?.sources ?? []).some((s) => !s.ok);
+  if (!hadApps && status?.capabilities?.apps?.have && missingAssignments) {
+    load({ force: true });
+  }
+}
+
 chrome.runtime.onMessage.addListener((message) => {
   if (message?.type === "token-changed") {
-    const hadApps = state.tokenStatus?.capabilities?.apps?.have;
-    state.tokenStatus = message.status;
-    renderTokens();
-
-    // Moduler som visar behörighetsläge ska följa med direkt.
-    const module = activeModule();
-    if (state.mounted.has(module.id)) module.update?.(moduleContext());
-
-    if (state.loading) return;
-
-    if (state.error && !state.data) {
-      load();
-      return;
-    }
-
-    // Kom app-token efter att trädet redan laddats utan pluppar? Hämta om
-    // tilldelningarna, annars står trädet grått tills någon trycker ⟳.
-    const missingAssignments = (state.data?.sources ?? []).some((s) => !s.ok);
-    if (!hadApps && message.status?.capabilities?.apps?.have && missingAssignments) {
-      load({ force: true });
-    }
+    onTokenChanged();
     return;
   }
 
@@ -442,9 +490,10 @@ ui.detach.addEventListener("click", () => {
 // Rutan togs fram igen efter att ha legat undan medan portalen användes.
 // Under tiden kan tokens ha bytts ut, och saknades trädet står det kvar tomt
 // tills någon ber om det.
-onShown(() => {
-  refreshTokens();
-  if (!state.loading && state.error && !state.data) load();
+onShown(async () => {
+  await refreshTokens();
+  if (state.loading) return;
+  if (tenantChanged() || (state.error && !state.data)) load();
 });
 
 // --- Start ---------------------------------------------------------------

@@ -21,7 +21,7 @@ ihopfälld.
 Tillägget är **enbart läsande**. Det gör bara `GET` mot Microsoft Graph och
 Intunes backend, och skriver ingenting i tenanten.
 
-Nuvarande version: **0.12**. Versionsstandarden är `0.1`, `0.2`, `0.3` … med ett
+Nuvarande version: **0.13**. Versionsstandarden är `0.1`, `0.2`, `0.3` … med ett
 steg per levererad omgång, och `1.0` när tillägget går att använda dagligen
 utan förbehåll. Vad som ändrats när står i [CHANGELOG.md](CHANGELOG.md), och
 versionen där ska alltid stämma med `manifest.json`.
@@ -127,6 +127,31 @@ behöver — `groups`, `apps`, `config`, `serviceConfig`, `devices` — och pane
 kan peka på exakt det portalblad som ger just det. Förmågorna och deras scopes
 står samlade i `src/common/jwt.js`.
 
+### Flera tenanter
+
+Den som arbetar åt flera kunder har flera portalflikar öppna, i olika
+tenanter. Poolen håller tokens från alla, men ett val görs alltid inom **en**
+tenant — annars kunde trädet komma från en kund och plupparna från en annan,
+utan att något på skärmen avslöjade det.
+
+- **Vilken tenant en portalflik står i** avgörs av trafiken den faktiskt
+  skickar. Bara tokens som täcker något tillägget använder räknas, så en
+  profilbild hämtad med hemtenantens token flyttar inte fliken. Det portalen
+  lagt undan i sin lagring räknas bara tills fliken visat riktig trafik.
+- **Sidan i en portalflik** visar den flikens tenant och ingen annans. Står
+  fliken ännu inte i någon känd tenant visas ingenting hellre än fel kund.
+- **Sidan i en egen flik** följer den tenant portalen senast talade med.
+- **Tenantens namn står i sidhuvudet**, och byter portalfliken tenant hämtas
+  sidan om direkt.
+- Cache, inlärda Intune-adresser och portalsidor sparas per tenant.
+- Under **Tokens vi sett** märks tokens från andra tenanter ut — ofta svaret
+  på "varför saknas något" när man står i fel flik.
+- Servicearbetaren somnar och glömmer då vilken flik som stod var. Första
+  gissningen efter det kan komma ur portalens lagring, som kan ha kvar tokens
+  från en katalog man lämnat. Så fort portalen skickar trafik rättar sidan sig
+  och hämtar om — och namnet i sidhuvudet visar hela tiden vilken tenant som
+  gäller.
+
 Två vägar till tilldelningarna, i den här ordningen:
 
 1. **Graph**, när poolen har en token med `DeviceManagementApps.Read.All` eller
@@ -169,7 +194,7 @@ Konsekvenser:
   Microsoft ändrar den. Se `src/background/token.js` — bytet till MSAL med egen
   app-registrering rör bara den filen.
 
-Kör `spike/` först om du vill kontrollera att lånet fungerar i din tenant
+Kör `docs/spike/` först om du vill kontrollera att lånet fungerar i din tenant
 innan du använder tillägget på riktigt.
 
 ## Moduler
@@ -251,7 +276,7 @@ src/
                 för tokenfångst)
   options/      inställningar
 tests/          enhetstester, körs i webbläsaren
-spike/          Steg 0 — fristående test av token-lånet
+docs/           spike/ (Steg 0 — fristående test av token-lånet) och skisser
 ```
 
 Trädlogiken ligger medvetet i sidan och inte i servicearbetaren: den är då
@@ -267,6 +292,14 @@ Inga beroenden och ingen tenant behövs.
 Testerna täcker trädbygget och plupp-rollupen, inklusive de fall som är lätta
 att få fel: grupper med flera föräldrar, cirkulära medlemskap, kanter till
 grupper utanför urvalet och sortering på svenska tecken.
+
+De täcker att tenanter hålls isär: att en token aldrig lämnas ut för fel
+tenant eller utan tenant, att en flik följer sin senaste trafik men inte
+flyttas av portalens kvarglömda lagring eller av en hemtenants profiltoken,
+att en livlig tenant inte tränger ut en annans tokens, och att cache och
+inlärda adresser nycklas per tenant. Och att en saknad Intune-token känns igen
+på felkoden, inte på feltexten, och att en adress utanför Intunes backend
+aldrig anropas.
 
 De täcker också paletten: att ett mörkt tema räknas som mörkt, att vändpunkten
 ligger vid mellangrått, att en obegriplig bakgrund lämnar sidan i utgångsläget i
@@ -313,10 +346,10 @@ där om en tagg inte ensam ska räcka för att skicka ut en version.
 | Data | Var | Livslängd |
 | --- | --- | --- |
 | Råa access-tokens | Enbart i servicearbetarens minne | Försvinner när servicearbetaren somnar, senast när webbläsaren stängs. Når aldrig disk. |
-| Grupper, medlemskap, tilldelningar | `chrome.storage.session` | Minnesbaserat, rensas när webbläsaren stängs. Cache-TTL 15 min. Skrivs inte till disk. |
+| Grupper, medlemskap, tilldelningar | `chrome.storage.session`, per tenant | Minnesbaserat, rensas när webbläsaren stängs. Cache-TTL 15 min. Skrivs inte till disk. |
 | Inställningar (prefix, UI-läge) | `chrome.storage.local` | Kvar på disk tills tillägget avinstalleras. |
-| Intunes backend-adresser för tenanten | `chrome.storage.local` | Kvar på disk. Innehåller regionvärd, tjänstnamn, api-version och för settings catalog en tenant-GUID. |
-| Portalsidor som gett oss token | `chrome.storage.local` | Kvar på disk. En URL till intune.microsoft.com. |
+| Intunes backend-adresser, per tenant | `chrome.storage.local` | Kvar på disk. Nycklade på tenantens id. Innehåller regionvärd, tjänstnamn, api-version och för settings catalog en tenant-GUID. |
+| Portalsidor som gett oss token, per tenant | `chrome.storage.local` | Kvar på disk. En URL till intune.microsoft.com. |
 
 Det som ligger kvar på disk är alltså inställningar och tenantens
 tjänsteadresser — **inga tokens, inga gruppnamn, inga medlemmar**.
