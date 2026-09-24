@@ -21,7 +21,7 @@ ihopfälld.
 Tillägget är **enbart läsande**. Det gör bara `GET` mot Microsoft Graph och
 Intunes backend, och skriver ingenting i tenanten.
 
-Nuvarande version: **0.13**. Versionsstandarden är `0.1`, `0.2`, `0.3` … med ett
+Nuvarande version: **0.14**. Versionsstandarden är `0.1`, `0.2`, `0.3` … med ett
 steg per levererad omgång, och `1.0` när tillägget går att använda dagligen
 utan förbehåll. Vad som ändrats när står i [CHANGELOG.md](CHANGELOG.md), och
 versionen där ska alltid stämma med `manifest.json`.
@@ -198,11 +198,35 @@ Sidan är uppdelad i flikar. Aktiv flik sparas mellan gångerna.
 | --- | --- | --- |
 | **Träd** | Grupper, Appar, Konfiguration | Byggd. Gruppstruktur, pluppar, sök, filter, detaljpanel. |
 | **Connections** | Appar, Konfiguration, Anslutningar | Byggd. VPP-tokens, Apple ADE/DEP, Android-enrollment och APNS i tre subträd, sorterade på det som löper ut först. Licenser per VPP-token: totalt, använda och lediga, filtrerbart och sökbart. |
+| **Hälsokontroll** | Grupper, Appar, Konfiguration | Byggd, slås på i inställningarna. 27 regler för rätt och fel i tilldelningarna — se nedan. |
 | **Rapporter** | Grupper, Appar, Enheter | Inte byggd. Excel-export per grupp med enheter, serienummer, användare, inventarie och appar. Egen xlsx-skrivare utan beroenden. |
 
 Träd och detaljer ligger sida vid sida, och breda vyer som rapporttabeller och
 VPP-listor har den plats de behöver. Det var sidopanelens bredd som en gång
 tvingade ner detaljerna under raderna — på en hel sida behövs inte det.
+
+### Hälsokontroll
+
+Slås på med **Hälsokontroll** i inställningarna. Fliken granskar tenantens
+tilldelningar mot regler i `src/health/checks.js`. Varje regel säger hur det
+ska se ut och listar det som avviker. Fel står först, sorterade på allvar;
+regler som gick igenom står under **Rätt**, så att det syns att de kördes.
+
+Utöver trädets data behöver kontrollen veta vad varje grupp innehåller —
+användare eller enheter, vilka plattformar, inaktiverade konton — och om
+okända grupp-id i tilldelningarna är borttagna. Det hämtas med ett
+`$batch`-anrop per 20 grupper. Bara första sidan (999) medlemmar per grupp
+läses, så antal i stora grupper är golv, och texterna säger "minst". Saknas
+underlaget står berörda regler som okända, aldrig som gröna.
+
+Det här fångas bland annat: användarlicens till iPad-vagnar, "tillgänglig"
+till enhetsgrupper, enhetslicens till elevgrupper, fler mottagare än licenser,
+appar och profiler till fel plattform, användare undantagna från
+enhetstilldelningar, installera och avinstallera på samma enheter, tomma och
+borttagna grupper, licenser låsta hos inaktiverade konton, dubbla
+Wi-Fi-profiler, cirkulära medlemskap, kioskläge på stora grupper, överlappande
+uppdateringsringar, plattformar utan efterlevnadsprincip och anslutningar som
+går ut inom 30 dagar.
 
 ## På sidan
 
@@ -269,6 +293,7 @@ src/
                 för tokenfångst)
   options/      inställningar
   demo/         påhittad tenant och en Graph-klient utan nätverk
+  health/       hälsokontrollens regler (rena funktioner)
 tests/          enhetstester, körs i webbläsaren eller i Node
 spike/          Steg 0 — fristående test av token-lånet
 ```

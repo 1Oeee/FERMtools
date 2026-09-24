@@ -37,7 +37,9 @@ export const DEFAULT_SETTINGS = {
   showLoose: true,
   onlyWithAssignments: false,
   // Påhittad tenant i stället för portalens. Se src/demo/.
-  demo: false
+  demo: false,
+  // Fliken Hälsokontroll: regler för rätt och fel i tilldelningarna.
+  healthCheck: false
 };
 
 export async function readSettings() {

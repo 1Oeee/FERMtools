@@ -4,6 +4,33 @@ Versionsstandard: `0.1`, `0.2`, `0.3` … Ett steg per levererad omgång.
 Versionen står i `manifest.json` och ska alltid stämma med översta posten här.
 `1.0` när tillägget är stabilt nog att användas dagligen utan förbehåll.
 
+## 0.14 — 2026-09-24
+
+Hälsokontroll: tilldelningarna granskas mot regler för rätt och fel.
+
+- **Ny flik, Hälsokontroll,** som slås på under inställningarna. Avstängd
+  från början, eftersom den läser medlemmarna i varje grupp.
+- **27 kontroller.** Varje kontroll säger hur det ska se ut och listar det
+  som avviker: användarlicens till enhetsgrupper, "tillgänglig" till enheter,
+  enhetslicens till användare, fler mottagare än licenser, fel plattform,
+  undantag av fel sort, installera och avinstallera samtidigt, tomma och
+  borttagna grupper, licenser hos inaktiverade konton, dubbla Wi-Fi-profiler,
+  blandade grupper, cirklar, djup nästling, dubbletter, kioskläge på stora
+  grupper, användargrupper bland enhetsgrupper, överlappande
+  uppdateringsringar, plattformar utan efterlevnadsprincip, anslutningar som
+  går ut med flera.
+- **Fel först, rätt sist.** Fel sorteras på allvar, därefter varningar och
+  sådant att titta på. Kontroller som gick igenom står under **Rätt** — så
+  syns det att de faktiskt kördes. Saknas underlag står kontrollen som okänd,
+  aldrig som grön.
+- **Reglerna är rena funktioner** i `src/health/checks.js`, utan nätverk och
+  DOM. Underlaget — vad varje grupp innehåller och vilka okända grupper som
+  är borttagna — hämtas av servicearbetaren. Bara första sidan medlemmar per
+  grupp läses, så antal i stora grupper är golv: texterna säger "minst".
+- **Demotenantens facit är testfall.** Varje inlagt fel anger vilken kontroll
+  som ska hitta det, och testerna kräver att den gör det. En liten, välskött
+  tenant kräver åt andra hållet att ingenting flaggas.
+
 ## 0.13 — 2026-09-24
 
 Demoläge: AidTune går att använda utan tenant.

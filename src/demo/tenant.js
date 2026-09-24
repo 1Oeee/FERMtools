@@ -71,7 +71,10 @@ function group(displayName, options = {}) {
     index: groups.length - 1,
     users: options.users ?? 0,
     devices: options.devices ?? 0,
-    tag: options.tag ?? "DEV"
+    tag: options.tag ?? "DEV",
+    // Entras operativsystem för gruppens enheter, som Entra själv skriver det.
+    os: options.os ?? "Windows",
+    disabled: Boolean(options.disabled)
   });
   for (const parent of options.parents ?? []) nest(parent, g);
   return g;
@@ -91,6 +94,7 @@ const ALLA_ANDROID = group("Intune - Alla Android", {
   parents: [ALLA_ENHETER],
   devices: 34,
   tag: "AND",
+  os: "AndroidEnterprise",
   rule: '(device.deviceOSType -eq "AndroidEnterprise")'
 });
 const SKOLOR = group("Intune - Skolor");
@@ -120,11 +124,14 @@ function devices(s, { carts, elevPc, kiosk, laptops, typoInRule }) {
     parents: [s.ipads],
     devices: typoInRule ? 0 : vary(60, 90),
     tag: `${s.tag}-IPAD`,
+    os: "IPad",
     rule: `(device.enrollmentProfileName -eq "${profileName} iPad 1:1")`
   });
   s.carts = [];
   for (let n = 1; n <= carts; n++) {
-    s.carts.push(group(`Intune - ${s.name} - iPads - Vagn ${n}`, { parents: [s.ipads], devices: 30, tag: `${s.tag}-VAGN${n}` }));
+    s.carts.push(
+      group(`Intune - ${s.name} - iPads - Vagn ${n}`, { parents: [s.ipads], devices: 30, tag: `${s.tag}-VAGN${n}`, os: "IPad" })
+    );
   }
 
   s.windows = group(`Intune - ${s.name} - Windows`, { parents: [s.enheter, ALLA_WINDOWS] });
@@ -241,7 +248,7 @@ const UNDANTAG = group("Intune - Undantag - Begränsningar", {
 });
 
 // Sådant som blivit kvar.
-const GAMLA = group("Intune - GAMLA - Elever avgång 2023", { users: 184, tag: "AVG23" });
+const GAMLA = group("Intune - GAMLA - Elever avgång 2023", { users: 184, tag: "AVG23", disabled: true });
 group("Intune - GAMLA - iPads Västerskolan");
 group("Intune - Test - Tom grupp");
 const KIOSK_BIB = group("Intune - Kiosk - Biblioteket", { devices: 6, tag: "BIB" });
@@ -267,6 +274,7 @@ const BLANDAT = group("Intune - Söderskolan - Blandat", {
   users: 8,
   devices: 14,
   tag: "SODER-MIX",
+  os: "IPad",
   description: "Lärare och deras iPads, för hemskärmen"
 });
 
@@ -300,31 +308,52 @@ const LAST = ["Andersson", "Johansson", "Karlsson", "Nilsson", "Eriksson", "Lars
 /** Mer än så här behöver detaljpanelen aldrig. */
 const MEMBER_CAP = 250;
 
-/** Direkta användare och enheter i en grupp. Samma utfall varje gång. */
-export function membersOf(groupId) {
+/**
+ * Direkta användare och enheter i en grupp. Samma utfall varje gång.
+ * @param {number} [cap] Högst så här många av varje sort.
+ */
+export function membersOf(groupId, cap = MEMBER_CAP) {
   const m = meta.get(groupId);
   if (!m) return null;
 
   const users = [];
-  for (let n = 0; n < Math.min(m.users, MEMBER_CAP); n++) {
+  for (let n = 0; n < Math.min(m.users, cap); n++) {
     const first = FIRST[(m.index * 7 + n * 3) % FIRST.length];
     const last = LAST[(m.index * 5 + n * 7) % LAST.length];
     users.push({
       id: `10000000-0000-4000-8000-${String(m.index * 1000 + n).padStart(12, "0")}`,
       displayName: `${first} ${last}`,
-      userPrincipalName: `${ascii(first)}.${ascii(last)}${n > 29 ? n : ""}@contoso.com`
+      userPrincipalName: `${ascii(first)}.${ascii(last)}${n > 29 ? n : ""}@contoso.com`,
+      accountEnabled: !m.disabled
     });
   }
 
   const devices = [];
-  for (let n = 0; n < Math.min(m.devices, MEMBER_CAP); n++) {
+  for (let n = 0; n < Math.min(m.devices, cap); n++) {
     devices.push({
       id: `20000000-0000-4000-8000-${String(m.index * 1000 + n).padStart(12, "0")}`,
-      displayName: `${m.tag}-${String(n + 1).padStart(3, "0")}`
+      displayName: `${m.tag}-${String(n + 1).padStart(3, "0")}`,
+      operatingSystem: m.os
     });
   }
 
   return { users, devices };
+}
+
+/**
+ * Som Graphs /groups/{id}/members: undergrupper, användare och enheter i en
+ * och samma lista, med @odata.type som skiljer dem åt.
+ */
+export function directMembersOf(groupId, cap) {
+  const members = membersOf(groupId, cap);
+  if (!members) return null;
+
+  const typed = (type) => (member) => ({ "@odata.type": `#microsoft.graph.${type}`, ...member });
+  return [
+    ...(children.get(groupId) ?? []).map((id) => ({ "@odata.type": "#microsoft.graph.group", id })),
+    ...members.users.map(typed("user")),
+    ...members.devices.map(typed("device"))
+  ].slice(0, cap);
 }
 
 // --- Tilldelningar -------------------------------------------------------
@@ -470,7 +499,7 @@ export const mobileApps = [
   ]),
   vppApp("Kahoot!", VPP_GRUND, { total: 150, used: 97, publisher: "Kahoot!" }, [
     ...larareAll.map((g) => available(g, USER_LICENCE)),
-    available(oster.ipads, USER_LICENCE) // "tillgänglig" till en enhetsgrupp
+    available(vaster.ipads, USER_LICENCE) // "tillgänglig" till en enhetsgrupp
   ]),
   vppApp("Seesaw", VPP_GRUND, { total: 200, used: 188, user: false, publisher: "Seesaw Learning" }, [
     required(norr.carts[1], DEVICE_LICENCE),
@@ -682,6 +711,7 @@ const configNamed = (name) => byName([...deviceConfigurations, ...configurationP
 export const MISTAKES = [
   {
     title: "Användarlicens till en iPad-vagn",
+    check: "user-licence-to-devices",
     where: "Book Creator → Norrskolan - iPads - Vagn 1",
     why: "Delade iPads har ingen inloggad användare med Apple-konto, så en användarlicens kan aldrig lösas in. Appen står som väntande för evigt. Delade enheter behöver enhetslicens.",
     items: [appNamed("Book Creator")],
@@ -689,13 +719,15 @@ export const MISTAKES = [
   },
   {
     title: "\"Tillgänglig\" till en enhetsgrupp",
-    where: "Kahoot! → Österskolan - iPads",
+    check: "available-to-devices",
+    where: "Kahoot! → Västerskolan - iPads",
     why: "Tillgänglig betyder att användaren väljer appen i Företagsportalen. Det fungerar bara mot användargrupper — mot en enhetsgrupp syns appen ingenstans.",
     items: [appNamed("Kahoot!")],
-    groups: [oster.ipads]
+    groups: [vaster.ipads]
   },
   {
     title: "Enhetslicens till elevgrupper",
+    check: "device-licence-to-users",
     where: "Seesaw → Norrskolan - Åk 1 och Åk 2",
     why: "Appen följer eleverna i stället för vagnarna och tar en licens per enhet varje elev loggar in på. Licenserna tar slut långt innan alla vagnar fått appen.",
     items: [appNamed("Seesaw")],
@@ -703,6 +735,7 @@ export const MISTAKES = [
   },
   {
     title: "Fler mottagare än licenser",
+    check: "licence-overcommit",
     where: "Duolingo → Alla elever",
     why: "200 licenser, obligatorisk till ungefär 2 600 elever. De första 200 får appen, resten får ett licensfel. Alla licenser är redan förbrukade.",
     items: [appNamed("Duolingo")],
@@ -710,6 +743,7 @@ export const MISTAKES = [
   },
   {
     title: "iOS-app till Windows-datorer",
+    check: "platform-mismatch",
     where: "Keynote → Västerskolan - Windows - Elev-PC",
     why: "Intune tillåter tilldelningen men ingenting händer. Den skräpar ner rapporterna och får det att se ut som att Elev-PC har en app de inte har.",
     items: [appNamed("Keynote")],
@@ -717,6 +751,7 @@ export const MISTAKES = [
   },
   {
     title: "Windows-profil till iPads",
+    check: "platform-mismatch",
     where: "Windows – Begränsningar elev → Söderskolan - iPads",
     why: "Profilen gäller bara Windows och gör ingenting på iPads. Troligen ett felklick bland liknande gruppnamn — begränsningarna man ville ha på iPads saknas då.",
     items: [configNamed("Windows – Begränsningar elev")],
@@ -724,6 +759,7 @@ export const MISTAKES = [
   },
   {
     title: "Användargrupp undantagen från enhetsgrupper",
+    check: "mixed-exclusion",
     where: "iOS – Begränsningar grundskola, undantag: Undantag - Begränsningar",
     why: "Intune kan inte undanta användare från en tilldelning till enheter. Personalen i undantagsgruppen får begränsningarna ändå.",
     items: [configNamed("iOS – Begränsningar grundskola")],
@@ -731,6 +767,7 @@ export const MISTAKES = [
   },
   {
     title: "Bortglömt undantag",
+    check: "exclusion-inside-target",
     where: "Microsoft Teams → All personal, undantag: Söderskolan - Lärare",
     why: "Undantaget lades in under en pilot och togs aldrig bort. Söderskolans lärare saknar Teams på sina telefoner utan att någon vet varför.",
     items: [appNamed("Microsoft Teams")],
@@ -738,6 +775,7 @@ export const MISTAKES = [
   },
   {
     title: "Installera och avinstallera samtidigt",
+    check: "intent-conflict",
     where: "Google Chrome → Söderskolan - Elev-PC (installera) och Söderskolan - Enheter (avinstallera)",
     why: "Elev-PC ligger inuti Enheter, så datorerna får båda avsikterna. Utfallet avgörs av Intunes konfliktregler och är svårt att förutse.",
     items: [appNamed("Google Chrome")],
@@ -745,6 +783,7 @@ export const MISTAKES = [
   },
   {
     title: "Tilldelat till en tom dynamisk grupp",
+    check: "empty-target",
     where: "Swift Playgrounds → Västerskolan - iPads - 1:1",
     why: "Regeln letar efter registreringsprofilen \"Vasterskolan iPad 1:1\" — utan ä. Profilen i ADE heter \"Västerskolan iPad 1:1\", så gruppen är tom och ingen iPad får appen.",
     items: [appNamed("Swift Playgrounds")],
@@ -752,6 +791,7 @@ export const MISTAKES = [
   },
   {
     title: "Tilldelning till en borttagen grupp",
+    check: "deleted-target",
     where: "SMART Notebook → (borttagen grupp)",
     why: "Gruppen \"Hamngymnasiet - Windows - Lärar-PC\" är borttagen, men tilldelningen ligger kvar. Den syns inte i trädet eftersom gruppen inte finns — lärardatorerna där får inte appen.",
     items: [appNamed("SMART Notebook")],
@@ -760,6 +800,7 @@ export const MISTAKES = [
   },
   {
     title: "Licenser till elever som gått ut",
+    check: "disabled-users",
     where: "Explain Everything → GAMLA - Elever avgång 2023",
     why: "184 användarlicenser är låsta hos konton som inte används längre. Samtidigt är licenserna nästan slut för lärarna.",
     items: [appNamed("Explain Everything")],
@@ -767,6 +808,7 @@ export const MISTAKES = [
   },
   {
     title: "Två Wi-Fi-profiler för samma nätverk",
+    check: "duplicate-ssid",
     where: "iOS – Wi-Fi Elevnät och iOS – Wi-Fi Elevnät (gammal)",
     why: "Båda gäller SSID Contoso-Elev, en med certifikat och en med lösenord. Söderskolans iPads får båda, och vilken som vinner varierar från iPad till iPad.",
     items: [configNamed("iOS – Wi-Fi Elevnät"), configNamed("iOS – Wi-Fi Elevnät (gammal)")],
@@ -774,6 +816,7 @@ export const MISTAKES = [
   },
   {
     title: "Användare och enheter i samma grupp",
+    check: "mixed-group",
     where: "iOS – Hemskärm Söderskolan → Söderskolan - Blandat",
     why: "En enhetsprofil mot en blandad grupp träffar både iPadarna och alla enheter lärarna i gruppen använder, även deras egna telefoner.",
     items: [configNamed("iOS – Hemskärm Söderskolan")],
@@ -781,6 +824,7 @@ export const MISTAKES = [
   },
   {
     title: "Samma app två gånger via nästling",
+    check: "redundant-assignment",
     where: "Microsoft 365 Apps → Alla Windows och Contosogymnasiet - Elevdatorer 1:1",
     why: "Elevdatorerna ingår redan i Alla Windows. Det är ofarligt men skräpar ner, och den dag någon tar bort den ena tilldelningen tror de att appen försvinner.",
     items: [appNamed("Microsoft 365 Apps")],
@@ -788,6 +832,7 @@ export const MISTAKES = [
   },
   {
     title: "Cirkulärt medlemskap",
+    check: "cycle",
     where: "Test A ↔ Test B, med Test – Experimentinställningar",
     why: "A innehåller B som innehåller A. Entra löser inte upp cirklar på samma sätt överallt, så det är oklart vilka som får policyn.",
     items: [configNamed("Test – Experimentinställningar")],
@@ -795,6 +840,7 @@ export const MISTAKES = [
   },
   {
     title: "Djup nästling döljer räckvidden",
+    check: "deep-nesting",
     where: "iOS – Pilot: ny hemskärm → Projekt - Digitalisering",
     why: "Fyra nivåer ner ligger två enskilda klasser och Österskolans alla elever. Det syns inte på projektgruppen hur många som faktiskt får profilen.",
     items: [configNamed("iOS – Pilot: ny hemskärm")],
@@ -802,6 +848,7 @@ export const MISTAKES = [
   },
   {
     title: "Samma app från en utgången VPP-token",
+    check: "duplicate-item",
     where: "Numbers (VPP Gamla konto) → Norrskolan - iPads",
     why: "Token gick ut för över en månad sedan. Norrskolan har Numbers två gånger, och den gamla kopian kan inte synkas eller licensieras om.",
     items: [appNamed("Numbers", VPP_GAMMAL)],
@@ -809,6 +856,7 @@ export const MISTAKES = [
   },
   {
     title: "Elevbegränsningar till alla användare",
+    check: "restriction-all-users",
     where: "iOS – Skärmtid elever → Alla användare",
     why: "\"Alla användare\" betyder även personalen. Lärarnas iPads och telefoner får elevernas skärmtidsgränser.",
     items: [configNamed("iOS – Skärmtid elever")],
@@ -816,6 +864,7 @@ export const MISTAKES = [
   },
   {
     title: "Kioskläge på elevernas datorer",
+    check: "kiosk-large",
     where: "Windows – Kioskläge → Hamngymnasiet - Elevdatorer 1:1",
     why: "Skulle ha gått till kioskdatorerna. Hundratals elevdatorer låses till en enda app vid nästa synk.",
     items: [configNamed("Windows – Kioskläge")],
@@ -823,6 +872,7 @@ export const MISTAKES = [
   },
   {
     title: "Lärare nästlade i en iPad-grupp",
+    check: "users-in-device-branch",
     where: "Österskolan - Lärare inuti Österskolan - iPads",
     why: "Tanken var att lärarna också skulle få apparna. Men enhetsprofilerna för elevernas iPads följer nu med till lärarnas egna enheter.",
     items: [],
@@ -830,6 +880,7 @@ export const MISTAKES = [
   },
   {
     title: "Överlappande uppdateringsringar",
+    check: "overlapping-rings",
     where: "Windows Update – Ring 1 och Ring 2",
     why: "Ring 2 omfattar Alla Windows, där Söderskolans personaldatorer redan ingår — och de ligger också i Ring 1. De får två uppsättningar uppdateringsregler.",
     items: [configNamed("Windows Update – Ring 1 (Pilot)"), configNamed("Windows Update – Ring 2 (Bred)")],
@@ -837,6 +888,7 @@ export const MISTAKES = [
   },
   {
     title: "Anslutningar som går ut",
+    check: "expiring-connections",
     where: "Anslutningar: APNS om 12 dagar, Android-kiosk om 3 dagar, VPP Förvaltningen om 9 dagar",
     why: "Går APNS-certifikatet ut slutar alla Apple-enheter att ta emot något från Intune, och förnyelsen måste göras med samma Apple-ID. Ett utgånget Android-token och en utgången VPP-token finns redan.",
     items: [],

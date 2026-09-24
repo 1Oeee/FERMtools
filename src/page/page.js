@@ -7,8 +7,12 @@ import { applyPortalTheme } from "./theme.js";
 import { treeModule } from "./modules/tree.js";
 import { connectionsModule } from "./modules/connections.js";
 import { reportsModule } from "./modules/reports.js";
+import { healthModule } from "./modules/health.js";
 
-const MODULES = [treeModule, connectionsModule, reportsModule];
+const MODULES = [treeModule, connectionsModule, healthModule, reportsModule];
+
+/** Moduler med en `setting` visas bara när den inställningen är på. */
+const availableModules = () => MODULES.filter((m) => !m.setting || state.settings?.[m.setting]);
 
 const ui = {
   tokens: document.getElementById("tokens"),
@@ -83,10 +87,11 @@ function moduleContext() {
   };
 }
 
-const activeModule = () => MODULES.find((m) => m.id === state.activeId) ?? MODULES[0];
+const activeModule = () => availableModules().find((m) => m.id === state.activeId) ?? MODULES[0];
 
 async function showModule(id) {
-  state.activeId = id;
+  // En flik som slagits av i inställningarna finns inte längre att visa.
+  state.activeId = (availableModules().find((m) => m.id === id) ?? MODULES[0]).id;
   renderTabs();
   renderTokens(); // raden speglar den aktiva modulens behov
 
@@ -114,7 +119,7 @@ function invalidateModules() {
 
 function renderTabs() {
   ui.tabs.replaceChildren(
-    ...MODULES.map((module) => {
+    ...availableModules().map((module) => {
       const tab = el("button", `tab${module.id === state.activeId ? " active" : ""}`, module.label);
       tab.type = "button";
       tab.setAttribute("role", "tab");
@@ -233,7 +238,8 @@ function renderNotices() {
       tone: "info",
       text:
         "Demoläge: Contoso kommun, dess skolor, grupper och tilldelningar är påhittade. " +
-        "Ingenting hämtas från någon tenant.",
+        "Ingenting hämtas från någon tenant." +
+        (state.settings?.healthCheck ? "" : " Slå på Hälsokontroll i inställningarna så letas felen upp åt dig."),
       details: state.demoMistakes.length
         ? {
             summary: `Inlagda fel att leta efter (${state.demoMistakes.length})`,
@@ -458,12 +464,16 @@ chrome.runtime.onMessage.addListener((message) => {
 
   // Modulhämtningar sker utanför skalets egen laddning, men framstegen
   // ska synas på samma ställe.
-  if (message?.type === "progress" && (state.loading || message.stage === "connections")) {
+  if (
+    message?.type === "progress" &&
+    (state.loading || message.stage === "connections" || message.stage === "health")
+  ) {
     const labels = {
       groups: "Hämtar grupper",
       edges: "Läser medlemskap",
       assignments: "Läser tilldelningar",
-      connections: "Läser anslutningar"
+      connections: "Läser anslutningar",
+      health: "Hälsokontroll: läser"
     };
     const detail = message.detail;
     const n = typeof detail === "number" || typeof detail === "string" ? ` (${detail})` : "";

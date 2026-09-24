@@ -27,6 +27,11 @@ const ROUTES = [
       ? tenant.groups
       : tenant.groups.filter((g) => g.displayName.toLowerCase().startsWith(prefix));
   }],
+  [/^\/groups\/([^/]+)$/, ([, id]) => tenant.groups.find((g) => g.id === id) ?? null],
+  [/^\/groups\/([^/]+)\/members$/, ([, id], query) => {
+    const top = Number(new URLSearchParams(query).get("$top")) || 100;
+    return tenant.directMembersOf(id, top);
+  }],
   [/^\/groups\/([^/]+)\/members\/microsoft\.graph\.(group|user|device)$/, ([, id, kind]) => {
     const members = tenant.membersOf(id);
     if (!members) return null;

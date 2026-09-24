@@ -63,6 +63,52 @@ const ALL_USERS = "microsoft.graph.allLicensedUsersAssignmentTarget";
 // Settings catalog kallar fältet "name", allt annat "displayName".
 const itemName = (item) => item?.displayName ?? item?.name ?? "(namnlös)";
 
+/**
+ * Vilken plattform gäller posten? Läses ur typnamnet, eller ur `platforms`
+ * för settings catalog. null betyder alla, eller okänt — t.ex. webbappar.
+ */
+export function platformOf(item) {
+  const type = String(item?.["@odata.type"] ?? "").replace(/^#microsoft\.graph\./, "");
+  const hint = type || String(item?.platforms ?? "");
+  if (/^ios|^iPad|^iOS/i.test(hint)) return "iOS";
+  if (/^macOS/i.test(hint)) return "macOS";
+  if (/^android|^aosp/i.test(hint)) return "Android";
+  if (/^windows|^win32|^winGet|^officeSuite|^microsoftStore/i.test(hint)) return "Windows";
+  return null;
+}
+
+const TARGET_KIND = {
+  [GROUP_TARGET]: "group",
+  [EXCLUSION_TARGET]: "exclude",
+  [ALL_DEVICES]: "allDevices",
+  [ALL_USERS]: "allUsers"
+};
+
+/**
+ * Det hälsokontrollen behöver veta om en post — och inget mer. Rådatat från
+ * Intune är stort; det här är det som faktiskt avgör om en tilldelning är rimlig.
+ */
+function describeItem(item, source) {
+  const licensing = item.licensingType;
+  return {
+    id: item.id,
+    name: itemName(item),
+    sourceKey: source.key,
+    sourceLabel: source.label,
+    kind: source.kind,
+    type: String(item["@odata.type"] ?? "").replace(/^#microsoft\.graph\./, "") || null,
+    platform: platformOf(item),
+    vppTokenId: item.vppTokenId ?? null,
+    vppOrganization: item.vppTokenOrganizationName ?? null,
+    totalLicenses: typeof item.totalLicenseCount === "number" ? item.totalLicenseCount : null,
+    usedLicenses: typeof item.usedLicenseCount === "number" ? item.usedLicenseCount : null,
+    userLicensing: licensing ? Boolean(licensing.supportsUserLicensing) : null,
+    deviceLicensing: licensing ? Boolean(licensing.supportsDeviceLicensing) : null,
+    ssid: item.ssid ?? null,
+    wifiSecurity: item.wiFiSecurityType ?? null
+  };
+}
+
 function bucketFor(byGroup, groupId) {
   let bucket = byGroup.get(groupId);
   if (!bucket) {
@@ -86,6 +132,10 @@ export async function fetchAssignments(graphClient, intuneClient, onProgress = n
 
   /** VPP-appar plockas ut på vägen, så Connections slipper hämta om dem. */
   const vppApps = [];
+
+  /** Hälsokontrollens underlag: varje post, och varje tilldelning platt. */
+  const described = [];
+  const details = [];
 
   const results = await runSequentially(SOURCES, (source) =>
     fetchSource(
@@ -127,9 +177,23 @@ export async function fetchAssignments(graphClient, intuneClient, onProgress = n
         kind: source.kind
       };
 
+      described.push(describeItem(item, source));
+
       for (const assignment of item.assignments ?? []) {
         const target = assignment?.target;
         const type = targetType(target);
+
+        if (TARGET_KIND[type]) {
+          const deviceLicensing = assignment?.settings?.useDeviceLicensing;
+          details.push({
+            itemId: item.id,
+            target: TARGET_KIND[type],
+            groupId: target?.groupId ?? null,
+            // Profiler och policyer har ingen avsikt; appar har alltid en.
+            intent: assignment?.intent ?? null,
+            deviceLicensing: typeof deviceLicensing === "boolean" ? deviceLicensing : null
+          });
+        }
 
         if (type === GROUP_TARGET && target.groupId) {
           bucketFor(byGroup, target.groupId)[source.kind === "app" ? "apps" : "configs"].push(
@@ -158,5 +222,5 @@ export async function fetchAssignments(graphClient, intuneClient, onProgress = n
     });
   }
 
-  return { byGroup, global, sources, vppApps };
+  return { byGroup, global, sources, vppApps, items: described, details };
 }

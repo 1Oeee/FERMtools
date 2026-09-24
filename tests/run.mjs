@@ -9,6 +9,7 @@ globalThis.location = new URL("chrome-extension://test/tests/tests.html");
 const { runAll } = await import("./tree.test.js");
 await import("./theme.test.js");
 await import("./demo.test.js");
+await import("./health.test.js");
 
 const { passed, total } = await runAll(({ name, ok, error }) => {
   console.log(`${ok ? "✓" : "✗"} ${name}${ok ? "" : `\n    ${error}`}`);

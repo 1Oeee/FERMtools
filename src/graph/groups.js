@@ -96,6 +96,89 @@ export async function fetchMembers(client, groupId, limit = 200) {
   return { users, devices };
 }
 
+/** Entras operativsystem är fritext: "iOS", "IPad", "Windows", "AndroidEnterprise" … */
+export function osFamily(operatingSystem) {
+  const os = String(operatingSystem ?? "");
+  if (/ios|ipad|iphone/i.test(os)) return "iOS";
+  if (/windows/i.test(os)) return "Windows";
+  if (/android/i.test(os)) return "Android";
+  if (/mac/i.test(os)) return "macOS";
+  return "other";
+}
+
+const MEMBER_PAGE = 999;
+
+/**
+ * Vad varje grupp innehåller direkt: användare, enheter per plattform och
+ * inaktiverade konton. Underlag för hälsokontrollen.
+ *
+ * Bara första sidan per grupp läses — det räcker för att avgöra vad en grupp
+ * är, och håller antalet anrop nere. Större grupper markeras `capped`, och
+ * deras antal är då ett golv, inte en exakt siffra.
+ *
+ * @returns {Promise<{ composition: Map<string, object>, failed: string[] }>}
+ */
+export async function fetchComposition(client, groupIds, onProgress = null) {
+  const requests = groupIds.map((id) => ({
+    id,
+    url: `/groups/${id}/members?$select=id,operatingSystem,accountEnabled&$top=${MEMBER_PAGE}`
+  }));
+
+  const results = await client.batchGet(requests, { onProgress });
+  const composition = new Map();
+  const failed = [];
+
+  for (const [groupId, result] of results) {
+    if (!result.ok) {
+      failed.push(groupId);
+      continue;
+    }
+
+    const counts = { users: 0, disabled: 0, groups: 0, devices: { iOS: 0, Windows: 0, Android: 0, macOS: 0, other: 0 } };
+    const members = Array.isArray(result.body?.value) ? result.body.value : [];
+
+    for (const member of members) {
+      const type = String(member["@odata.type"] ?? "");
+      if (type.endsWith(".user")) {
+        counts.users += 1;
+        if (member.accountEnabled === false) counts.disabled += 1;
+      } else if (type.endsWith(".device")) {
+        counts.devices[osFamily(member.operatingSystem)] += 1;
+      } else if (type.endsWith(".group")) {
+        counts.groups += 1;
+      }
+    }
+
+    counts.capped = Boolean(result.body?.["@odata.nextLink"]) || members.length >= MEMBER_PAGE;
+    composition.set(groupId, counts);
+  }
+
+  return { composition, failed };
+}
+
+/**
+ * Grupper som tilldelningar pekar på men som inte finns i trädet. Antingen
+ * ligger de utanför prefixet, eller så är de borttagna — bara ett uppslag
+ * säger vilket.
+ *
+ * @returns {Promise<{ found: Array<{id: string, displayName: string}>, deleted: string[] }>}
+ */
+export async function lookupGroups(client, groupIds) {
+  if (!groupIds.length) return { found: [], deleted: [] };
+
+  const results = await client.batchGet(
+    groupIds.map((id) => ({ id, url: `/groups/${id}?$select=id,displayName` }))
+  );
+
+  const found = [];
+  const deleted = [];
+  for (const [id, result] of results) {
+    if (result.ok) found.push({ id, displayName: result.body?.displayName ?? id });
+    else if (result.error?.status === 404) deleted.push(id);
+  }
+  return { found, deleted };
+}
+
 /** Är gruppen dynamisk? Påverkar vad detaljpanelen visar. */
 export function isDynamic(group) {
   return Boolean(group?.membershipRule);

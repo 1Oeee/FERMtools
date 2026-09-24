@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AidTune",
-  "version": "0.13",
+  "version": "0.14",
   "description": "Egen sida i Intune-portalen: Entra-gruppernas nästlade struktur som ett träd, med pluppar för var appar och konfigurationer är tilldelade.",
   "permissions": ["storage", "webRequest", "tabs"],
   "host_permissions": [

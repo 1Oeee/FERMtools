@@ -314,6 +314,41 @@ button.linklike:hover {
   margin-top: 6px;
 }
 
+/* --- Hälsokontroll --- */
+
+.health-mark {
+  display: inline-block;
+  width: 16px;
+  font-weight: 700;
+  text-align: center;
+  margin-right: 6px;
+}
+
+.health-check summary .subtree-when {
+  margin-left: 8px;
+}
+
+.health-right {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 6px 0 4px;
+}
+
+.health-findings {
+  margin: 4px 0 2px;
+  padding-left: 22px;
+  font-size: 13px;
+}
+
+.health-findings li {
+  margin-bottom: 5px;
+}
+
+.health-findings.plain {
+  list-style: none;
+  padding-left: 0;
+}
+
 .notice-details summary {
   cursor: pointer;
   font-weight: 600;

@@ -11,7 +11,13 @@ import {
 } from "../graph/endpoints.js";
 import { pathFor, rememberPath } from "./paths.js";
 import { createGraphClient } from "../graph/client.js";
-import { fetchGroups, fetchChildEdges, fetchMembers } from "../graph/groups.js";
+import {
+  fetchGroups,
+  fetchChildEdges,
+  fetchMembers,
+  fetchComposition,
+  lookupGroups
+} from "../graph/groups.js";
 import { fetchAssignments } from "../graph/assignments.js";
 import { fetchConnections } from "../graph/connections.js";
 import { readCache, writeCache, clearCache, readSettings, writeSettings } from "./cache.js";
@@ -218,6 +224,9 @@ async function loadTree({ force = false } = {}) {
       sources: assignmentData.sources,
       // Bärs med hit så Connections slipper svepa igenom alla appar igen.
       vppApps: assignmentData.vppApps ?? [],
+      // Hälsokontrollens underlag. Litet jämfört med rådatat.
+      items: assignmentData.items ?? [],
+      assignmentDetails: assignmentData.details ?? [],
       failedEdges: failed.map((f) => ({ id: f.id, error: f.error.message ?? String(f.error) })),
       fetchedAt: Date.now()
     };
@@ -272,6 +281,74 @@ async function loadConnections({ force = false } = {}) {
     return await connectionsInFlight;
   } finally {
     connectionsInFlight = null;
+  }
+}
+
+const HEALTH_KEY = "health-data";
+let healthInFlight = null;
+
+/**
+ * Det hälsokontrollen behöver utöver trädet: vad varje grupp innehåller,
+ * vilka okända grupp-id som är borttagna, och anslutningarna. Själva reglerna
+ * körs i sidan — här hämtas bara underlaget.
+ */
+async function loadHealth({ force = false } = {}) {
+  const settings = await readSettings();
+
+  if (!force) {
+    const cached = await readCache(HEALTH_KEY);
+    if (cached && cached.demo === settings.demo && cached.prefix === settings.prefix) return cached;
+  }
+
+  if (healthInFlight) return healthInFlight;
+
+  healthInFlight = (async () => {
+    // Samma träd som sidan redan visar — ⟳ i fliken hämtar om medlemmarna, inte trädet.
+    const tree = await loadTree();
+    const clients = clientsFor(settings);
+    const progress = (detail) => broadcast({ type: "progress", stage: "health", detail });
+
+    progress("medlemmar");
+    const { composition, failed } = await fetchComposition(
+      clients.groups,
+      tree.groups.map((g) => g.id),
+      (done, total) => progress(`${done}/${total}`)
+    );
+
+    // Tilldelningar till grupper utanför trädet: finns de, eller är de borta?
+    const known = new Set(tree.groups.map((g) => g.id));
+    const unknown = [
+      ...new Set((tree.assignmentDetails ?? []).map((a) => a.groupId).filter((id) => id && !known.has(id)))
+    ];
+    progress("okända grupper");
+    const lookup = await lookupGroups(clients.groups, unknown).catch(() => null);
+
+    let connections = null;
+    try {
+      connections = await loadConnections();
+    } catch {
+      // Utan anslutningar blir bara den kontrollen okänd.
+    }
+
+    const payload = {
+      demo: settings.demo,
+      prefix: settings.prefix,
+      composition: [...composition.entries()],
+      failedComposition: failed.length,
+      outside: lookup?.found ?? [],
+      deleted: lookup?.deleted ?? null,
+      connections: connections ? { items: connections.items } : null,
+      fetchedAt: Date.now()
+    };
+
+    await writeCache(HEALTH_KEY, payload);
+    return payload;
+  })();
+
+  try {
+    return await healthInFlight;
+  } finally {
+    healthInFlight = null;
   }
 }
 
@@ -339,6 +416,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
     },
 
+    health: async () => {
+      try {
+        return { ok: true, data: await loadHealth({ force: Boolean(message.force) }) };
+      } catch (e) {
+        return { ok: false, error: e.message ?? String(e) };
+      }
+    },
+
     members: async () => {
       try {
         const settings = await readSettings();
@@ -357,6 +442,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       // Prefixet styr urvalet och demoläget källan — cachen är ogiltig.
       await clearCache(CACHE_KEY);
       await clearCache(CONNECTIONS_KEY);
+      await clearCache(HEALTH_KEY);
       broadcast({ type: "settings-changed", settings: next, status: await currentStatus() });
       return next;
     }
