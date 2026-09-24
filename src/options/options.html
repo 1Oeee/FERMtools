@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="sv">
+  <head>
+    <meta charset="utf-8" />
+    <title>AidTune – inställningar</title>
+    <link rel="stylesheet" href="../page/page.css" />
+    <style>
+      body {
+        display: block;
+        padding: 20px;
+        max-width: 620px;
+      }
+      h1 {
+        font-size: 17px;
+        margin: 0 0 16px;
+      }
+      .field {
+        margin-bottom: 18px;
+      }
+      label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 3px;
+      }
+      .hint {
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 3px;
+      }
+      input[type="text"] {
+        width: 100%;
+        padding: 6px 8px;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        background: var(--bg);
+        color: var(--fg);
+        font: inherit;
+      }
+      .check {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+      }
+      .check label {
+        font-weight: 400;
+        margin: 0;
+      }
+      #saved {
+        color: var(--app);
+        font-size: 12px;
+        margin-left: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>AidTune – inställningar</h1>
+
+    <div class="field">
+      <label for="prefix">Visa grupper vars namn börjar med</label>
+      <input id="prefix" type="text" spellcheck="false" />
+      <div class="hint">
+        Tomt fält hämtar alla grupper i tenanten. Det fungerar, men blir långsamt
+        och rörigt i en stor tenant.
+      </div>
+    </div>
+
+    <div class="field check">
+      <input id="showLoose" type="checkbox" />
+      <div>
+        <label for="showLoose">Visa grupper utan hierarki</label>
+        <div class="hint">
+          Grupper som varken har föräldrar eller barn samlas längst ner i en egen lista.
+        </div>
+      </div>
+    </div>
+
+    <div class="field check">
+      <input id="onlyWithAssignments" type="checkbox" />
+      <div>
+        <label for="onlyWithAssignments">Visa bara grenar med tilldelningar</label>
+        <div class="hint">
+          Döljer grupper som varken har, eller har något under sig med, appar eller
+          konfigurationer.
+        </div>
+      </div>
+    </div>
+
+    <button id="save" type="button" class="secondary">Spara</button>
+    <span id="saved" hidden>Sparat — hämtar om på AidTune-sidan.</span>
+
+    <p class="hint" style="margin-top: 28px">
+      <a id="tests" href="#">Kör enhetstesterna</a> för trädbygget.
+    </p>
+
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

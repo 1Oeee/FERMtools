@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+  "name": "AidTune",
+  "version": "0.12",
+  "description": "Egen sida i Intune-portalen: Entra-gruppernas nästlade struktur som ett träd, med pluppar för var appar och konfigurationer är tilldelade.",
+  "permissions": ["storage", "webRequest", "tabs"],
+  "host_permissions": [
+    "https://intune.microsoft.com/*",
+    "https://graph.microsoft.com/*",
+    "https://*.manage.microsoft.com/*"
+  ],
+  "background": {
+    "service_worker": "src/background/service-worker.js",
+    "type": "module"
+  },
+  "options_ui": {
+    "page": "src/options/options.html",
+    "open_in_tab": true
+  },
+  "action": {
+    "default_title": "AidTune — öppna i Intune-portalen"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://intune.microsoft.com/*"],
+      "js": ["src/content/token-scan.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://intune.microsoft.com/*"],
+      "js": ["src/content/portal-nav.js"],
+      "css": ["src/content/portal-nav.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["src/page/page.html"],
+      "matches": ["https://intune.microsoft.com/*"]
+    }
+  ]
+}

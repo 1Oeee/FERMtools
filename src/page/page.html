@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="sv">
+  <head>
+    <meta charset="utf-8" />
+    <title>AidTune</title>
+    <link rel="stylesheet" href="page.css" />
+  </head>
+  <body>
+    <header>
+      <div class="titlerow">
+        <h1 class="brand">AidTune</h1>
+        <span class="brand-sub">Grupper, tilldelningar och anslutningar</span>
+        <div class="actions">
+          <button id="refresh" type="button" class="icon" title="Hämta om">⟳</button>
+          <button id="detach" type="button" class="icon" title="Öppna i egen flik">⧉</button>
+          <button id="settings" type="button" class="icon" title="Inställningar">⚙</button>
+          <button id="close" type="button" class="icon" title="Stäng och visa portalen" hidden>✕</button>
+        </div>
+      </div>
+
+      <div id="tokens" class="tokenbar"></div>
+
+      <div id="notices"></div>
+      <div id="status" hidden></div>
+
+      <!-- Flikarna sist: deras understrykning ska möta kanten mot innehållet,
+           precis som i portalens egna blad. -->
+      <nav id="tabs" class="tabs" role="tablist"></nav>
+    </header>
+
+    <main id="module"></main>
+
+    <footer id="footer"></footer>
+
+    <script type="module" src="page.js"></script>
+  </body>
+</html>

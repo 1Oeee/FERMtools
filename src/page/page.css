@@ -1,0 +1,883 @@
+/* Paletten här är ett utgångsläge, inte facit.
+ *
+ * Ligger sidan i portalen mäter `theme.js` portalens egna färger och skriver
+ * över var och en av egenskaperna nedan som inline-stil på rotelementet — då
+ * gäller portalens tema, vilket det än är. Det som står här används när ingen
+ * portal svarat: i en egen flik, och under den första bråkdelen av en sekund
+ * innan mätningen kommit fram.
+ *
+ * Ändras ett värde här ska motsvarande värde i `theme.js` följa med. */
+
+:root {
+  color-scheme: light;
+  --bg: #ffffff;
+  --fg: #1b1a19;
+  --muted: #605e5c;
+  --line: #e1dfdd;
+  --card: #f5f4f2;
+  --hover: #efedeb;
+  --selected: #dbeafe;
+  --accent: #0f6cbd;
+  --config: #2b88d8;
+  --app: #2f9e4f;
+  --bad: #a4262c;
+  --warn: #8a6100;
+  --mark: #fde68a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #1b1a19;
+    --fg: #f3f2f1;
+    --muted: #a19f9d;
+    --line: #3b3a39;
+    --card: #252423;
+    --hover: #323130;
+    --selected: #0e3a5c;
+    --accent: #479ef5;
+    --config: #479ef5;
+    --app: #6bb700;
+    --bad: #f1707b;
+    --warn: #d9a441;
+    --mark: #6b5600;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background: var(--bg);
+  color: var(--fg);
+  font: 13px/1.4 "Segoe UI", system-ui, sans-serif;
+}
+
+/* --- Verktygsrad --- */
+
+header {
+  padding: 10px 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+/* --- Titelrad --- */
+
+/* Sidan är ett blad bland portalens andra blad och ska presentera sig som
+   ett: namn till vänster, knappar till höger. */
+.titlerow {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.brand {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.brand-sub {
+  flex: 1;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Tokenraden: en knapp per token vi behöver, som visar om vi har den och
+   tar portalfliken till sidan som ger den. */
+.tokenbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  margin-bottom: 6px;
+}
+
+.tokenbar-label {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.chip-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1.5px solid;
+}
+
+.chip.ok {
+  border-color: var(--app);
+  color: var(--app);
+}
+
+.chip.ok .chip-dot {
+  background: var(--app);
+  border-color: var(--app);
+}
+
+.chip.missing {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.chip.missing .chip-dot {
+  background: transparent;
+  border-color: var(--warn);
+}
+
+.chip:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.pool {
+  flex: 1 0 100%;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.pool summary {
+  cursor: pointer;
+}
+
+.pool .d-list {
+  margin-top: 4px;
+}
+
+.pool .d-list li {
+  flex-direction: column;
+  gap: 0;
+}
+
+.toolbar {
+  display: flex;
+  gap: 6px;
+}
+
+input[type="search"] {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+}
+
+input[type="search"]:focus-visible,
+button:focus-visible,
+.row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+button {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--card);
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+button.icon {
+  flex: 0 0 28px;
+  height: 28px;
+  font-size: 14px;
+  line-height: 1;
+}
+
+button.secondary.small {
+  padding: 3px 8px;
+  font-size: 12px;
+}
+
+button.linklike {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  text-align: left;
+  cursor: pointer;
+}
+
+button.linklike:hover {
+  text-decoration: underline;
+  background: none;
+}
+
+#status {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.notice {
+  margin-top: 6px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  border-left: 3px solid;
+  background: var(--card);
+  font-size: 12px;
+}
+
+.notice-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.notice-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.notice-close {
+  flex: 0 0 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 16px;
+}
+
+.notice-close:hover {
+  background: none;
+  color: var(--fg);
+}
+
+.notice-restore {
+  margin-top: 6px;
+  padding: 3px 8px;
+  width: 100%;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.notice.bad {
+  border-color: var(--bad);
+}
+
+.notice.warn {
+  border-color: var(--warn);
+}
+
+.notice.info {
+  border-color: var(--accent);
+}
+
+/* --- Trädet --- */
+
+.tree-rows {
+  overflow: auto;
+  padding: 4px 0 8px;
+}
+
+.tree-rows:focus {
+  outline: none;
+}
+
+.row {
+  --depth: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px 2px calc(6px + var(--depth) * 14px);
+  cursor: default;
+  white-space: nowrap;
+}
+
+.row:hover {
+  background: var(--hover);
+}
+
+.row.selected {
+  background: var(--selected);
+}
+
+.chev {
+  flex: 0 0 14px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+}
+
+.chev:hover {
+  background: none;
+  color: var(--fg);
+}
+
+.chev.leaf {
+  cursor: default;
+}
+
+.name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.name mark {
+  background: var(--mark);
+  color: inherit;
+  border-radius: 2px;
+}
+
+.badge {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.badge.warn {
+  color: var(--warn);
+}
+
+.dots {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 4px;
+  padding-left: 4px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid transparent;
+  display: inline-block;
+}
+
+.dot.config.direct {
+  background: var(--config);
+  border-color: var(--config);
+}
+
+.dot.config.below {
+  background: transparent;
+  border-color: var(--config);
+}
+
+.dot.app.direct {
+  background: var(--app);
+  border-color: var(--app);
+}
+
+.dot.app.below {
+  background: transparent;
+  border-color: var(--app);
+}
+
+.dot.none {
+  background: transparent;
+  border-color: transparent;
+}
+
+.loose {
+  margin: 8px 8px 0;
+  border-top: 1px solid var(--line);
+  padding-top: 6px;
+}
+
+.loose summary {
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.loose .rows {
+  margin-top: 4px;
+}
+
+/* --- Detaljpanel --- */
+
+/* Står till höger om trädet, i full höjd. Det var sidopanelens bredd som en
+   gång tvingade ner den under raderna — på en hel sida finns plats. */
+.tree-details {
+  flex: 0 0 440px;
+  padding: 8px 14px;
+  overflow: auto;
+  background: var(--card);
+}
+
+/* Rubriken sitter kvar när man scrollar i detaljerna, så knappen som fäller
+   ihop panelen alltid går att nå. */
+.d-title {
+  position: sticky;
+  top: -8px;
+  margin: -8px -14px 4px;
+  padding: 8px 14px 4px;
+  background: var(--card);
+  z-index: 1;
+}
+
+.d-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.d-groupname {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.d-collapse {
+  flex: 0 0 22px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.d-collapse:hover {
+  background: none;
+  color: var(--fg);
+}
+
+.tree-details.collapsed {
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
+.tree-details.collapsed .d-body {
+  display: none;
+}
+
+.d-kind,
+.d-desc {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.d-desc {
+  margin: 4px 0;
+  word-break: break-word;
+}
+
+.d-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 10px 0 3px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.d-head .count {
+  font-variant-numeric: tabular-nums;
+}
+
+.d-empty {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 4px 0;
+}
+
+.d-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.d-list li {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 2px 0;
+}
+
+.d-name {
+  min-width: 0;
+  word-break: break-word;
+}
+
+.d-src {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.d-rule {
+  margin: 0;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.d-id {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.d-id code {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  word-break: break-all;
+  color: var(--muted);
+}
+
+.d-links {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+footer {
+  padding: 5px 14px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* --- Flikrad --- */
+
+.tabs {
+  display: flex;
+  min-width: 0;
+  gap: 2px;
+  margin-top: 8px;
+  /* Understrykningen ska täcka kanten under raden, inte ligga ovanpå den. */
+  margin-bottom: -1px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  padding: 4px 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: none;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.tab:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+
+.tab.active {
+  color: var(--fg);
+  font-weight: 600;
+  border-bottom-color: var(--accent);
+}
+
+/* --- Modulyta --- */
+
+#module {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Löpande text ska inte bli längre än den går att läsa, hur bred skärmen än är. */
+.module-pad {
+  flex: 1;
+  min-height: 0;
+  max-width: 1000px;
+  padding: 14px;
+  overflow: auto;
+}
+
+.lead {
+  margin: 0 0 10px;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.mono {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11px;
+  word-break: break-all;
+}
+
+table.grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+table.grid th,
+table.grid td {
+  padding: 4px 8px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+}
+
+table.grid th {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.yes {
+  color: var(--app);
+}
+
+.no {
+  color: var(--warn);
+}
+
+.row-kv {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.row-kv .k {
+  color: var(--muted);
+}
+
+/* Utgangsdatum: farre dagar kvar, starkare varning. */
+.exp-expired,
+.exp-critical {
+  color: var(--bad);
+  font-weight: 600;
+}
+
+.exp-warn {
+  color: var(--warn);
+}
+
+.exp-ok {
+  color: var(--app);
+}
+
+.exp-unknown {
+  color: var(--muted);
+}
+
+/* --- Tradmodulen --- */
+
+.tree-toolbar {
+  display: flex;
+  gap: 6px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.item-filter {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: 12px;
+}
+
+/* Trad till vanster, detaljer till hoger — sidan ar bred nog for bada. */
+.tree-body {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+}
+
+.tree-rows {
+  flex: 1;
+  min-height: 0;
+  border-right: 1px solid var(--line);
+}
+
+
+/* Forma som bara kanske gar att na via reservvagen - varken ja eller nej. */
+.chip.maybe {
+  border-color: var(--muted);
+  color: var(--muted);
+}
+
+.chip.maybe .chip-dot {
+  background: var(--muted);
+  border-color: var(--muted);
+  opacity: 0.55;
+}
+
+.tokenbar-where {
+  flex: 1 0 100%;
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+/* --- Connections --- */
+
+.headline {
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+}
+
+.headline-label {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.headline-name {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 2px 0;
+  word-break: break-word;
+}
+
+.headline-when {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.subtree {
+  margin-bottom: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+.subtree.nested {
+  margin: 10px 0 2px;
+  background: var(--card);
+}
+
+.subtree > summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.subtree-name {
+  font-weight: 600;
+}
+
+.subtree-when {
+  font-size: 12px;
+}
+
+.licence-search {
+  width: 100%;
+  margin-top: 8px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: 12px;
+}
+
+table.grid td.num,
+table.grid th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.licence-filter {
+  width: 100%;
+  margin-top: 8px;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: 12px;
+}
+
+table.grid tr.clickable {
+  cursor: pointer;
+}
+
+table.grid tr.clickable:hover td {
+  background: var(--hover);
+}
+
+table.grid tr.selected-row td {
+  background: var(--selected);
+}

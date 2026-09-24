@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="sv">
+  <head>
+    <meta charset="utf-8" />
+    <title>AidTune – Steg 0</title>
+    <link rel="stylesheet" href="panel.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Steg 0 – tokenkontroll</h1>
+      <p class="sub">Verifierar att portalens Graph-token går att låna.</p>
+    </header>
+
+    <section id="token" class="card">
+      <div class="muted">Läser av …</div>
+    </section>
+
+    <div class="actions">
+      <button id="refresh" type="button" class="secondary">Läs av igen</button>
+      <button id="probe" type="button" class="primary">Kör testanrop</button>
+    </div>
+
+    <section id="results"></section>
+
+    <details class="help">
+      <summary>Om inget fångas</summary>
+      <ol>
+        <li>Öppna <code>intune.microsoft.com</code> i en flik och logga in.</li>
+        <li>Gå till <strong>Grupper</strong> och öppna en grupp — det tvingar portalen att anropa Graph.</li>
+        <li>Klicka <strong>Läs av igen</strong> här.</li>
+      </ol>
+    </details>
+
+    <script type="module" src="panel.js"></script>
+  </body>
+</html>

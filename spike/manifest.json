@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "AidTune – Steg 0 (spike)",
+  "version": "0.2",
+  "description": "Verifierar att Intune-portalens Graph-token går att låna.",
+  "permissions": ["sidePanel", "storage", "webRequest", "tabs"],
+  "host_permissions": [
+    "https://intune.microsoft.com/*",
+    "https://graph.microsoft.com/*",
+    "https://*.manage.microsoft.com/*"
+  ],
+  "background": {
+    "service_worker": "service-worker.js",
+    "type": "module"
+  },
+  "side_panel": {
+    "default_path": "panel.html"
+  },
+  "action": {
+    "default_title": "AidTune (spike)"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://intune.microsoft.com/*"],
+      "js": ["content-token.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

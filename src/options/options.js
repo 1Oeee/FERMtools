@@ -1,0 +1,47 @@
+const fields = {
+  prefix: document.getElementById("prefix"),
+  showLoose: document.getElementById("showLoose"),
+  onlyWithAssignments: document.getElementById("onlyWithAssignments")
+};
+
+const saveBtn = document.getElementById("save");
+const saved = document.getElementById("saved");
+
+function send(message) {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage(message, (response) => {
+      resolve(chrome.runtime.lastError ? null : response);
+    });
+  });
+}
+
+(async () => {
+  const settings = (await send({ type: "settings" })) ?? {};
+  fields.prefix.value = settings.prefix ?? "";
+  fields.showLoose.checked = Boolean(settings.showLoose);
+  fields.onlyWithAssignments.checked = Boolean(settings.onlyWithAssignments);
+})();
+
+saveBtn.addEventListener("click", async () => {
+  saveBtn.disabled = true;
+
+  await send({
+    type: "save-settings",
+    patch: {
+      prefix: fields.prefix.value,
+      showLoose: fields.showLoose.checked,
+      onlyWithAssignments: fields.onlyWithAssignments.checked
+    }
+  });
+
+  saveBtn.disabled = false;
+  saved.hidden = false;
+  setTimeout(() => {
+    saved.hidden = true;
+  }, 2000);
+});
+
+// Testsidan ligger i tillägget, så den måste öppnas via dess egen URL.
+const tests = document.getElementById("tests");
+tests.href = chrome.runtime.getURL("tests/tests.html");
+tests.target = "_blank";

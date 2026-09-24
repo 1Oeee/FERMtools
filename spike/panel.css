@@ -1,0 +1,200 @@
+:root {
+  --bg: #ffffff;
+  --fg: #1b1a19;
+  --muted: #605e5c;
+  --line: #e1dfdd;
+  --card: #faf9f8;
+  --ok: #107c10;
+  --warn: #b7791f;
+  --bad: #a4262c;
+  --accent: #0f6cbd;
+  --config: #2b88d8;
+  --app: #3aa655;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1b1a19;
+    --fg: #f3f2f1;
+    --muted: #a19f9d;
+    --line: #3b3a39;
+    --card: #252423;
+    --ok: #6bb700;
+    --warn: #d9a441;
+    --bad: #f1707b;
+    --accent: #479ef5;
+    --config: #479ef5;
+    --app: #6bb700;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 12px;
+  background: var(--bg);
+  color: var(--fg);
+  font: 13px/1.45 "Segoe UI", system-ui, sans-serif;
+}
+
+h1 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.sub,
+.muted {
+  color: var(--muted);
+}
+
+.sub {
+  margin: 2px 0 12px;
+  font-size: 12px;
+}
+
+.card {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--card);
+  padding: 10px;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+.row .k {
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+
+.row .v {
+  text-align: right;
+  word-break: break-all;
+  font-variant-numeric: tabular-nums;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+button {
+  flex: 1;
+  padding: 7px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.verdict {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-weight: 600;
+  border: 1px solid;
+}
+
+.verdict.ok {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
+.verdict.bad {
+  color: var(--bad);
+  border-color: var(--bad);
+}
+
+.probe {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.probe .mark {
+  flex: 0 0 14px;
+  font-weight: 700;
+}
+
+.probe .mark.ok {
+  color: var(--ok);
+}
+
+.probe .mark.bad {
+  color: var(--bad);
+}
+
+.probe .mark.warn {
+  color: var(--warn);
+}
+
+.probe .body {
+  flex: 1;
+}
+
+.probe .why {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 2px;
+  word-break: break-word;
+}
+
+.pill {
+  display: inline-block;
+  margin: 2px 4px 2px 0;
+  padding: 1px 6px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  font-size: 11px;
+}
+
+.pill.have {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.help {
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.help ol {
+  padding-left: 18px;
+}
+
+code {
+  background: var(--card);
+  padding: 0 3px;
+  border-radius: 3px;
+}

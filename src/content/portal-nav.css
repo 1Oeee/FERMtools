@@ -1,0 +1,55 @@
+/* Formgivning för de två sakerna tillägget lägger till i portalen: punkten i
+   vänsterlisten och rutan sidan bor i.
+
+   Så lite som möjligt sägs här. Punkten bär portalens egna klasser och ska
+   ärva dess mått, färger och tema — det enda vi lägger till är markeringen
+   för att den är framme, och den ritas i currentColor så att den följer med
+   vare sig portalen står i ljust eller mörkt läge. */
+
+a.aidtune-sidebar-link {
+  position: relative;
+  cursor: pointer;
+}
+
+a.aidtune-sidebar-link.aidtune-selected {
+  background: rgba(127, 127, 127, 0.18);
+}
+
+/* Samma markering som portalen ger den valda punkten: en stapel i kanten. */
+a.aidtune-sidebar-link.aidtune-selected::before {
+  content: "";
+  position: absolute;
+  inset: 2px auto 2px 0;
+  width: 2px;
+  border-radius: 1px;
+  background: currentColor;
+}
+
+/* Rutan läggs innanför listen och den översta raden — vänster- och
+   överkanten sätts av skriptet, som mäter dem.
+
+   Bakgrunden sätts också av skriptet, till den färg portalen själv målar med,
+   så att ingenting blinkar vitt medan sidan laddar. `Canvas` är bara vad som
+   gäller tills mätningen gjorts. */
+#aidtune-host {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  z-index: 2147483000;
+  display: block;
+  background: Canvas;
+  box-shadow: inset 1px 0 0 rgba(127, 127, 127, 0.35);
+}
+
+#aidtune-host[hidden] {
+  display: none;
+}
+
+#aidtune-host > iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  margin: 0;
+  color-scheme: light dark;
+}
