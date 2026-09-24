@@ -668,13 +668,14 @@ function renderConsent() {
 
   const card = el("div", "consent");
   card.id = "consent";
-  card.append(el("h2", null, "Before you start"));
+  card.append(el("h2", null, "See your whole tenant, clearly"));
   card.append(
     el(
       "p",
       null,
-      "AidTune shows your Entra groups as a tree inside the Intune portal, with markers for " +
-        "where apps and configurations are assigned. It has no sign-in of its own — here is exactly how it gets your data:"
+      "AidTune gives you a powerful overview of how your Intune tenant is put together, right inside the " +
+        "portal you already work in. There is nothing to set up and nothing to sign in to, because it works " +
+        "through the session you already have. Here is exactly how:"
     )
   );
 
