@@ -32,9 +32,14 @@ Also included:
 - Demo mode with a fictional tenant, so you can try it without signing in
 - Follows the portal's theme (light, dark, high contrast)
 
-Read-only: AidTune only makes GET requests and never changes anything in your
-tenant. No data leaves your browser except requests to Microsoft. No
-analytics, no tracking.
+HOW IT READS YOUR DATA: AidTune has no app registration or sign-in of its own.
+It borrows the access tokens the Intune portal already holds for you. It reads
+the Authorization header of the portal's own requests to Microsoft Graph and
+Intune, and as a fallback scans the portal's browser storage for those tokens.
+It then makes read-only requests to Microsoft with them (GETs, batched through Graph's $batch endpoint), so it can read
+whatever your account can read there. Tokens stay in memory. Nothing is sent
+anywhere except to Microsoft: no analytics, no tracking, no server of ours.
+It never changes anything in your tenant. Full details in the privacy policy.
 
 AidTune is an independent project and is not affiliated with or endorsed by
 Microsoft. Microsoft, Intune and Entra are trademarks of Microsoft Corporation.
@@ -53,11 +58,14 @@ configurations are assigned, inside the Intune admin portal.
   without requiring a separate app registration. Requests from other tabs are
   ignored. Tokens are kept in memory only and never sent anywhere except back
   to Microsoft.
-- **https://intune.microsoft.com/*** : Content scripts add the menu entry and
-  the page frame to the portal, and look for the portal's existing tokens when
-  no request has been seen yet.
+- **https://intune.microsoft.com/*** : Content scripts (a) add the menu entry
+  and page frame to the portal, reading the URL fragment, theme colours and
+  the position of the menu for that, and (b) scan the portal's sessionStorage
+  and localStorage for its Graph/Intune tokens when no request has been seen
+  yet. Every stored value is inspected; only unexpired Graph/Intune tokens are
+  kept, everything else is discarded immediately.
 - **https://graph.microsoft.com/***, **https://*.manage.microsoft.com/***:
-  Read groups, memberships and assignments (GET only).
+  Read groups, memberships and assignments (read-only; GET requests, batched via $batch).
 
 ## Remote code
 No. All code is in the package.
