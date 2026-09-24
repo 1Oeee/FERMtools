@@ -48,7 +48,6 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 chrome.tabs.onRemoved.addListener((tabId) => portalTabs.delete(tabId));
 
 const tokens = new PortalTokenSource();
-tokens.start((tabId) => portalTabs.has(tabId));
 
 // Lär av portalens egna anrop: dels var Intunes backend ligger i den här
 // tenanten, dels vilka sidor i portalen som matar oss med vilken token.
@@ -81,16 +80,41 @@ tokens.onAccepted(({ capabilities, tabId }) => learnPaths(capabilities, tabId));
 
 // Portalens anrop mot Intunes backend lär oss både var tjänsten ligger och
 // vilket blad som når den.
-chrome.webRequest.onBeforeRequest.addListener(
-  (details) => {
-    const key = classify(details.url);
-    if (!key) return;
-    rememberEndpoint(key, details.url);
-    const capability = capabilityForSource(key);
-    if (capability) learnPaths([capability], details.tabId);
-  },
-  { urls: ["https://*.manage.microsoft.com/*"] }
-);
+const learnEndpoint = (details) => {
+  const key = classify(details.url);
+  if (!key) return;
+  rememberEndpoint(key, details.url);
+  const capability = capabilityForSource(key);
+  if (capability) learnPaths([capability], details.tabId);
+};
+
+// Allt som läser portalens trafik — headers, tokens, adresser — startar först
+// när användaren har samtyckt, och stoppar när samtycket dras tillbaka.
+let capturing = false;
+
+function startCapture() {
+  if (capturing) return;
+  capturing = true;
+  tokens.start((tabId) => portalTabs.has(tabId));
+  chrome.webRequest.onBeforeRequest.addListener(learnEndpoint, {
+    urls: ["https://*.manage.microsoft.com/*"]
+  });
+}
+
+function stopCapture() {
+  if (!capturing) return;
+  capturing = false;
+  tokens.stop();
+  chrome.webRequest.onBeforeRequest.removeListener(learnEndpoint);
+}
+
+readSettings().then((settings) => settings.consent && startCapture());
+
+// Första starten: öppna en välkomstflik med förklaringen. Där väljer
+// användaren mellan att godkänna och att prova demot först.
+chrome.runtime.onInstalled.addListener(({ reason }) => {
+  if (reason === "install") chrome.tabs.create({ url: chrome.runtime.getURL("src/page/page.html") });
+});
 
 // Tre klienter, tre behov. Portalen har olika Graph-tokens för katalog och
 // för device management, och en helt egen token mot Intunes backend.
@@ -357,7 +381,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // Avsändaren kontrolleras även om manifestet bara kör content scriptet på
     // portalen: garantin ska stå i koden, inte bara vara underförstådd.
     "token-from-page": async () => {
-      if (!PORTAL_URL.test(sender?.tab?.url ?? "")) return { accepted: false };
+      if (!capturing || !PORTAL_URL.test(sender?.tab?.url ?? "")) return { accepted: false };
       return { accepted: tokens.offer(message.token, null, "portalens sessionStorage") };
     },
 
@@ -434,6 +458,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     "save-settings": async () => {
       const next = await writeSettings(message.patch ?? {});
+      if (next.consent) startCapture();
+      else stopCapture();
       // Prefixet styr urvalet och demoläget källan — cachen är ogiltig.
       await clearCache(CACHE_KEY);
       await clearCache(CONNECTIONS_KEY);
@@ -477,7 +503,8 @@ chrome.action.onClicked.addListener(async () => {
 
   // Utan portal och utan inloggning finns ingenting att bädda in i. Demot
   // visas då i en egen flik — det är så en granskare utan Intune ser det.
-  if ((await readSettings()).demo) {
+  const settings = await readSettings();
+  if (settings.demo || !settings.consent) {
     await chrome.tabs.create({ url: chrome.runtime.getURL("src/page/page.html") });
     return;
   }

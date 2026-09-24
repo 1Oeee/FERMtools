@@ -39,7 +39,10 @@ export const DEFAULT_SETTINGS = {
   // Påhittad tenant i stället för portalens. Se src/demo/.
   demo: false,
   // Fliken Hälsokontroll: regler för rätt och fel i tilldelningarna.
-  healthCheck: false
+  healthCheck: false,
+  // Användaren har läst och godkänt att tillägget lånar portalens tokens.
+  // Utan det läser tillägget inga tokens alls; demoläget kräver inget samtycke.
+  consent: false
 };
 
 export async function readSettings() {

@@ -1129,3 +1129,57 @@ table.grid tr.clickable:hover td {
 table.grid tr.selected-row td {
   background: var(--selected);
 }
+
+/* --- Welcome / consent --- */
+
+.consent {
+  max-width: 640px;
+  margin: 24px auto;
+  padding: 18px 22px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--card);
+  overflow: auto;
+}
+
+.consent h2 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.consent ul {
+  padding-left: 18px;
+}
+
+.consent li {
+  margin-bottom: 8px;
+}
+
+.consent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0 10px;
+}
+
+.consent-actions button {
+  padding: 7px 14px;
+}
+
+button.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+button.primary:hover:not(:disabled) {
+  background: var(--accent);
+  filter: brightness(1.1);
+}
+
+@media (prefers-color-scheme: dark) {
+  button.primary {
+    color: #06121f;
+  }
+}

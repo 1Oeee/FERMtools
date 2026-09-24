@@ -44,6 +44,14 @@ and opens the page there. If you have no portal tab open, one is started.
 Requires Node or npm to be installed: no. Requires an app registration in
 Entra: no, see below.
 
+### First run
+
+On first install a tab opens explaining exactly how AidTune gets its data, and
+asks whether to use your own tenant or try the demo first. **Until you allow
+it, AidTune reads nothing from the portal** — no request headers, no storage.
+The choice can be changed in Settings, where revoking consent also discards any
+tokens held. See [PRIVACY.md](PRIVACY.md).
+
 ### Demo mode
 
 No tenant to try it against? Turn on **Demo mode** in the settings

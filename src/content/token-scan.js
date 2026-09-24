@@ -47,7 +47,31 @@
 
   const sent = new Set();
 
+  // Ingenting i portalens lagring läses förrän användaren har samtyckt. Samtycket
+  // ligger i tilläggets inställningar och följs live, så ett godkännande (eller
+  // ett återkallande) gäller direkt utan att portalfliken laddas om.
+  let allowed = false;
+
+  const readConsent = (settings) => {
+    const next = Boolean(settings?.consent);
+    if (next === allowed) return;
+    allowed = next;
+    if (allowed) {
+      sent.clear();
+      scan();
+    }
+  };
+
+  chrome.storage.local.get("settings").then(
+    (stored) => readConsent(stored?.settings),
+    () => {}
+  );
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && changes.settings) readConsent(changes.settings.newValue);
+  });
+
   function scan() {
+    if (!allowed) return;
     for (const store of [sessionStorage, localStorage]) {
       let keys;
       try {

@@ -45,6 +45,17 @@
         font-weight: 400;
         margin: 0;
       }
+      .disclosure {
+        margin: 0 0 18px;
+        padding: 8px 12px;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        background: var(--card);
+      }
+      .disclosure summary {
+        cursor: pointer;
+        font-weight: 600;
+      }
       #saved {
         color: var(--app);
         font-size: 12px;
@@ -100,6 +111,18 @@
     </div>
 
     <div class="field check">
+      <input id="consent" type="checkbox" />
+      <div>
+        <label for="consent">Allow AidTune to read the Intune portal's access tokens</label>
+        <div class="hint">
+          Needed to show your own tenant. Off means AidTune reads nothing from the
+          portal — only demo mode works. Turning it off also forgets any tokens it
+          holds. See "How AidTune reads data" below.
+        </div>
+      </div>
+    </div>
+
+    <div class="field check">
       <input id="demo" type="checkbox" />
       <div>
         <label for="demo">Demo mode</label>
@@ -110,6 +133,46 @@
         </div>
       </div>
     </div>
+
+    <details class="disclosure">
+      <summary>How AidTune reads data</summary>
+      <p>
+        AidTune has no sign-in and no app registration of its own. It borrows the
+        access tokens the Intune portal already holds for you, and only from tabs on
+        <code>intune.microsoft.com</code>:
+      </p>
+      <ol>
+        <li>
+          It reads the <code>Authorization</code> header of the portal's own requests
+          to <code>graph.microsoft.com</code> and <code>*.manage.microsoft.com</code>.
+          Other tabs (Outlook, Teams, Graph Explorer …) are ignored.
+        </li>
+        <li>
+          As a fallback it scans the portal's <code>sessionStorage</code> and
+          <code>localStorage</code> for tokens. To find them it inspects every stored
+          value; only unexpired tokens addressed to Graph or Intune are kept, all else
+          is discarded immediately.
+        </li>
+      </ol>
+      <p>
+        With those tokens it makes <strong>read-only</strong> requests to Microsoft:
+        groups, memberships, assignments, connectors. Every request is a GET (Graph
+        requests are grouped through its <code>$batch</code> endpoint, which contains
+        only GETs). It never creates, changes or deletes anything — but because the
+        tokens are yours, it can read whatever your account can.
+      </p>
+      <p>
+        Also read on the portal page: the URL fragment (to know which page you are
+        on), the portal's colours (to match the theme) and the position of its left
+        menu (to place AidTune's entry). Nothing else, and no other website.
+      </p>
+      <p>
+        Nothing leaves your browser except requests to Microsoft. Tokens are kept in
+        memory only and are never written to disk. No analytics, no tracking, no
+        server of ours.
+        <a id="policy" href="https://github.com/1Oeee/FERMtools/blob/main/PRIVACY.md" target="_blank" rel="noopener">Full privacy policy</a>.
+      </p>
+    </details>
 
     <button id="save" type="button" class="secondary">Save</button>
     <span id="saved" hidden>Saved — refreshing the AidTune page.</span>

@@ -364,7 +364,10 @@ function renderNotices() {
             items: state.demoMistakes
           }
         : null,
-      action: { label: "Turn off in the settings", run: () => chrome.runtime.openOptionsPage() }
+      action: {
+        label: "Use my own tenant",
+        run: () => send({ type: "save-settings", patch: { demo: false } })
+      }
     });
   }
 
@@ -507,6 +510,7 @@ function saveDismissed() {
 // --- Datahämtning --------------------------------------------------------
 
 async function load({ force = false } = {}) {
+  if (needsConsent()) return;
   state.loading = true;
   state.error = null;
   renderStatus("Fetching groups …");
@@ -579,6 +583,13 @@ chrome.runtime.onMessage.addListener((message) => {
     state.tokenStatus = message.status;
     state.data = null;
     state.health = emptyHealth();
+    if (needsConsent()) {
+      renderConsent();
+      return;
+    }
+    document.getElementById("consent")?.remove();
+    ui.refresh.disabled = false;
+    renderTabs();
     renderTokens();
     load({ force: true });
     return;
@@ -638,6 +649,86 @@ onShown(() => {
   if (!state.loading && state.error && !state.data) load();
 });
 
+// --- Welcome and consent -------------------------------------------------
+
+const POLICY_URL = "https://github.com/1Oeee/FERMtools/blob/main/PRIVACY.md";
+
+/** Until the user has chosen, nothing reads the portal's tokens. Demo needs no consent. */
+const needsConsent = () => Boolean(state.settings) && !state.settings.consent && !state.settings.demo;
+
+function renderConsent() {
+  ui.tabs.replaceChildren();
+  ui.tokens.replaceChildren();
+  ui.notices.replaceChildren();
+  ui.footer.textContent = "";
+  ui.refresh.disabled = true;
+  renderStatus(null);
+  for (const pane of panes.values()) pane.hidden = true;
+  document.getElementById("consent")?.remove();
+
+  const card = el("div", "consent");
+  card.id = "consent";
+  card.append(el("h2", null, "Before you start"));
+  card.append(
+    el(
+      "p",
+      null,
+      "AidTune shows your Entra groups as a tree inside the Intune portal, with markers for " +
+        "where apps and configurations are assigned. It has no sign-in of its own — here is exactly how it gets your data:"
+    )
+  );
+
+  const list = el("ul");
+  for (const [strong, rest] of [
+    [
+      "It borrows the access tokens the Intune portal already holds for you. ",
+      "It reads the Authorization header of the portal's own requests to Microsoft Graph and Intune, " +
+        "and scans the portal's browser storage for those tokens. Only tabs on intune.microsoft.com are looked at."
+    ],
+    [
+      "It only reads. ",
+      "It uses the tokens for read-only requests to Microsoft — groups, memberships, assignments, connectors. " +
+        "It never creates, changes or deletes anything. Because the tokens are yours, it can read whatever your account can."
+    ],
+    [
+      "Nothing leaves your browser except requests to Microsoft. ",
+      "Tokens are kept in memory only. No analytics, no tracking, no server of ours."
+    ]
+  ]) {
+    const li = el("li");
+    li.append(el("strong", null, strong), rest);
+    list.append(li);
+  }
+  card.append(list);
+
+  const link = el("a", null, "Read the full privacy policy");
+  link.href = POLICY_URL;
+  link.target = "_blank";
+  link.rel = "noopener";
+  const linkRow = el("p", "hint");
+  linkRow.append(link);
+  card.append(linkRow);
+
+  const actions = el("div", "consent-actions");
+  const allow = el("button", "primary", "Allow and use with my tenant");
+  allow.type = "button";
+  allow.addEventListener("click", () => send({ type: "save-settings", patch: { consent: true, demo: false } }));
+  const demo = el("button", "secondary", "Try the demo first");
+  demo.type = "button";
+  demo.addEventListener("click", () => send({ type: "save-settings", patch: { demo: true } }));
+  actions.append(allow, demo);
+  card.append(actions);
+  card.append(
+    el(
+      "p",
+      "hint",
+      "Demo mode uses a made-up school and reads nothing. You can change your mind any time under Settings."
+    )
+  );
+
+  ui.module.append(card);
+}
+
 // --- Start ---------------------------------------------------------------
 
 (async () => {
@@ -655,9 +746,13 @@ onShown(() => {
     /* strunt samma */
   }
 
+  state.settings = await send({ type: "settings" });
+  if (needsConsent()) {
+    renderConsent();
+    return;
+  }
   renderTabs();
   await refreshTokens();
-  state.settings = await send({ type: "settings" });
   await load();
   await refreshTokens(); // hämtningen kan ha fångat in det som saknades
 })();

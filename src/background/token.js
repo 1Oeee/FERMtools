@@ -55,6 +55,7 @@ export class PortalTokenSource {
   #pool = { [GRAPH]: new Map(), [INTUNE]: new Map() };
   #listeners = new Set();
   #acceptedListeners = new Set();
+  #hooks = [];
 
   /** Avgör om en flik är portalen. Utan filter fångas ingenting. */
   #fromPortal = () => false;
@@ -69,18 +70,29 @@ export class PortalTokenSource {
    */
   start(isPortalTab) {
     this.#fromPortal = isPortalTab;
+    if (this.#hooks.length) return; // redan igång
 
-    chrome.webRequest.onBeforeSendHeaders.addListener(
-      (details) => this.#observe(details, GRAPH),
-      { urls: ["https://graph.microsoft.com/*"] },
-      ["requestHeaders", "extraHeaders"]
-    );
+    // Lyssnarna registreras först när användaren har samtyckt (se
+    // service-worker.js) — innan dess läses ingen header alls.
+    for (const [kind, urls] of [
+      [GRAPH, ["https://graph.microsoft.com/*"]],
+      [INTUNE, ["https://*.manage.microsoft.com/*"]]
+    ]) {
+      const fn = (details) => this.#observe(details, kind);
+      chrome.webRequest.onBeforeSendHeaders.addListener(fn, { urls }, [
+        "requestHeaders",
+        "extraHeaders"
+      ]);
+      this.#hooks.push(fn);
+    }
+  }
 
-    chrome.webRequest.onBeforeSendHeaders.addListener(
-      (details) => this.#observe(details, INTUNE),
-      { urls: ["https://*.manage.microsoft.com/*"] },
-      ["requestHeaders", "extraHeaders"]
-    );
+  /** Slutar läsa headers och glömmer alla tokens — när samtycket dras tillbaka. */
+  stop() {
+    for (const fn of this.#hooks) chrome.webRequest.onBeforeSendHeaders.removeListener(fn);
+    this.#hooks = [];
+    this.#pool[GRAPH].clear();
+    this.#pool[INTUNE].clear();
   }
 
   /** Anropas när en ny token tagits emot, så sidan kan uppdatera sig. */

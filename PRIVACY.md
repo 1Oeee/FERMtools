@@ -8,6 +8,12 @@ Microsoft Entra / Intune tenant as a tree inside the Intune admin portal
 
 ## How AidTune reads data — in full
 
+**Nothing is read until you agree.** On first run AidTune shows this explanation
+and asks whether to use your tenant or try the built-in demo (which reads
+nothing). Until you allow it, AidTune does not listen to any request and does
+not look at the portal's storage. You can withdraw consent at any time in
+Settings, which stops all reading and discards the tokens it holds.
+
 AidTune has no app registration and no sign-in of its own. It works by
 **borrowing the access tokens the Intune portal already holds for you**, and it
 gets them in two ways. Both apply only to tabs on `intune.microsoft.com`.

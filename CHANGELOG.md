@@ -4,6 +4,23 @@ Version scheme: `0.1`, `0.2`, `0.3` … One step per delivered batch of work.
 The version lives in `manifest.json` and must always match the top entry here.
 `1.0` when the extension is stable enough to use daily without reservations.
 
+## 0.15 — 2026-09-24
+
+Consent first: nothing reads the portal until the user has said yes.
+
+- **Welcome and consent panel.** On first install a tab opens explaining exactly
+  how AidTune gets its data (borrowed portal tokens, read-only), with two
+  choices: allow and use your own tenant, or try the demo first.
+- **No consent, no reading.** Until the user allows it, the request-header
+  listeners are not even registered and the portal storage scan does not run.
+  Demo mode needs no consent. Revoking consent in Settings stops capture and
+  forgets every token held.
+- **Settings:** a consent toggle and a "How AidTune reads data" section with the
+  full disclosure, plus a link to the privacy policy.
+- **Demo notice:** the button is now "Use my own tenant".
+- Reports tab hidden until it is built; reading width fixed so the scrollbar
+  sits at the window edge; `tabs` permission removed; icons added; English UI.
+
 ## 0.14 — 2026-09-24
 
 Health check: the assignments are reviewed against rules for what is right and

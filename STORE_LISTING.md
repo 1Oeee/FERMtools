@@ -32,7 +32,8 @@ Also included:
 - Demo mode with a fictional tenant, so you can try it without signing in
 - Follows the portal's theme (light, dark, high contrast)
 
-HOW IT READS YOUR DATA: AidTune has no app registration or sign-in of its own.
+HOW IT READS YOUR DATA: nothing is read until you agree on first run (or you can
+try the demo, which reads nothing). AidTune has no app registration or sign-in of its own.
 It borrows the access tokens the Intune portal already holds for you. It reads
 the Authorization header of the portal's own requests to Microsoft Graph and
 Intune, and as a fallback scans the portal's browser storage for those tokens.
@@ -78,5 +79,5 @@ No. All code is in the package.
 - Privacy policy URL: https://github.com/1Oeee/FERMtools/blob/main/PRIVACY.md (works once PRIVACY.md is pushed to main)
 
 ## Assets still needed
-- Screenshots 1280x800 (take from demo mode; at least 1, up to 5)
-- Small promo tile 440x280 (optional but recommended)
+- Done: store/screenshot-*.png (1280x800) and store/promo-tile-440x280.png
+- Optionally add store/screenshot-4-consent.png (the first-run consent panel) to show reviewers the disclosure

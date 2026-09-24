@@ -3,7 +3,8 @@ const fields = {
   showLoose: document.getElementById("showLoose"),
   onlyWithAssignments: document.getElementById("onlyWithAssignments"),
   healthCheck: document.getElementById("healthCheck"),
-  demo: document.getElementById("demo")
+  demo: document.getElementById("demo"),
+  consent: document.getElementById("consent")
 };
 
 const saveBtn = document.getElementById("save");
@@ -24,6 +25,7 @@ function send(message) {
   fields.onlyWithAssignments.checked = Boolean(settings.onlyWithAssignments);
   fields.healthCheck.checked = Boolean(settings.healthCheck);
   fields.demo.checked = Boolean(settings.demo);
+  fields.consent.checked = Boolean(settings.consent);
 })();
 
 saveBtn.addEventListener("click", async () => {
@@ -36,7 +38,8 @@ saveBtn.addEventListener("click", async () => {
       showLoose: fields.showLoose.checked,
       onlyWithAssignments: fields.onlyWithAssignments.checked,
       healthCheck: fields.healthCheck.checked,
-      demo: fields.demo.checked
+      demo: fields.demo.checked,
+      consent: fields.consent.checked
     }
   });
 
