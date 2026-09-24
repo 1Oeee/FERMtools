@@ -31,6 +31,22 @@ Hälsokontroll: tilldelningarna granskas mot regler för rätt och fel.
   som ska hitta det, och testerna kräver att den gör det. En liten, välskött
   tenant kräver åt andra hållet att ingenting flaggas.
 
+Rättat:
+
+- **Flikbyten fastnade.** Från Connections eller Hälsokontroll gick det inte
+  att komma tillbaka till Träd eller vidare till Rapporter — fliken markerades
+  men innehållet stod kvar. Flikarna delade en yta, och en flik som redan
+  laddats ritade om i element som den andra fliken slängt. Nu har varje flik
+  en egen yta som göms och visas. En flik som blir klar i bakgrunden skriver
+  inte heller längre över statusraden eller sidfoten för den som är framme.
+- **Demoläget kunde få en riktig hämtnings fel.** Slogs demot på medan en
+  hämtning mot tenanten väntade på token, fick demot dess "Ingen giltig
+  token". En pågående hämtning återanvänds nu bara om den gäller samma läge
+  och prefix.
+- **Klicktest i webbläsaren**, `node tests/e2e.mjs`: laddar tillägget i en
+  huvudlös Edge och byter mellan flikarna i alla riktningar. Mot den gamla
+  flikkoden fallerar det på just de byten som fastnade.
+
 ## 0.13 — 2026-09-24
 
 Demoläge: AidTune går att använda utan tenant.

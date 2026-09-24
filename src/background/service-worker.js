@@ -104,8 +104,31 @@ const CONNECTIONS_KEY = "connections-data";
 /** Var i portalen användaren senast befann sig, enligt content scriptet. */
 let portalBlade = null;
 
-/** En hämtning i taget — sidan kan öppnas flera gånger under tiden. */
-let inFlight = null;
+/**
+ * En hämtning i taget per sort — sidan kan be om samma sak flera gånger
+ * medan den första pågår. Men bara om den gäller samma läge: slås demot på
+ * medan en riktig hämtning väntar på token ska demot inte få dess fel.
+ */
+function singleFlight() {
+  let current = null;
+  return async (key, run) => {
+    if (current?.key === key) return current.promise;
+    const entry = { key, promise: run() };
+    current = entry;
+    try {
+      return await entry.promise;
+    } finally {
+      if (current === entry) current = null;
+    }
+  };
+}
+
+const treeFlight = singleFlight();
+const connectionsFlight = singleFlight();
+const healthFlight = singleFlight();
+
+/** Vilket läge en hämtning gäller. Samma nyckel = samma svar. */
+const modeKey = (settings) => `${settings.demo ? "demo" : "tenant"}|${settings.prefix}`;
 
 function broadcast(message) {
   chrome.runtime.sendMessage(message, () => void chrome.runtime.lastError);
@@ -180,9 +203,7 @@ async function loadTree({ force = false } = {}) {
     if (cached && cached.prefix === settings.prefix && cached.demo === settings.demo) return cached;
   }
 
-  if (inFlight) return inFlight;
-
-  inFlight = (async () => {
+  return treeFlight(modeKey(settings), async () => {
     const progress = (stage, detail) => broadcast({ type: "progress", stage, detail });
     const clients = clientsFor(settings);
 
@@ -233,17 +254,8 @@ async function loadTree({ force = false } = {}) {
 
     await writeCache(CACHE_KEY, payload);
     return { ...payload, savedAt: Date.now() };
-  })();
-
-  try {
-    return await inFlight;
-  } finally {
-    inFlight = null;
-  }
+  });
 }
-
-/** En hämtning i taget även här — Connections kan öppnas om och om igen. */
-let connectionsInFlight = null;
 
 async function loadConnections({ force = false } = {}) {
   const settings = await readSettings();
@@ -253,9 +265,7 @@ async function loadConnections({ force = false } = {}) {
     if (cached && cached.demo === settings.demo) return cached;
   }
 
-  if (connectionsInFlight) return connectionsInFlight;
-
-  connectionsInFlight = (async () => {
+  return connectionsFlight(modeKey(settings), async () => {
     const clients = clientsFor(settings);
     if (!settings.demo) await ensureTokens();
 
@@ -275,17 +285,10 @@ async function loadConnections({ force = false } = {}) {
 
     await writeCache(CONNECTIONS_KEY, payload);
     return payload;
-  })();
-
-  try {
-    return await connectionsInFlight;
-  } finally {
-    connectionsInFlight = null;
-  }
+  });
 }
 
 const HEALTH_KEY = "health-data";
-let healthInFlight = null;
 
 /**
  * Det hälsokontrollen behöver utöver trädet: vad varje grupp innehåller,
@@ -300,9 +303,7 @@ async function loadHealth({ force = false } = {}) {
     if (cached && cached.demo === settings.demo && cached.prefix === settings.prefix) return cached;
   }
 
-  if (healthInFlight) return healthInFlight;
-
-  healthInFlight = (async () => {
+  return healthFlight(modeKey(settings), async () => {
     // Samma träd som sidan redan visar — ⟳ i fliken hämtar om medlemmarna, inte trädet.
     const tree = await loadTree();
     const clients = clientsFor(settings);
@@ -343,13 +344,7 @@ async function loadHealth({ force = false } = {}) {
 
     await writeCache(HEALTH_KEY, payload);
     return payload;
-  })();
-
-  try {
-    return await healthInFlight;
-  } finally {
-    healthInFlight = null;
-  }
+  });
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {

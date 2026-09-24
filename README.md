@@ -313,6 +313,11 @@ paketbygge.
 Demotesterna kör den riktiga hämtkedjan mot demotenanten. Läggs en datakälla
 till utan att demot följer med faller de.
 
+`node tests/e2e.mjs` är ett klicktest i en riktig webbläsare: det laddar
+tillägget i en huvudlös Edge med demoläge och hälsokontroll påslagna och byter
+mellan flikarna i alla riktningar. Kräver Microsoft Edge — Chrome tar inte
+längre emot `--load-extension` — och körs därför inte i GitHub Actions.
+
 Testerna täcker trädbygget och plupp-rollupen, inklusive de fall som är lätta
 att få fel: grupper med flera föräldrar, cirkulära medlemskap, kanter till
 grupper utanför urvalet och sortering på svenska tecken.

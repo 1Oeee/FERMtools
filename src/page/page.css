@@ -704,6 +704,19 @@ footer {
   overflow: hidden;
 }
 
+/* En yta per flik. Den som inte är framme göms men behåller sitt innehåll. */
+.module-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.module-pane[hidden] {
+  display: none;
+}
+
 /* Löpande text ska inte bli längre än den går att läsa, hur bred skärmen än är. */
 .module-pad {
   flex: 1;

@@ -61,12 +61,12 @@ jobs:
 
       - name: Bygg paket
         # Bara det tillägget laddar. spike/ och Projekt tree/ hör inte hemma i butiken.
-        # tests/ följer med eftersom inställningarna länkar dit — men inte Node-köraren.
+        # tests/ följer med eftersom inställningarna länkar dit — men inte Node-skripten.
         run: |
           mkdir -p dist
           paths=(manifest.json src tests)
           [[ -d icons ]] && paths+=(icons)
-          zip -r -X "dist/aidtune-${{ steps.check.outputs.version }}.zip" "${paths[@]}" -x "tests/run.mjs"
+          zip -r -X "dist/aidtune-${{ steps.check.outputs.version }}.zip" "${paths[@]}" -x "tests/*.mjs"
           unzip -l dist/*.zip
 
       - uses: actions/upload-artifact@v4

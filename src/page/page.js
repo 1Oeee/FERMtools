@@ -74,20 +74,44 @@ function send(message) {
 
 // --- Vad modulerna får se ------------------------------------------------
 
-function moduleContext() {
+/**
+ * En modul får bara skriva i statusraden och sidfoten när den är framme.
+ * Connections och Hälsokontroll hämtar i bakgrunden, och blir de klara efter
+ * att man bytt flik ska de inte skriva över fliken man faktiskt tittar på.
+ */
+function moduleContext(module) {
+  const isActive = () => activeModule() === module;
   return {
     data: state.data,
     settings: state.settings,
     tokenStatus: state.tokenStatus,
     send,
-    setStatus: renderStatus,
+    setStatus: (text) => {
+      if (isActive()) renderStatus(text);
+    },
     setFooter: (text) => {
-      ui.footer.textContent = text ?? "";
+      if (isActive()) ui.footer.textContent = text ?? "";
     }
   };
 }
 
 const activeModule = () => availableModules().find((m) => m.id === state.activeId) ?? MODULES[0];
+
+// Varje flik har en egen yta. Modulerna håller kvar referenser till sina
+// element och ritar om i dem — delade de en yta skulle fliken man byter
+// tillbaka till rita i element som en annan flik redan slängt.
+const panes = new Map();
+
+function paneFor(module) {
+  let pane = panes.get(module.id);
+  if (!pane) {
+    pane = el("div", "module-pane");
+    pane.dataset.module = module.id;
+    panes.set(module.id, pane);
+    ui.module.append(pane);
+  }
+  return pane;
+}
 
 async function showModule(id) {
   // En flik som slagits av i inställningarna finns inte längre att visa.
@@ -98,10 +122,18 @@ async function showModule(id) {
   const module = activeModule();
   ui.module.dataset.module = module.id;
 
+  const pane = paneFor(module);
+  for (const other of panes.values()) other.hidden = other !== pane;
+
+  // Sidfot och statusrad hör till fliken. Moduler som inte skriver egna ska
+  // inte ärva den förra flikens — utom under trädhämtningen, som gäller alla.
+  ui.footer.textContent = "";
+  if (!state.loading) renderStatus(null);
+
   if (state.mounted.has(module.id)) {
-    module.update?.(moduleContext());
+    module.update?.(moduleContext(module));
   } else {
-    await module.mount(ui.module, moduleContext());
+    await module.mount(pane, moduleContext(module));
     state.mounted.add(module.id);
   }
 
@@ -433,7 +465,7 @@ chrome.runtime.onMessage.addListener((message) => {
 
     // Moduler som visar behörighetsläge ska följa med direkt.
     const module = activeModule();
-    if (state.mounted.has(module.id)) module.update?.(moduleContext());
+    if (state.mounted.has(module.id)) module.update?.(moduleContext(module));
 
     if (state.loading) return;
 
@@ -464,9 +496,12 @@ chrome.runtime.onMessage.addListener((message) => {
 
   // Modulhämtningar sker utanför skalets egen laddning, men framstegen
   // ska synas på samma ställe.
+  // Trädhämtningen gäller alla flikar. Connections och Hälsokontroll hämtar
+  // för sig själva, och deras framsteg hör bara hemma när de är framme.
+  const ownStage = { connections: "connections", health: "health" }[message?.stage];
   if (
     message?.type === "progress" &&
-    (state.loading || message.stage === "connections" || message.stage === "health")
+    (state.loading || (ownStage && activeModule().id === ownStage))
   ) {
     const labels = {
       groups: "Hämtar grupper",
@@ -489,7 +524,7 @@ ui.refresh.addEventListener("click", async () => {
   const module = activeModule();
   if (module.refresh && state.mounted.has(module.id)) {
     ui.refresh.disabled = true;
-    await module.refresh(moduleContext());
+    await module.refresh(moduleContext(module));
     ui.refresh.disabled = false;
     return;
   }
