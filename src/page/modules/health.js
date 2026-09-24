@@ -44,6 +44,10 @@ function renderSummary({ counts }) {
   return box;
 }
 
+const FIX_NOTE =
+  "Åtgärderna är förslag byggda på Microsofts dokumentation, inte på er organisations rutiner — " +
+  "läs dem som en utgångspunkt.";
+
 /**
  * Gruppnamn som de står i fyndens text: utan prefix, precis som reglerna
  * skriver dem. Bara grupper som finns i trädet — en borttagen grupp, eller en
@@ -93,6 +97,40 @@ function findingText(finding, labels) {
   return fragment;
 }
 
+/**
+ * Åtgärden för kontrollen, med länkar till Microsofts dokumentation. Texterna
+ * står i src/health/guidance.js. Fälls ihop som standard — fynden är det man
+ * läser först, åtgärden när man bestämt sig för att göra något.
+ */
+function renderFix(check) {
+  const box = el("details", "health-fix");
+  const key = `fix:${check.id}`;
+  box.open = state.open.get(key) ?? false;
+  box.addEventListener("toggle", () => state.open.set(key, box.open));
+  box.append(el("summary", null, "Så åtgärdar du det"));
+
+  if (check.fix?.length) {
+    const list = el("ul");
+    for (const step of check.fix) list.append(el("li", null, step));
+    box.append(list);
+  }
+
+  if (check.docs?.length) {
+    const docs = el("div", "health-docs");
+    docs.append("Microsoft: ");
+    check.docs.forEach((doc, i) => {
+      if (i) docs.append(" · ");
+      const link = el("a", null, `${doc.label} ↗`);
+      link.href = doc.url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      docs.append(link);
+    });
+    box.append(docs);
+  }
+  return box;
+}
+
 function renderFound(check, labels) {
   const tone = TONE[check.severity];
   const box = el("details", "subtree health-check");
@@ -107,6 +145,7 @@ function renderFound(check, labels) {
   box.append(summary);
 
   box.append(el("div", "health-right", `Så ska det vara: ${check.right}`));
+  box.append(renderFix(check));
 
   // Ett fynd man letar efter ritas alltid, även om det ligger bortom taket.
   const focusIndex = state.focus?.startsWith(`${check.id}#`) ? Number(state.focus.split("#")[1]) : -1;
@@ -189,6 +228,7 @@ function draw() {
   }
 
   body.append(renderSummary(analysis));
+  body.append(el("div", "hint health-note", FIX_NOTE));
 
   const order = { bad: 0, warn: 1, info: 2 };
   const found = analysis.checks

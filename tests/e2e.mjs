@@ -150,6 +150,22 @@ try {
       `${jumpOk ? ` (${picked}: ${panel.title})` : `\n    ${JSON.stringify({ picked, panel, landed })}`}`
   );
 
+  // Åtgärden: fälls ut, har steg och länkar till Microsoft Learn i en ny flik.
+  const fix = await page.evaluate(`(() => {
+    const box = document.querySelector(".module-pane:not([hidden]) .health-fix");
+    if (!box) return null;
+    box.open = true;
+    const links = [...box.querySelectorAll(".health-docs a")];
+    return {
+      steps: box.querySelectorAll("li").length,
+      links: links.length,
+      learn: links.every((a) => a.href.startsWith("https://learn.microsoft.com/") && a.target === "_blank")
+    };
+  })()`);
+  const fixOk = Boolean(fix && fix.steps > 0 && fix.links > 0 && fix.learn);
+  if (!fixOk) failures += 1;
+  console.log(`${fixOk ? "✓" : "✗"} åtgärd med steg och Microsoft Learn-länkar${fixOk ? "" : `\n    ${JSON.stringify(fix)}`}`);
+
   // Och tillbaka: ett gruppnamn i ett fynd ska öppna trädet, fälla ut vägen
   // dit, välja gruppen och blinka raden. Vagn 1 ligger fyra nivåer ner.
   const linkText = await page.evaluate(`(() => {

@@ -15,6 +15,7 @@
 // läses. Texterna säger "minst" där det spelar roll.
 
 import { buildForest } from "../tree/build.js";
+import { GUIDANCE } from "./guidance.js";
 
 export const SEVERITIES = ["bad", "warn", "info"];
 
@@ -191,8 +192,13 @@ export const CHECKS = [
     severity: "bad",
     right: "Appar som väljs i Företagsportalen går till användargrupper.",
     needs: ["composition"],
+    // Undantagen enligt Microsoft: Win32-appar, och appar för Android Enterprise
+    // fullt hanterade och COPE-enheter, får vara Tillgängliga för enhetsgrupper.
+    // Vilket Android-läge en app används i syns inte här, så Android hoppas över.
     run: (ctx) =>
-      ctx.byItem.flatMap(({ item, includes, allDevices }) => [
+      ctx.byItem
+        .filter(({ item }) => item.type !== "win32LobApp" && item.platform !== "Android")
+        .flatMap(({ item, includes, allDevices }) => [
         ...includes
           .filter((a) => a.intent === "available" && ctx.kindOf(a.groupId) === "devices")
           .map((a) =>
@@ -877,7 +883,15 @@ export function analyse(input) {
   };
 
   const checks = CHECKS.map((check) => {
-    const base = { id: check.id, title: check.title, severity: check.severity, right: check.right };
+    const guidance = GUIDANCE[check.id] ?? { fix: [], docs: [] };
+    const base = {
+      id: check.id,
+      title: check.title,
+      severity: check.severity,
+      right: check.right,
+      fix: guidance.fix,
+      docs: guidance.docs
+    };
     if ((check.needs ?? []).some((need) => !available[need])) {
       return { ...base, status: "unknown", findings: [] };
     }

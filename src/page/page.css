@@ -352,6 +352,38 @@ button.linklike:hover {
   padding-left: 0;
 }
 
+.health-note {
+  margin: -4px 0 12px;
+}
+
+.health-fix {
+  margin: 2px 0 6px;
+  font-size: 12px;
+}
+
+.health-fix > summary {
+  cursor: pointer;
+  color: var(--accent);
+}
+
+.health-fix ul {
+  margin: 4px 0;
+  padding-left: 20px;
+}
+
+.health-fix li {
+  margin-bottom: 3px;
+}
+
+.health-docs {
+  color: var(--muted);
+  margin: 2px 0 4px 2px;
+}
+
+.health-docs a {
+  color: var(--accent);
+}
+
 .health-findings li {
   border-radius: 3px;
   padding: 1px 4px;

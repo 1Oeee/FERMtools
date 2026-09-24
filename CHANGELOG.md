@@ -42,6 +42,15 @@ Hälsokontroll: tilldelningarna granskas mot regler för rätt och fel.
   dit, väljer gruppen och blinkar raden gult — samma blinkning åt båda hållen.
   Borttagna grupper och grupper utanför prefixet står kvar som text; de har
   ingen rad att gå till. Licensfynden namnger nu också grupperna de gäller.
+- **Åtgärder för varje kontroll**, under **Så åtgärdar du det** i fliken. En
+  åtgärd per kontroll, inte per fynd; där rätt svar beror på vad som var
+  tänkt står alternativen efter varandra. Varje åtgärd länkar till Microsoft
+  Learn. Texterna är **utkast** — skrivna efter Microsofts dokumentation, inte
+  efter en organisations rutiner — och står samlade i
+  `src/health/guidance.js` för granskning.
+- **Rättat efter dokumentationen:** "Tillgänglig till enhetsgrupp" flaggade
+  även Win32-appar och Android-appar, som enligt Microsoft får vara
+  tillgängliga för enhetsgrupper. De hoppas nu över.
 - **Hälsokontrollen räknas ut en gång**, i sidans skal, och delas av trädet
   och fliken. Den hämtas efter trädet och blockerar det inte — trädet syns
   direkt och markeringarna fylls i när de är klara.

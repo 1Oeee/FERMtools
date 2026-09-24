@@ -3,7 +3,8 @@
 // måttstocken för det första; en liten, välskött tenant för det andra.
 
 import { test, assert } from "./tree.test.js";
-import { analyse, findingsByGroup } from "../src/health/checks.js";
+import { analyse, findingsByGroup, CHECKS } from "../src/health/checks.js";
+import { GUIDANCE } from "../src/health/guidance.js";
 import { createDemoClient } from "../src/demo/client.js";
 import { MISTAKES } from "../src/demo/tenant.js";
 import { fetchGroups, fetchChildEdges, fetchComposition, lookupGroups } from "../src/graph/groups.js";
@@ -165,6 +166,34 @@ test("hälsa: tips sprids inte uppåt i grenen", () => {
   const { direct, below } = findingsByGroup(analysis, new Map([["child", ["parent"]]]));
   assert.equal(direct.get("child")?.length, 1, "tipset ligger på gruppen");
   assert.notOk(below.has("parent"), "men inte på föräldern");
+});
+
+test("hälsa: varje kontroll har en åtgärd och en länk till Microsoft Learn", () => {
+  const ids = new Set(CHECKS.map((c) => c.id));
+  for (const check of CHECKS) {
+    const guidance = GUIDANCE[check.id];
+    assert.ok(guidance?.fix?.length, `åtgärd för ${check.id}`);
+    assert.ok(guidance.fix.every((step) => typeof step === "string" && step.length > 10), `text i ${check.id}`);
+    assert.ok(guidance.docs?.length, `dokumentation för ${check.id}`);
+    assert.ok(
+      guidance.docs.every((d) => d?.label && /^https:\/\/learn\.microsoft\.com\//.test(d.url)),
+      `Learn-länkar i ${check.id}`
+    );
+  }
+  assert.same(Object.keys(GUIDANCE).filter((id) => !ids.has(id)), [], "åtgärder utan kontroll");
+});
+
+test("hälsa: analysen bär med sig åtgärden", () => {
+  const check = analyse(tidyTenant()).checks.find((c) => c.id === "platform-mismatch");
+  assert.equal(check.fix, GUIDANCE["platform-mismatch"].fix, "samma åtgärd som i guidance.js");
+});
+
+test("hälsa: Win32-appar får vara Tillgängliga för enhetsgrupper", () => {
+  const input = tidyTenant();
+  input.items.push({ id: "Zoom", name: "Zoom", kind: "app", type: "win32LobApp", platform: "Windows", totalLicenses: null, usedLicenses: null });
+  input.assignments.push({ itemId: "Zoom", target: "group", groupId: "pc", intent: "available", deviceLicensing: null });
+  const check = analyse(input).checks.find((c) => c.id === "available-to-devices");
+  assert.equal(check.status, "ok", "inget fynd för Win32");
 });
 
 test("hälsa: utan medlemsdata blir de kontrollerna okända, inte gröna", () => {

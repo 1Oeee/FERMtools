@@ -228,6 +228,10 @@ Wi-Fi-profiler, cirkulära medlemskap, kioskläge på stora grupper, överlappan
 uppdateringsringar, plattformar utan efterlevnadsprincip och anslutningar som
 går ut inom 30 dagar.
 
+Varje kontroll har en åtgärd under **Så åtgärdar du det**, med länkar till
+Microsoft Learn. Texterna är utkast byggda på Microsofts dokumentation och
+står samlade i `src/health/guidance.js` — gå igenom dem mot er egen rutin.
+
 Felen syns också i **Träd**. Varje grupp får en romb bredvid prickarna:
 
 | Romb | Betyder |
