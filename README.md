@@ -21,7 +21,7 @@ ihopfälld.
 Tillägget är **enbart läsande**. Det gör bara `GET` mot Microsoft Graph och
 Intunes backend, och skriver ingenting i tenanten.
 
-Nuvarande version: **0.12**. Versionsstandarden är `0.1`, `0.2`, `0.3` … med ett
+Nuvarande version: **0.13**. Versionsstandarden är `0.1`, `0.2`, `0.3` … med ett
 steg per levererad omgång, och `1.0` när tillägget går att använda dagligen
 utan förbehåll. Vad som ändrats när står i [CHANGELOG.md](CHANGELOG.md), och
 versionen där ska alltid stämma med `manifest.json`.
@@ -43,6 +43,19 @@ och öppnar sidan där. Har du ingen portalflik öppen startas en.
 
 Kräver att Node eller npm finns installerat: nej. Kräver app-registrering i
 Entra: nej, se nedan.
+
+### Demoläge
+
+Ingen tenant att prova mot? Slå på **Demoläge** under inställningarna
+(`chrome://extensions` → AidTune → Tilläggsalternativ). Då visar sidan en
+påhittad skola hos Contoso — grupper, tilldelningar, VPP-licenser och
+anslutningar — utan inloggning och utan att något anrop lämnar webbläsaren.
+Ikonen i verktygsfältet öppnar sidan i en egen flik om ingen portal är öppen.
+
+Demot byter bara ut Graph-klienten. Hämtning, tolkning, cache och sida är
+samma kod som mot en riktig tenant, så det som fungerar i demot fungerar i
+kedjan. Det som *inte* provas är tokenlånet och punkten i portalens lista —
+de kräver portalen. Tenanten står i `src/demo/tenant.js`.
 
 ## Var sidan ligger
 
@@ -250,7 +263,8 @@ src/
   content/      portal-nav.js (punkten i listen + rutan), token-scan.js (reserv
                 för tokenfångst)
   options/      inställningar
-tests/          enhetstester, körs i webbläsaren
+  demo/         påhittad tenant och en Graph-klient utan nätverk
+tests/          enhetstester, körs i webbläsaren eller i Node
 spike/          Steg 0 — fristående test av token-lånet
 ```
 
@@ -262,7 +276,12 @@ rena funktioner utan beroenden, och kan testas för sig.
 Inga beroenden och ingen tenant behövs.
 
 Öppna inställningarna → **Kör enhetstesterna**, eller gå direkt till
-`chrome-extension://<tilläggets-id>/tests/tests.html`.
+`chrome-extension://<tilläggets-id>/tests/tests.html`. Samma tester körs i
+Node med `node tests/run.mjs`, och GitHub Actions kör dem före varje
+paketbygge.
+
+Demotesterna kör den riktiga hämtkedjan mot demotenanten. Läggs en datakälla
+till utan att demot följer med faller de.
 
 Testerna täcker trädbygget och plupp-rollupen, inklusive de fall som är lätta
 att få fel: grupper med flera föräldrar, cirkulära medlemskap, kanter till

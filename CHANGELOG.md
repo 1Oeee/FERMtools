@@ -4,6 +4,28 @@ Versionsstandard: `0.1`, `0.2`, `0.3` … Ett steg per levererad omgång.
 Versionen står i `manifest.json` och ska alltid stämma med översta posten här.
 `1.0` när tillägget är stabilt nog att användas dagligen utan förbehåll.
 
+## 0.13 — 2026-09-24
+
+Demoläge: AidTune går att använda utan tenant.
+
+- **En påhittad skola hos Contoso** med nästlade grupper, appar, profiler,
+  settings catalog, compliance, VPP-licenser och anslutningar som går ut.
+  Slås på under inställningarna. Inget anrop lämnar webbläsaren.
+- **Den riktiga hämtkedjan körs.** Demot byter bara ut Graph-klienten, så
+  `groups.js`, `assignments.js`, `connections.js`, cachen och sidan är samma
+  kod som mot en riktig tenant. Det är sidan som provas, inte en genväg förbi den.
+- **De svåra fallen finns med:** en grupp med två föräldrar, ett cirkulärt
+  medlemskap, en kant till en grupp utanför prefixet, lösa grupper, en
+  exkludering och tilldelningar till alla. Utgångsdatum räknas från dagens
+  datum, så att "går ut om tre dagar" alltid stämmer.
+- **Utan portal öppnas sidan i en egen flik** när demoläget är på — så ser en
+  granskare i Chrome Web Store, som saknar Intune, hela tillägget.
+- **Sparade inställningar hämtar om direkt** på AidTune-sidan, i stället för
+  att vänta på ⟳.
+- **Testerna går att köra i Node** (`node tests/run.mjs`), och GitHub Actions
+  kör dem före varje paketbygge. Nya tester binder demot till hämtkedjan:
+  läggs en datakälla till utan att demot följer med faller de.
+
 ## 0.12 — 2026-09-18
 
 AidTune flyttar in i portalen: sidopanelen är borta, och i stället ligger en

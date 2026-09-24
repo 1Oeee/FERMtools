@@ -52,14 +52,21 @@ jobs:
             echo "::warning file=manifest.json::Ingen 128px-ikon i manifest.json — Chrome Web Store kräver en"
           fi
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Tester
+        run: node tests/run.mjs
+
       - name: Bygg paket
         # Bara det tillägget laddar. spike/ och Projekt tree/ hör inte hemma i butiken.
-        # tests/ följer med eftersom inställningarna länkar dit.
+        # tests/ följer med eftersom inställningarna länkar dit — men inte Node-köraren.
         run: |
           mkdir -p dist
           paths=(manifest.json src tests)
           [[ -d icons ]] && paths+=(icons)
-          zip -r -X "dist/aidtune-${{ steps.check.outputs.version }}.zip" "${paths[@]}"
+          zip -r -X "dist/aidtune-${{ steps.check.outputs.version }}.zip" "${paths[@]}" -x "tests/run.mjs"
           unzip -l dist/*.zip
 
       - uses: actions/upload-artifact@v4

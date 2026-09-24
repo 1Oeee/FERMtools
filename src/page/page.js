@@ -149,6 +149,7 @@ function renderTokens() {
     }
 
     node.addEventListener("click", async () => {
+      if (status?.demo) return; // ingen portal att skicka någon till
       await send({ type: "open-path", capability: name });
       renderStatus(`Väntar på behörighet från ${info.where ?? "portalen"} …`);
       // Portalfliken är på väg till bladet — låt den synas, annars ser det ut
@@ -212,6 +213,17 @@ function renderStatus(text) {
 
 function renderNotices() {
   const notices = [];
+
+  if (state.tokenStatus?.demo) {
+    notices.push({
+      key: "demo",
+      tone: "info",
+      text:
+        "Demoläge: skolan, grupperna och tilldelningarna här är påhittade. " +
+        "Ingenting hämtas från någon tenant.",
+      action: { label: "Stäng av i inställningarna", run: () => chrome.runtime.openOptionsPage() }
+    });
+  }
 
   if (state.error) {
     notices.push({
@@ -397,6 +409,17 @@ chrome.runtime.onMessage.addListener((message) => {
     if (!hadApps && message.status?.capabilities?.apps?.have && missingAssignments) {
       load({ force: true });
     }
+    return;
+  }
+
+  // Nya inställningar — prefix, filter eller demoläge — gör det hämtade
+  // inaktuellt. Hämta om direkt i stället för att vänta på ⟳.
+  if (message?.type === "settings-changed") {
+    state.settings = message.settings;
+    state.tokenStatus = message.status;
+    state.data = null;
+    renderTokens();
+    load({ force: true });
     return;
   }
 

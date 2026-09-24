@@ -35,7 +35,9 @@ export async function clearCache(key) {
 export const DEFAULT_SETTINGS = {
   prefix: "Intune - ",
   showLoose: true,
-  onlyWithAssignments: false
+  onlyWithAssignments: false,
+  // Påhittad tenant i stället för portalens. Se src/demo/.
+  demo: false
 };
 
 export async function readSettings() {

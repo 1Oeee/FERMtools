@@ -15,6 +15,7 @@ import { fetchGroups, fetchChildEdges, fetchMembers } from "../graph/groups.js";
 import { fetchAssignments } from "../graph/assignments.js";
 import { fetchConnections } from "../graph/connections.js";
 import { readCache, writeCache, clearCache, readSettings, writeSettings } from "./cache.js";
+import { createDemoClient, demoStatus } from "../demo/client.js";
 
 // Vilka flikar är Intune-portalen? Tokens läses bara ur dessa.
 //
@@ -104,7 +105,25 @@ function broadcast(message) {
   chrome.runtime.sendMessage(message, () => void chrome.runtime.lastError);
 }
 
-tokens.onChange((status) => broadcast({ type: "token-changed", status }));
+// I demoläget är behörigheterna påhittade och ska inte skrivas över av
+// riktiga tokens som råkar fångas från en öppen portalflik.
+tokens.onChange(async (status) => {
+  if ((await readSettings()).demo) return;
+  broadcast({ type: "token-changed", status });
+});
+
+// Demoläget byter bara ut klienterna. Allt ovanför dem — hämtning, tolkning,
+// cache — är samma kod som mot en riktig tenant.
+const demoClient = createDemoClient();
+
+function clientsFor(settings) {
+  if (settings.demo) return { groups: demoClient, apps: demoClient, backend: demoClient };
+  return { groups: graphGroups, apps: graphApps, backend: intuneBackend };
+}
+
+async function currentStatus() {
+  return (await readSettings()).demo ? demoStatus() : tokens.describe();
+}
 
 /** Be öppna portalflikar att leta igenom sin lagring på nytt. */
 async function requestRescan() {
@@ -152,24 +171,25 @@ async function loadTree({ force = false } = {}) {
 
   if (!force) {
     const cached = await readCache(CACHE_KEY);
-    if (cached && cached.prefix === settings.prefix) return cached;
+    if (cached && cached.prefix === settings.prefix && cached.demo === settings.demo) return cached;
   }
 
   if (inFlight) return inFlight;
 
   inFlight = (async () => {
     const progress = (stage, detail) => broadcast({ type: "progress", stage, detail });
+    const clients = clientsFor(settings);
 
-    await ensureTokens();
+    if (!settings.demo) await ensureTokens();
 
     progress("groups", 0);
-    const groups = await fetchGroups(graphGroups, settings.prefix, (n) =>
+    const groups = await fetchGroups(clients.groups, settings.prefix, (n) =>
       progress("groups", n)
     );
 
     progress("edges", 0);
     const { edges, failed } = await fetchChildEdges(
-      graphGroups,
+      clients.groups,
       groups.map((g) => g.id),
       (done, total) => progress("edges", `${done}/${total}`)
     );
@@ -177,7 +197,7 @@ async function loadTree({ force = false } = {}) {
     progress("assignments", 0);
     let assignmentData = { byGroup: new Map(), global: [], sources: [] };
     try {
-      assignmentData = await fetchAssignments(graphApps, intuneBackend, (key, n) =>
+      assignmentData = await fetchAssignments(clients.apps, clients.backend, (key, n) =>
         progress("assignments", { key, n })
       );
     } catch (e) {
@@ -190,6 +210,7 @@ async function loadTree({ force = false } = {}) {
     // chrome.runtime-meddelanden JSON-serialiseras, så Map måste plattas ut.
     const payload = {
       prefix: settings.prefix,
+      demo: settings.demo,
       groups,
       edges: [...edges.entries()],
       assignments: [...assignmentData.byGroup.entries()],
@@ -216,23 +237,32 @@ async function loadTree({ force = false } = {}) {
 let connectionsInFlight = null;
 
 async function loadConnections({ force = false } = {}) {
+  const settings = await readSettings();
+
   if (!force) {
     const cached = await readCache(CONNECTIONS_KEY);
-    if (cached) return cached;
+    if (cached && cached.demo === settings.demo) return cached;
   }
 
   if (connectionsInFlight) return connectionsInFlight;
 
   connectionsInFlight = (async () => {
-    await ensureTokens();
+    const clients = clientsFor(settings);
+    if (!settings.demo) await ensureTokens();
 
-    const data = await fetchConnections(graphApps, intuneBackend, (key) =>
+    const data = await fetchConnections(clients.apps, clients.backend, (key) =>
       broadcast({ type: "progress", stage: "connections", detail: key })
     );
 
     // VPP-licenserna kommer ur apparna trädet redan hämtat — inga extra anrop.
     const tree = await readCache(CACHE_KEY);
-    const payload = { ...data, vppApps: tree?.vppApps ?? [], haveTreeData: Boolean(tree) };
+    const sameMode = tree?.demo === settings.demo;
+    const payload = {
+      ...data,
+      demo: settings.demo,
+      vppApps: sameMode ? (tree.vppApps ?? []) : [],
+      haveTreeData: sameMode
+    };
 
     await writeCache(CONNECTIONS_KEY, payload);
     return payload;
@@ -247,7 +277,7 @@ async function loadConnections({ force = false } = {}) {
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const handlers = {
-    status: async () => tokens.describe(),
+    status: currentStatus,
 
     // Content scriptet vet inte vilken sort det hittat — null låter
     // tokenkällan avgöra utifrån målgruppen.
@@ -274,6 +304,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     },
 
     "open-path": async () => {
+      // Det finns ingen portal att skicka någon till — allt är redan på plats.
+      if ((await readSettings()).demo) return { ok: true, demo: true };
+
       const url = await pathFor(message.capability ?? "groups");
 
       const tabs = await chrome.tabs.query({ url: "https://intune.microsoft.com/*" });
@@ -308,9 +341,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     members: async () => {
       try {
+        const settings = await readSettings();
         // Hämtas långt efter trädet, så token kan ha hunnit gå ur tiden.
-        await ensureTokens();
-        return { ok: true, ...(await fetchMembers(graphGroups, message.groupId)) };
+        if (!settings.demo) await ensureTokens();
+        return { ok: true, ...(await fetchMembers(clientsFor(settings).groups, message.groupId)) };
       } catch (e) {
         return { ok: false, error: e.message ?? String(e) };
       }
@@ -320,7 +354,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     "save-settings": async () => {
       const next = await writeSettings(message.patch ?? {});
-      await clearCache(CACHE_KEY); // prefixet styr urvalet — cachen är ogiltig
+      // Prefixet styr urvalet och demoläget källan — cachen är ogiltig.
+      await clearCache(CACHE_KEY);
+      await clearCache(CONNECTIONS_KEY);
+      broadcast({ type: "settings-changed", settings: next, status: await currentStatus() });
       return next;
     }
   };
@@ -354,6 +391,13 @@ chrome.action.onClicked.addListener(async () => {
     await chrome.tabs.update(tabs[0].id, { active: true });
     await chrome.windows.update(tabs[0].windowId, { focused: true });
     openInPortal(tabs[0].id);
+    return;
+  }
+
+  // Utan portal och utan inloggning finns ingenting att bädda in i. Demot
+  // visas då i en egen flik — det är så en granskare utan Intune ser det.
+  if ((await readSettings()).demo) {
+    await chrome.tabs.create({ url: chrome.runtime.getURL("src/page/page.html") });
     return;
   }
 
