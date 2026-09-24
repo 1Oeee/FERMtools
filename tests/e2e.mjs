@@ -101,16 +101,16 @@ try {
     })()`);
 
   const expect = {
-    Träd: (s) => s.rows > 0,
-    Connections: (s) => /Löper ut först|Hämtar/.test(s.content),
-    Hälsokontroll: (s) => /fel och/.test(s.content),
-    Rapporter: (s) => /Excel-export/.test(s.content)
+    Tree: (s) => s.rows > 0,
+    Connections: (s) => /Expires first|Fetch/.test(s.content),
+    "Health check": (s) => /errors and/.test(s.content),
+    Reports: (s) => /Excel export/.test(s.content)
   };
 
-  const route = ["Connections", "Träd", "Connections", "Rapporter", "Hälsokontroll", "Träd", "Hälsokontroll", "Rapporter", "Träd"];
+  const route = ["Connections", "Tree", "Connections", "Reports", "Health check", "Tree", "Health check", "Reports", "Tree"];
   for (const label of route) {
     await page.evaluate(`[...document.querySelectorAll(".tab")].find((t) => t.textContent === ${JSON.stringify(label)})?.click()`);
-    await sleep(label === "Hälsokontroll" ? 2500 : 900);
+    await sleep(label === "Health check" ? 2500 : 900);
     const s = await snapshot();
     const ok = s.active === label && s.visible.length === 1 && expect[label](s);
     if (!ok) failures += 1;
@@ -118,8 +118,8 @@ try {
   }
 
   // Från en markerad grupp i trädet, via detaljpanelen, till fyndet i
-  // Hälsokontroll — som ska blinka.
-  await page.evaluate(`[...document.querySelectorAll(".tab")].find((t) => t.textContent === "Träd")?.click()`);
+  // Health check — som ska blinka.
+  await page.evaluate(`[...document.querySelectorAll(".tab")].find((t) => t.textContent === "Tree")?.click()`);
   await sleep(900);
   const picked = await page.evaluate(`(() => {
     const row = document.querySelector('.module-pane:not([hidden]) .row:has(.dot.health.direct)');
@@ -143,10 +143,10 @@ try {
     };
   })()`);
 
-  const jumpOk = Boolean(picked && panel && landed.active === "Hälsokontroll" && landed.flashing && landed.open && landed.check === panel.title);
+  const jumpOk = Boolean(picked && panel && landed.active === "Health check" && landed.flashing && landed.open && landed.check === panel.title);
   if (!jumpOk) failures += 1;
   console.log(
-    `${jumpOk ? "✓" : "✗"} markering i trädet → detaljpanel → blinkande fynd i Hälsokontroll` +
+    `${jumpOk ? "✓" : "✗"} markering i trädet → detaljpanel → blinkande fynd i Health check` +
       `${jumpOk ? ` (${picked}: ${panel.title})` : `\n    ${JSON.stringify({ picked, panel, landed })}`}`
   );
 
@@ -187,11 +187,11 @@ try {
   })()`);
 
   const backOk = Boolean(
-    linkText && back.active === "Träd" && back.selected?.endsWith(linkText) && back.flashing && back.detail === back.selected
+    linkText && back.active === "Tree" && back.selected?.endsWith(linkText) && back.flashing && back.detail === back.selected
   );
   if (!backOk) failures += 1;
   console.log(
-    `${backOk ? "✓" : "✗"} gruppnamn i Hälsokontroll → vald och blinkande rad i trädet` +
+    `${backOk ? "✓" : "✗"} gruppnamn i Health check → vald och blinkande rad i trädet` +
       `${backOk ? ` (${back.selected}, nivå ${back.depth})` : `\n    ${JSON.stringify({ linkText, back })}`}`
   );
 
