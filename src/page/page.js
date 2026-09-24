@@ -214,7 +214,7 @@ function computeHealth() {
  * trädet syns direkt, markeringarna fylls i när de är klara.
  */
 async function loadHealth({ force = false } = {}) {
-  if (!state.settings?.healthCheck || !state.data) return;
+  if (!state.data) return;
 
   state.health.loading = true;
   state.health.error = null;
@@ -357,7 +357,7 @@ function renderNotices() {
       text:
         "Demo mode: Contoso municipality, its schools, groups and assignments are made up. " +
         "Nothing is fetched from any tenant." +
-        (state.settings?.healthCheck ? "" : " Turn on Health check in the settings and the mistakes are found for you."),
+        "",
       details: state.demoMistakes.length
         ? {
             summary: `Planted mistakes to look for (${state.demoMistakes.length})`,
@@ -609,7 +609,7 @@ chrome.runtime.onMessage.addListener((message) => {
       edges: "Reading memberships",
       assignments: "Reading assignments",
       connections: "Reading connections",
-      health: "Health check: reading"
+      health: "Health check: analyzing"
     };
     const detail = message.detail;
     const n = typeof detail === "number" || typeof detail === "string" ? ` (${detail})` : "";

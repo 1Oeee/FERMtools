@@ -2,7 +2,6 @@ const fields = {
   prefix: document.getElementById("prefix"),
   showLoose: document.getElementById("showLoose"),
   onlyWithAssignments: document.getElementById("onlyWithAssignments"),
-  healthCheck: document.getElementById("healthCheck"),
   demo: document.getElementById("demo"),
   consent: document.getElementById("consent")
 };
@@ -23,7 +22,6 @@ function send(message) {
   fields.prefix.value = settings.prefix ?? "";
   fields.showLoose.checked = Boolean(settings.showLoose);
   fields.onlyWithAssignments.checked = Boolean(settings.onlyWithAssignments);
-  fields.healthCheck.checked = Boolean(settings.healthCheck);
   fields.demo.checked = Boolean(settings.demo);
   fields.consent.checked = Boolean(settings.consent);
 })();
@@ -37,7 +35,6 @@ saveBtn.addEventListener("click", async () => {
       prefix: fields.prefix.value,
       showLoose: fields.showLoose.checked,
       onlyWithAssignments: fields.onlyWithAssignments.checked,
-      healthCheck: fields.healthCheck.checked,
       demo: fields.demo.checked,
       consent: fields.consent.checked
     }

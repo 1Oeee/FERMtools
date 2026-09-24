@@ -81,6 +81,3 @@ https://github.com/1Oeee/FERMtools. Token handling is in
 on the Chrome Web Store is built from this repository by the workflow in
 `.github/workflows/release.yml`.
 
-## Contact
-
-Questions: jobb@nicedesign.se
