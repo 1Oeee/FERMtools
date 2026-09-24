@@ -4,6 +4,12 @@ Version scheme: `0.1`, `0.2`, `0.3` … One step per delivered batch of work.
 The version lives in `manifest.json` and must always match the top entry here.
 `1.0` when the extension is stable enough to use daily without reservations.
 
+## 0.16 — 2026-09-24
+
+Health check is now always on and can't be toggled off. Removed the fix
+guidance from findings (show problems only). Privacy policy contact removed.
+Fixed zip build to exclude extra manifests and top-level wrappers.
+
 ## 0.15 — 2026-09-24
 
 Consent first: nothing reads the portal until the user has said yes.
