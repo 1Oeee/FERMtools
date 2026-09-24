@@ -1,12 +1,12 @@
-// Hälsokontroll: tilldelningarna granskade mot regler för rätt och fel.
+// Health check: assignments reviewed against rules for what is right and wrong.
 //
-// Reglerna står i src/health/checks.js. Sidans skal kör dem och delar
-// resultatet med trädet, som markerar grupperna; här visas hela listan. Fel
-// står först, sorterade på hur allvarliga de är. Det som är rätt står sist, så
-// att man ser att det kollats.
+// The rules live in src/health/checks.js. The page shell runs them and shares
+// the result with the tree, which marks the groups; the full list is shown
+// here. Errors come first, sorted by severity. What is correct comes last, so
+// you can see it was checked.
 //
-// Ett klick på "Visa i Hälsokontroll" i trädets detaljpanel landar här via
-// focus(): kontrollen fälls ut, fyndet rullas fram och blinkar gult tre gånger.
+// A click on "Show in Health check" in the tree's details panel lands here via
+// focus(): the check expands, the finding scrolls into view and flashes yellow three times.
 
 import { el } from "../dom.js";
 
@@ -14,9 +14,9 @@ import { el } from "../dom.js";
 const MAX_FINDINGS = 100;
 
 const TONE = {
-  bad: { mark: "✗", className: "exp-critical", label: "Fel" },
-  warn: { mark: "!", className: "exp-warn", label: "Varning" },
-  info: { mark: "i", className: "exp-unknown", label: "Att titta på" }
+  bad: { mark: "✗", className: "exp-critical", label: "Error" },
+  warn: { mark: "!", className: "exp-warn", label: "Warning" },
+  info: { mark: "i", className: "exp-unknown", label: "Worth a look" }
 };
 
 const state = {
@@ -33,20 +33,20 @@ function renderSummary({ counts }) {
   const problems = counts.bad + counts.warn;
   const tone = counts.bad ? "exp-critical" : counts.warn ? "exp-warn" : "exp-ok";
   const box = el("div", `headline ${tone}`);
-  box.append(el("div", "headline-label", "Hälsokontroll"));
+  box.append(el("div", "headline-label", "Health check"));
   box.append(
-    el("div", "headline-name", problems ? `${counts.bad} fel och ${counts.warn} varningar` : "Inga fel hittade")
+    el("div", "headline-name", problems ? `${counts.bad} errors and ${counts.warn} warnings` : "No problems found")
   );
-  const parts = [`${counts.ok} kontroller rätt`];
-  if (counts.info) parts.push(`${counts.info} att titta på`);
-  if (counts.unknown) parts.push(`${counts.unknown} gick inte att köra`);
+  const parts = [`${counts.ok} checks passed`];
+  if (counts.info) parts.push(`${counts.info} worth a look`);
+  if (counts.unknown) parts.push(`${counts.unknown} could not be run`);
   box.append(el("div", "headline-when", parts.join(" · ")));
   return box;
 }
 
 const FIX_NOTE =
-  "Åtgärderna är förslag byggda på Microsofts dokumentation, inte på er organisations rutiner — " +
-  "läs dem som en utgångspunkt.";
+  "The fixes are suggestions based on Microsoft's documentation, not on your organisation's procedures — " +
+  "read them as a starting point.";
 
 /**
  * Gruppnamn som de står i fyndens text: utan prefix, precis som reglerna
@@ -90,7 +90,7 @@ function findingText(finding, labels) {
     }
     const link = el("button", "linklike group-link", part.name);
     link.type = "button";
-    link.title = "Visa gruppen i trädet";
+    link.title = "Show the group in the tree";
     link.addEventListener("click", () => ctx.openGroup(part.id));
     fragment.append(link);
   }
@@ -107,7 +107,7 @@ function renderFix(check) {
   const key = `fix:${check.id}`;
   box.open = state.open.get(key) ?? false;
   box.addEventListener("toggle", () => state.open.set(key, box.open));
-  box.append(el("summary", null, "Så åtgärdar du det"));
+  box.append(el("summary", null, "How to fix it"));
 
   if (check.fix?.length) {
     const list = el("ul");
@@ -144,7 +144,7 @@ function renderFound(check, labels) {
   summary.append(el("span", `subtree-when ${tone.className}`, `${tone.label} · ${check.findings.length}`));
   box.append(summary);
 
-  box.append(el("div", "health-right", `Så ska det vara: ${check.right}`));
+  box.append(el("div", "health-right", `How it should be: ${check.right}`));
   box.append(renderFix(check));
 
   // Ett fynd man letar efter ritas alltid, även om det ligger bortom taket.
@@ -161,7 +161,7 @@ function renderFound(check, labels) {
   box.append(list);
 
   const rest = check.findings.length - MAX_FINDINGS;
-  if (rest > 0) box.append(el("div", "hint", `… och ${rest} till.`));
+  if (rest > 0) box.append(el("div", "hint", `… and ${rest} more.`));
   return box;
 }
 
@@ -185,9 +185,9 @@ function renderPlain(title, checks, { mark, className, text }) {
 }
 
 const REASON = {
-  composition: "gruppernas medlemmar kunde inte läsas",
-  lookup: "okända grupper kunde inte slås upp",
-  connections: "anslutningarna kunde inte hämtas"
+  composition: "the members of the groups could not be read",
+  lookup: "unknown groups could not be looked up",
+  connections: "the connections could not be fetched"
 };
 
 /** Rulla fram fyndet och blinka det. Returnerar false om det inte är ritat än. */
@@ -213,16 +213,16 @@ function draw() {
   const health = ctx.health ?? {};
 
   if (!ctx.data) {
-    body.append(el("div", "d-empty", "Trädet behöver hämtas innan hälsokontrollen kan köras."));
+    body.append(el("div", "d-empty", "The tree must be fetched before the health check can run."));
     host.replaceChildren(body);
     return;
   }
 
-  if (health.error) body.append(el("div", "notice bad", `Underlaget kunde inte hämtas helt: ${health.error}`));
+  if (health.error) body.append(el("div", "notice bad", `The underlying data could not be fully fetched: ${health.error}`));
 
   const analysis = health.analysis;
   if (!analysis) {
-    body.append(el("div", "d-empty", health.loading ? "Läser vad varje grupp innehåller …" : "Ingen hälsokontroll körd än."));
+    body.append(el("div", "d-empty", health.loading ? "Reading what each group contains …" : "No health check run yet."));
     host.replaceChildren(body);
     return;
   }
@@ -238,19 +238,19 @@ function draw() {
   for (const check of found) body.append(renderFound(check, labels));
 
   const ok = analysis.checks.filter((c) => c.status === "ok");
-  if (ok.length) body.append(renderPlain("Rätt", ok, { mark: "✓", className: "exp-ok", text: (c) => c.right }));
+  if (ok.length) body.append(renderPlain("Passed", ok, { mark: "✓", className: "exp-ok", text: (c) => c.right }));
 
   const unknown = analysis.checks.filter((c) => c.status === "unknown");
   if (unknown.length) {
     body.append(
-      renderPlain("Kunde inte kontrolleras", unknown, {
+      renderPlain("Could not be checked", unknown, {
         mark: "?",
         className: "exp-unknown",
         text: (c) => {
           if (!health.payload?.composition?.length) return REASON.composition;
           if (c.id === "deleted-target") return REASON.lookup;
           if (c.id === "expiring-connections") return REASON.connections;
-          return "underlag saknas";
+          return "data missing";
         }
       })
     );
@@ -258,10 +258,10 @@ function draw() {
 
   const failed = health.payload?.failedComposition ?? 0;
   ctx.setFooter(
-    `${analysis.checks.length} kontroller · ${ctx.data.groups?.length ?? 0} grupper` +
-      (failed ? ` · ${failed} grupp(er) gick inte att läsa` : "") +
+    `${analysis.checks.length} checks · ${ctx.data.groups?.length ?? 0} groups` +
+      (failed ? ` · ${failed} group(s) could not be read` : "") +
       (health.payload?.fetchedAt
-        ? ` · hämtat ${new Date(health.payload.fetchedAt).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" })}`
+        ? ` · fetched ${new Date(health.payload.fetchedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`
         : "")
   );
 
@@ -271,8 +271,8 @@ function draw() {
 
 export const healthModule = {
   id: "health",
-  label: "Hälsokontroll",
-  // Syns bara när den är påslagen i inställningarna.
+  label: "Health check",
+  // Only shown when turned on in the settings.
   setting: "healthCheck",
   needs: ["groups", "apps", "config"],
 

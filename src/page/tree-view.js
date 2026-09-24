@@ -188,13 +188,13 @@ function dot(kind, direct, below) {
   const state = direct ? "direct" : below ? "below" : "none";
   span.className = `dot ${kind} ${state}`;
   if (state !== "none") {
-    const what = kind === "config" ? "Konfigurationer" : "Appar";
-    span.title = direct ? `${what}: tilldelat här` : `${what}: tilldelat längre ner i grenen`;
+    const what = kind === "config" ? "Configurations" : "Apps";
+    span.title = direct ? `${what}: assigned here` : `${what}: assigned further down the branch`;
   }
   return span;
 }
 
-const SEVERITY_LABEL = { bad: "fel", warn: "varning", info: "att titta på" };
+const SEVERITY_LABEL = { bad: "error", warn: "warning", info: "worth a look" };
 
 /**
  * Hälsokontrollens markering: en romb, så att den inte förväxlas med
@@ -210,10 +210,10 @@ function healthDot(direct, below) {
   if (state === "direct") {
     span.title =
       direct.length === 1
-        ? `Hälsokontroll, ${SEVERITY_LABEL[severity]}: ${direct[0].title}`
-        : `Hälsokontroll: ${direct.length} fynd, värst: ${direct[0].title}`;
+        ? `Health check, ${SEVERITY_LABEL[severity]}: ${direct[0].title}`
+        : `Health check: ${direct.length} findings, worst: ${direct[0].title}`;
   } else if (state === "below") {
-    span.title = `Hälsokontroll: ${below.count} fynd längre ner i grenen`;
+    span.title = `Health check: ${below.count} finding(s) further down the branch`;
   }
   return span;
 }
@@ -269,7 +269,7 @@ export function renderRows(container, rows, { forest, flags, selectedId, query =
     chevron.tabIndex = -1;
     chevron.setAttribute(
       "aria-label",
-      row.hasChildren ? (row.open ? "Fäll ihop" : "Fäll ut") : ""
+      row.hasChildren ? (row.open ? "Collapse" : "Expand") : ""
     );
     if (row.hasChildren) chevron.textContent = row.open ? "⌄" : "›";
 
@@ -284,7 +284,7 @@ export function renderRows(container, rows, { forest, flags, selectedId, query =
       const badge = document.createElement("span");
       badge.className = "badge";
       badge.textContent = "↗";
-      badge.title = "Gruppen ligger under flera föräldrar och visas på fler ställen";
+      badge.title = "The group sits under several parents and is shown in more places";
       el.append(badge);
     }
 
@@ -292,7 +292,7 @@ export function renderRows(container, rows, { forest, flags, selectedId, query =
       const badge = document.createElement("span");
       badge.className = "badge warn";
       badge.textContent = "⟲";
-      badge.title = "Cirkulärt medlemskap — grenen bryts här";
+      badge.title = "Circular membership — the branch is cut here";
       el.append(badge);
     }
 

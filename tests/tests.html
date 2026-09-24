@@ -2,7 +2,7 @@
 <html lang="sv">
   <head>
     <meta charset="utf-8" />
-    <title>Enhetstester – gruppträd</title>
+    <title>Unit tests – group tree</title>
     <style>
       :root {
         color-scheme: light dark;
@@ -63,9 +63,9 @@
     </style>
   </head>
   <body>
-    <h1>Enhetstester – trädbygge, pluppar och palett</h1>
-    <p class="sub">Rena funktioner, inget nätverk och ingen tenant behövs.</p>
-    <div id="summary">Kör …</div>
+    <h1>Unit tests – tree building, markers and palette</h1>
+    <p class="sub">Pure functions — no network and no tenant needed.</p>
+    <div id="summary">Running …</div>
     <div id="list"></div>
 
     <script type="module">
@@ -106,8 +106,8 @@
       summary.className = passed === total ? "ok" : "bad";
       summary.textContent =
         passed === total
-          ? `Alla ${total} tester gröna.`
-          : `${total - passed} av ${total} tester föll.`;
+          ? `All ${total} tests green.`
+          : `${total - passed} of ${total} tests failed.`;
     </script>
   </body>
 </html>

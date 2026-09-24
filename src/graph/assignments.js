@@ -19,7 +19,7 @@ export const SOURCES = [
   {
     key: "apps",
     kind: "app",
-    label: "Appar",
+    label: "Apps",
     // Inget $select här: kombinerat med $expand riskerar det att klippa bort
     // assignments ur svaret, och då tappar vi alla gröna pluppar.
     url: "/v1.0/deviceAppManagement/mobileApps?$expand=assignments&$top=100"
@@ -27,7 +27,7 @@ export const SOURCES = [
   {
     key: "deviceConfigs",
     kind: "config",
-    label: "Konfigurationsprofiler",
+    label: "Configuration profiles",
     url: "/v1.0/deviceManagement/deviceConfigurations?$expand=assignments&$top=100"
   },
   {
@@ -40,7 +40,7 @@ export const SOURCES = [
   {
     key: "compliance",
     kind: "config",
-    label: "Compliance-policies",
+    label: "Compliance policies",
     url: "/v1.0/deviceManagement/deviceCompliancePolicies?$expand=assignments&$top=100",
     optional: true
   }
@@ -61,7 +61,7 @@ const ALL_DEVICES = "microsoft.graph.allDevicesAssignmentTarget";
 const ALL_USERS = "microsoft.graph.allLicensedUsersAssignmentTarget";
 
 // Settings catalog kallar fältet "name", allt annat "displayName".
-const itemName = (item) => item?.displayName ?? item?.name ?? "(namnlös)";
+const itemName = (item) => item?.displayName ?? item?.name ?? "(unnamed)";
 
 /**
  * Vilken plattform gäller posten? Läses ur typnamnet, eller ur `platforms`
@@ -205,7 +205,7 @@ export async function fetchAssignments(graphClient, intuneClient, onProgress = n
         } else if (type === ALL_DEVICES || type === ALL_USERS) {
           global.push({
             ...entry,
-            scope: type === ALL_DEVICES ? "Alla enheter" : "Alla användare"
+            scope: type === ALL_DEVICES ? "All devices" : "All users"
           });
         }
       }

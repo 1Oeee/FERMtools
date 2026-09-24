@@ -95,7 +95,7 @@ export function urlFromError(error) {
   // Adressen kommer ur ett svar vi inte skrivit själva och kommer att anropas
   // med token. Pekar den någon annanstans än Intunes backend rör vi den inte.
   if (!isIntuneBackend(url)) {
-    console.warn("AidTune: ignorerar adress utanför Intunes backend:", url);
+    console.warn("AidTune: ignoring address outside the Intune backend:", url);
     return null;
   }
 

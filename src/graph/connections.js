@@ -32,7 +32,7 @@ export const SOURCES = [
   {
     key: "apns",
     kind: "apns",
-    label: "APNS-certifikat",
+    label: "APNS certificate",
     capability: "serviceConfig",
     url: "/v1.0/deviceManagement/applePushNotificationCertificate",
     single: true
@@ -145,7 +145,7 @@ export function vppLicences(apps) {
   return apps
     .map((app) => ({
       id: app.id,
-      name: app.displayName ?? app.name ?? "(namnlös)",
+      name: app.displayName ?? app.name ?? "(unnamed)",
       total: app.totalLicenseCount ?? 0,
       used: app.usedLicenseCount ?? 0,
       free: Math.max(0, (app.totalLicenseCount ?? 0) - (app.usedLicenseCount ?? 0)),

@@ -47,7 +47,7 @@ saveBtn.addEventListener("click", async () => {
   }, 2000);
 });
 
-// Testsidan ligger i tillägget, så den måste öppnas via dess egen URL.
+// The test page lives in the extension, so it has to be opened via its own URL.
 const tests = document.getElementById("tests");
 tests.href = chrome.runtime.getURL("tests/tests.html");
 tests.target = "_blank";

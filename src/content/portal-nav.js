@@ -264,7 +264,7 @@
 
     // Går temat fel igen är det första frågan vad vi faktiskt läste. En rad i
     // konsolen per verklig ändring svarar på det utan att stå i vägen.
-    console.debug("AidTune: portalens färger", theme.bg, "/", theme.fg);
+    console.debug("AidTune: portal colours", theme.bg, "/", theme.fg);
 
     tell({ type: "theme", ...theme });
   }

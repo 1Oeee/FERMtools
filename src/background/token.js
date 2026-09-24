@@ -131,7 +131,7 @@ export class PortalTokenSource {
     if (!resolved) {
       // Loggas för att gå att felsöka: känner vi inte igen målgruppen är det
       // den listan som behöver utökas, och då vill vi veta vad som stod där.
-      console.debug("AidTune: okänd token-målgrupp, hoppar över:", claims.aud);
+      console.debug("AidTune: unknown token audience, skipping:", claims.aud);
       return false;
     }
 
@@ -287,7 +287,7 @@ export class PortalTokenSource {
       haveToken: Boolean(groupToken),
       upn: groupToken?.claims.upn ?? groupToken?.claims.preferred_username ?? null,
       tenant: groupToken?.claims.tid ?? null,
-      hint: "Öppna intune.microsoft.com och gå till Grupper — då fångar vi en token.",
+      hint: "Open intune.microsoft.com and go to Groups — then we can capture a token.",
       // Ren diagnostik: vad ligger i poolen just nu?
       pool: [GRAPH, INTUNE].flatMap((kind) =>
         [...this.#pool[kind].values()].map((held) => ({

@@ -63,13 +63,13 @@ function answer(url) {
     if (!match) continue;
     const result = handler(match, query);
     if (result === null) {
-      throw new GraphError("Finns inte i demotenanten", { status: 404, code: "Request_ResourceNotFound", url });
+      throw new GraphError("Not found in the demo tenant", { status: 404, code: "Request_ResourceNotFound", url });
     }
     // Kopia: anroparna får gärna ändra i svaret utan att demot ändras med.
     return structuredClone(result);
   }
 
-  throw new GraphError(`Demoläget känner inte till ${path}`, { status: 400, code: "DemoUnknownPath", url });
+  throw new GraphError(`Demo mode does not know ${path}`, { status: 400, code: "DemoUnknownPath", url });
 }
 
 export function createDemoClient() {

@@ -77,12 +77,12 @@ export function createGraphClient(getToken) {
     const target = url.startsWith("http") ? url : BASE + url;
 
     if (!isAllowed(target)) {
-      throw new GraphError("Adressen ligger utanför tillåtna värdar", { url: target });
+      throw new GraphError("The address is outside the allowed hosts", { url: target });
     }
 
     for (let attempt = 0; ; attempt++) {
       const token = await getToken();
-      if (!token) throw new GraphError("Ingen giltig token", { url });
+      if (!token) throw new GraphError("No valid token", { url });
 
       let response;
       try {
@@ -98,7 +98,7 @@ export function createGraphClient(getToken) {
         });
       } catch (e) {
         if (attempt >= MAX_RETRIES) {
-          throw new GraphError(`Nätverksfel: ${e}`, { url });
+          throw new GraphError(`Network error: ${e}`, { url });
         }
         await sleep(retryDelay(null, attempt));
         continue;

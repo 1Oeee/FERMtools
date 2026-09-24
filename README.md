@@ -1,482 +1,500 @@
 # AidTune
 
-Webbläsartillägg (Edge/Chrome, Manifest V3) som lägger en **egen sida i
-Intune-portalen** — en punkt i vänsterlisten direkt under **Start** — där
-Entra-gruppernas nästlade struktur visas som ett träd. Ungefär trädvyn från
-Intune for Education, som saknas i huvudkonsolen, fast på plats i den konsol
-man faktiskt arbetar i.
+A browser extension (Edge/Chrome, Manifest V3) that adds **a page of its own to
+the Intune portal** — an entry in the left-hand rail, directly under **Home** —
+showing the nested structure of your Entra groups as a tree. Roughly the tree
+view from Intune for Education, which is missing from the main console, but
+placed in the console you actually work in.
 
-Varje rad får två pluppar:
+Every row gets two markers:
 
-| Plupp | Betyder |
+| Marker | Means |
 | --- | --- |
-| ● blå | konfiguration tilldelad direkt på gruppen |
-| ○ blå | konfiguration tilldelad längre ner i grenen |
-| ● grön | app tilldelad direkt på gruppen |
-| ○ grön | app tilldelad längre ner i grenen |
+| ● blue | configuration assigned directly to the group |
+| ○ blue | configuration assigned further down the branch |
+| ● green | app assigned directly to the group |
+| ○ green | app assigned further down the branch |
 
-Så syns det var i strukturen något faktiskt distribueras, även när grenen är
-ihopfälld.
+So you can see where in the structure something is actually being distributed,
+even when the branch is collapsed.
 
-Tillägget är **enbart läsande**. Det gör bara `GET` mot Microsoft Graph och
-Intunes backend, och skriver ingenting i tenanten.
+The extension is **read-only**. It only makes `GET` requests to Microsoft Graph
+and the Intune backend, and writes nothing to the tenant.
 
-Nuvarande version: **0.14**. Versionsstandarden är `0.1`, `0.2`, `0.3` … med ett
-steg per levererad omgång, och `1.0` när tillägget går att använda dagligen
-utan förbehåll. Vad som ändrats när står i [CHANGELOG.md](CHANGELOG.md), och
-versionen där ska alltid stämma med `manifest.json`.
+Current version: **0.14**. The version scheme is `0.1`, `0.2`, `0.3` … with one
+step per delivered batch of work, and `1.0` when the extension can be used
+daily without reservations. What changed when is in [CHANGELOG.md](CHANGELOG.md),
+and the version there must always match `manifest.json`.
 
-## Installera
+## Install
 
-Inget byggsteg — mappen laddas som den är.
+No build step — the folder is loaded as it is.
 
-1. Öppna `edge://extensions` (eller `chrome://extensions`).
-2. Slå på **Utvecklarläge**.
-3. **Läs in uppackat** → peka ut den här mappen.
-4. Öppna `https://intune.microsoft.com`, logga in och gå till **Grupper → Alla
-   grupper**.
-5. Klicka **AidTune** i vänsterlisten, direkt under Start — sidan öppnas med
-   trädet ifyllt.
+1. Open `edge://extensions` (or `chrome://extensions`).
+2. Turn on **Developer mode**.
+3. **Load unpacked** → point to this folder.
+4. Open `https://intune.microsoft.com`, sign in and go to **Groups → All
+   groups**.
+5. Click **AidTune** in the left rail, directly under Home — the page opens with
+   the tree filled in.
 
-Tilläggets ikon i verktygsfältet gör samma sak: den tar dig till portalfliken
-och öppnar sidan där. Har du ingen portalflik öppen startas en.
+The extension's toolbar icon does the same thing: it takes you to the portal tab
+and opens the page there. If you have no portal tab open, one is started.
 
-Kräver att Node eller npm finns installerat: nej. Kräver app-registrering i
-Entra: nej, se nedan.
+Requires Node or npm to be installed: no. Requires an app registration in
+Entra: no, see below.
 
-### Demoläge
+### Demo mode
 
-Ingen tenant att prova mot? Slå på **Demoläge** under inställningarna
-(`chrome://extensions` → AidTune → Tilläggsalternativ). Då visar sidan en
-påhittad kommun, Contoso, med sex skolor och runt 270 grupper — tilldelningar,
-VPP-licenser och anslutningar — utan inloggning och utan att något anrop
-lämnar webbläsaren. Ikonen i verktygsfältet öppnar sidan i en egen flik om
-ingen portal är öppen.
+No tenant to try it against? Turn on **Demo mode** in the settings
+(`chrome://extensions` → AidTune → Extension options). The page then shows a
+made-up municipality, Contoso, with six schools and around 270 groups —
+assignments, VPP licences and connections — without signing in and without any
+request leaving the browser. The toolbar icon opens the page in a tab of its
+own if no portal is open.
 
-Tenanten är rörig med flit. Ett tjugotal fel är inlagda — användarlicens till
-iPad-vagnar, "tillgänglig" till enhetsgrupper, fler mottagare än licenser,
-överlappande uppdateringsringar och liknande. Demonotisen på sidan har facit.
+The tenant is messy on purpose. About twenty mistakes are planted — user
+licences to iPad carts, "available" to device groups, more recipients than
+licences, overlapping update rings and the like. The demo notice on the page
+has the answer key.
 
-Demot byter bara ut Graph-klienten. Hämtning, tolkning, cache och sida är
-samma kod som mot en riktig tenant, så det som fungerar i demot fungerar i
-kedjan. Det som *inte* provas är tokenlånet och punkten i portalens lista —
-de kräver portalen. Tenanten står i `src/demo/tenant.js`.
+The demo only swaps out the Graph client. Fetching, parsing, cache and page are
+the same code as against a real tenant, so what works in the demo works in the
+chain. What is *not* exercised is the token borrowing and the entry in the
+portal's rail — they need the portal. The tenant lives in `src/demo/tenant.js`.
+Its group, app and profile names are deliberately in Swedish, as a Swedish
+school tenant would have them.
 
-## Var sidan ligger
+## Where the page lives
 
-Punkten i vänsterlisten sätts in direkt efter portalens **Start**, i samma
-sorts hölje som portalen själv använder, och ärver därför listens mått, färger
-och tema. Portalen ritar om listen vid bladbyten och slänger då punkten — den
-sätts tillbaka av en kontroll som går med jämna mellanrum.
+The entry in the left rail is inserted directly after the portal's **Home**, in
+the same kind of wrapper the portal itself uses, and therefore inherits the
+rail's dimensions, colours and theme. The portal redraws the rail when you
+switch blades and throws the entry away — it is put back by a check that runs at
+regular intervals.
 
-Klick på punkten lägger AidTune **över portalens innehållsyta**, inte över hela
-fönstret: listen och den översta raden lämnas orörda, så det går fortfarande
-att byta blad, söka och logga ut medan sidan står framme. Kanterna mäts i
-stället för att gissas — listen kan fällas ihop, och radens höjd ändras.
+A click on the entry places AidTune **over the portal's content area**, not over
+the whole window: the rail and the top bar are left alone, so you can still
+switch blades, search and sign out while the page is showing. The edges are
+measured rather than guessed — the rail can be collapsed, and the height of the
+bar changes.
 
-Sidan är en vanlig tilläggssida i en ram, inte markup injicerad i portalen.
-Det är avsiktligt: där gäller tilläggets egen origin, så `chrome.tabs`,
-`chrome.storage` och modulimporterna fungerar precis som i en egen flik, och
-portalens DOM rörs aldrig av något annat än länken och rutan. Content scriptet
-som placerar dem läser ingenting ur portalen.
+The page is an ordinary extension page in a frame, not markup injected into the
+portal. That is deliberate: the extension's own origin applies there, so
+`chrome.tabs`, `chrome.storage` and module imports work exactly as in a tab of
+their own, and the portal's DOM is never touched by anything but the link and
+the frame. The content script that places them reads nothing from the portal.
 
-Sidan fäller undan sig själv när den skickar fliken någon annanstans — efter
-ett klick på en behörighetsknapp eller på **Öppna i Intune** är det bladet man
-vill se, inte AidTune. Den stänger också när du byter blad i portalen.
+The page folds itself away when it sends the tab somewhere else — after a click
+on a permission button or on **Open group** it is the blade you want to see, not
+AidTune. It also closes when you switch blades in the portal.
 
-### Temat
+### The theme
 
-Sidan följer **portalens** tema, inte webbläsarens. Det spelar roll: portalens
-tema — Azure, Ljust, Mörkt, Hög kontrast — sitter i portalens egna
-inställningar och har ingenting med `prefers-color-scheme` att göra. Följde
-sidan operativsystemet skulle den stå vit mitt i ett mörkt Intune så fort de
-två inte råkade vara överens.
+The page follows the **portal's** theme, not the browser's. It matters: the
+portal's theme — Azure, Light, Dark, High contrast — lives in the portal's own
+settings and has nothing to do with `prefers-color-scheme`. If the page followed
+the operating system it would stand white in the middle of a dark Intune as soon
+as the two happened to disagree.
 
-Temaklasserna är odokumenterade och kan bytas ut, precis som bladnamnen, så vi
-läser dem inte. I stället mäts de två färger portalen faktiskt målar med —
-bakgrunden en bit in i innehållsytan och textfärgen — och resten av paletten
-räknas ut ur dem: kanter, kort, hovring, dämpad text. Då följer sidan med i
-vilket tema som helst, även ett vi aldrig sett. Se `src/page/theme.js`.
+The theme classes are undocumented and may be replaced, just like the blade
+names, so we do not read them. Instead the two colours the portal actually paints
+with are measured — the background a little way into the content area and the
+text colour — and the rest of the palette is computed from them: borders, cards,
+hover, muted text. That way the page follows along in any theme, even one we
+have never seen. See `src/page/theme.js`.
 
-Båda färgerna tas ur **samma** element, och bara ur ett som är brett nog att
-vara sidans egen yta. Det är inte en detalj: portalens `body` bär en textfärg
-som hör ihop med skalets mörka topprad, inte med den vita ytan under, så
-bakgrund från ett ställe och text från ett annat ger vit text på vit bakgrund —
-allt ritat, ingenting synligt. En knapp eller en markerad rad har också en
-bakgrund men säger ingenting om temat, därför kravet på bredd. Under det ligger
-ett skyddsnät: når den uppmätta textfärgen inte läsbar kontrast mot bakgrunden
-kastas den till förmån för vår egen. Bakgrunden måste stämma, texten är bara ett
-förslag. `console.debug` säger vad som faktiskt lästes.
+Both colours are taken from the **same** element, and only from one that is wide
+enough to be the page's own surface. This is not a detail: the portal's `body`
+carries a text colour that belongs with the shell's dark top bar, not with the
+white surface below, so a background from one place and text from another gives
+white text on a white background — everything drawn, nothing visible. A button
+or a selected row also has a background but says nothing about the theme, hence
+the width requirement. Beneath that is a safety net: if the measured text colour
+does not reach readable contrast against the background, it is discarded in
+favour of our own. The background has to be right; the text is only a
+suggestion. `console.debug` says what was actually read.
 
-Det som inte går att räkna fram är signalfärgerna — blått för konfiguration,
-grönt för app, rött för fel. De ska synas och får inte glida med bakgrunden, så
-de finns i två uppsättningar och portalens ljushet avgör vilken som gäller.
-Samma mätning sätter `color-scheme`, så att rullister, rullgardiner och
-sökfältets kryss ritas i rätt läge — det är sådant som annars avslöjar direkt
-att en sida inte hör hemma där den står.
+What cannot be computed is the signal colours — blue for configuration, green
+for app, red for errors. They must be visible and must not drift with the
+background, so they exist in two sets and the portal's lightness decides which
+applies. The same measurement sets `color-scheme`, so that scrollbars, dropdowns
+and the search field's cross are drawn in the right mode — the sort of thing
+that otherwise gives away at once that a page does not belong where it stands.
 
-Färgerna följer med i ramens adress och inte bara som meddelande efteråt, så
-att paletten sitter innan sidan målat sin första bild. Byter du tema medan
-AidTune står framme mäts det om direkt.
+The colours travel along in the frame's address and not just as a message
+afterwards, so that the palette is in place before the page has painted its
+first image. If you change theme while AidTune is showing, it is re-measured
+immediately.
 
-I en egen flik finns ingen portal att mäta, och då gäller `prefers-color-scheme`
-som vanligt.
+In a tab of its own there is no portal to measure, and `prefers-color-scheme`
+applies as usual.
 
-**⧉** öppnar samma sida i en egen flik. Vill du ha AidTune uppe medan du
-arbetar i portalen är en flik bättre än att växla fram och tillbaka.
+**⧉** opens the same page in a tab of its own. If you want AidTune up while you
+work in the portal, a tab is better than switching back and forth.
 
-## Hur token fungerar
+## How tokens work
 
-Tillägget registrerar ingen egen app i Entra. I stället lånar det de tokens
-Intune-portalen redan skaffat åt dig.
+The extension registers no app of its own in Entra. Instead it borrows the
+tokens the Intune portal has already obtained for you.
 
-Portalen använder inte *en* token utan flera, och de har olika behörigheter.
-Grupplistan hämtar en Graph-token med katalogbehörigheter, app-vyn en annan
-Graph-token med DeviceManagement-behörigheter, och vissa blad går utanför Graph
-till Intunes egen backend på `*.manage.microsoft.com`.
+The portal does not use *one* token but several, and they have different
+permissions. The group list fetches a Graph token with directory permissions,
+the apps view another Graph token with DeviceManagement permissions, and some
+blades go outside Graph to Intune's own backend at `*.manage.microsoft.com`.
 
-Därför håller tillägget en **pool** av alla giltiga tokens det sett, och väljer
-per anrop den som täcker just det anropet. Att hålla en enda token betydde att
-den som kunde appar slängde den som kunde grupper, och tvärtom — det var därför
-plupparna uteblev i 0.2. Se `src/background/token.js`.
+The extension therefore keeps a **pool** of all valid tokens it has seen, and
+for each request picks the one that covers that request. Holding a single token
+meant the one that could do apps threw away the one that could do groups, and
+vice versa — that is why the markers were missing in 0.2. See
+`src/background/token.js`.
 
-Tillägget modellerar därför **förmågor**, inte tokens. En modul säger vad den
-behöver — `groups`, `apps`, `config`, `serviceConfig`, `devices` — och panelen
-kan peka på exakt det portalblad som ger just det. Förmågorna och deras scopes
-står samlade i `src/common/jwt.js`.
+The extension therefore models **capabilities**, not tokens. A module says what
+it needs — `groups`, `apps`, `config`, `serviceConfig`, `devices` — and the
+panel can point to exactly the portal blade that provides it. The capabilities
+and their scopes are collected in `src/common/jwt.js`.
 
-Två vägar till tilldelningarna, i den här ordningen:
+Two routes to the assignments, in this order:
 
-1. **Graph**, när poolen har en token med `DeviceManagementApps.Read.All` eller
+1. **Graph**, when the pool has a token with `DeviceManagementApps.Read.All` or
    `DeviceManagementConfiguration.Read.All`.
-2. **Intunes backend**, annars. Graph är i praktiken bara en fasad framför den
-   tjänsten, och när den avvisar oss talar felet om exakt vilken adress Graph
-   vidarebefordrade till. Den adressen anropas om med backend-token. Adresserna
-   hårdkodas aldrig; de lärs in ur felsvaret eller ur portalens egen trafik och
-   sparas per tenant. Se `src/graph/endpoints.js`.
+2. **The Intune backend**, otherwise. Graph is in practice only a facade in
+   front of that service, and when it rejects us the error says exactly which
+   address Graph forwarded to. That address is called again with a backend token.
+   The addresses are never hard-coded; they are learned from the error response
+   or from the portal's own traffic and stored per tenant. See
+   `src/graph/endpoints.js`.
 
-Tokens fångas på två sätt:
+Tokens are captured in two ways:
 
-1. **`webRequest`** läser `Authorization`-headern ur portalens egna anrop, mot
-   både Graph och Intunes backend — men **bara från flikar som är
-   `intune.microsoft.com`**. Tillägget för ett register över vilka flikar det
-   är. Utan den gränsen hade varje flik som anropar Graph, som Outlook eller
-   Teams, fått sin header avläst.
-2. **Content script** letar i portalens `sessionStorage`/`localStorage` om
-   portalen inte hunnit göra något anrop sedan tillägget startade. Det körs
-   bara på portalen, och avsändarens flik kontrolleras ändå.
+1. **`webRequest`** reads the `Authorization` header from the portal's own
+   requests, against both Graph and the Intune backend — but **only from tabs
+   that are `intune.microsoft.com`**. The extension keeps a register of which
+   tabs those are. Without that limit, every tab that calls Graph, like Outlook
+   or Teams, would have its header read.
+2. **A content script** looks in the portal's `sessionStorage`/`localStorage` if
+   the portal has not made a request since the extension started. It runs only
+   on the portal, and the sender's tab is checked anyway.
 
-Konsekvenser:
+Consequences:
 
-- Du ser exakt det du redan har behörighet till — inget mer.
-- Råa tokens ligger bara i servicearbetarens minne. De skrivs aldrig till
-  `chrome.storage` och når aldrig disk.
-- **Portalen måste vara öppen och inloggad.** Eftersom sidan bor i portalen är
-  den förutsättningen uppfylld så fort du ser AidTune över huvud taget — men
-  tokens hämtas fortfarande ur de blad du besökt. Det räcker att stå på **Alla
-  grupper**; du behöver inte öppna en enskild grupp. Saknas token visar sidan en
-  knapp som tar fliken dit i ett klick, fäller undan sig själv så att bladet
-  syns, och fyller sig själv så fort token dykt upp.
-- Står du redan på grupplistan när du öppnar sidan är trädet oftast redan
-  hämtat: tillägget förhämtar när det märker att du är där.
-- **Plupparna behöver Intune-token.** Den fångas så fort portalen talat med
-  `*.manage.microsoft.com`, vilket sker på Intunes startsida och de flesta
-  Intune-blad. Saknas den står trädet kvar utan pluppar, och sidan säger
-  vilken sida du ska titta på för att fånga den.
-- Detta är odokumenterat beteende hos portalen och kan sluta fungera om
-  Microsoft ändrar den. Se `src/background/token.js` — bytet till MSAL med egen
-  app-registrering rör bara den filen.
+- You see exactly what you already have permission to see — nothing more.
+- Raw tokens live only in the service worker's memory. They are never written to
+  `chrome.storage` and never reach disk.
+- **The portal must be open and signed in.** Since the page lives in the portal,
+  that condition is met as soon as you see AidTune at all — but tokens are still
+  picked up from the blades you have visited. Standing on **All groups** is
+  enough; you do not need to open an individual group. If a token is missing the
+  page shows a button that takes the tab there in one click, folds itself away so
+  the blade is visible, and fills itself in as soon as the token has turned up.
+- If you are already on the group list when you open the page, the tree has
+  usually already been fetched: the extension prefetches when it notices you are
+  there.
+- **The markers need an Intune token.** It is captured as soon as the portal has
+  talked to `*.manage.microsoft.com`, which happens on Intune's home page and
+  most Intune blades. If it is missing the tree stays without markers, and the
+  page says which page to look at to capture it.
+- This is undocumented portal behaviour and may stop working if Microsoft
+  changes it. See `src/background/token.js` — switching to MSAL with an app
+  registration of your own touches only that file.
 
-Kör `spike/` först om du vill kontrollera att lånet fungerar i din tenant
-innan du använder tillägget på riktigt.
+Run `spike/` first if you want to check that the borrowing works in your tenant
+before using the extension for real.
 
-## Moduler
+## Modules
 
-Sidan är uppdelad i flikar. Aktiv flik sparas mellan gångerna.
+The page is divided into tabs. The active tab is remembered between visits.
 
-| Flik | Behöver | Läge |
+| Tab | Needs | Status |
 | --- | --- | --- |
-| **Träd** | Grupper, Appar, Konfiguration | Byggd. Gruppstruktur, pluppar, sök, filter, detaljpanel. |
-| **Connections** | Appar, Konfiguration, Anslutningar | Byggd. VPP-tokens, Apple ADE/DEP, Android-enrollment och APNS i tre subträd, sorterade på det som löper ut först. Licenser per VPP-token: totalt, använda och lediga, filtrerbart och sökbart. |
-| **Hälsokontroll** | Grupper, Appar, Konfiguration | Byggd, slås på i inställningarna. 27 regler för rätt och fel i tilldelningarna — se nedan. |
-| **Rapporter** | Grupper, Appar, Enheter | Inte byggd. Excel-export per grupp med enheter, serienummer, användare, inventarie och appar. Egen xlsx-skrivare utan beroenden. |
+| **Tree** | Groups, Apps, Configuration | Built. Group structure, markers, search, filter, details panel. |
+| **Connections** | Apps, Configuration, Connections | Built. VPP tokens, Apple ADE/DEP, Android enrollment and APNS in three subtrees, sorted by what expires first. Licences per VPP token: total, used and free, filterable and searchable. |
+| **Health check** | Groups, Apps, Configuration | Built, turned on in the settings. 27 rules for what is right and wrong in the assignments — see below. |
+| **Reports** | Groups, Apps, Devices | Not built. Excel export per group with devices, serial numbers, users, inventory and apps. A custom xlsx writer with no dependencies. |
 
-Träd och detaljer ligger sida vid sida, och breda vyer som rapporttabeller och
-VPP-listor har den plats de behöver. Det var sidopanelens bredd som en gång
-tvingade ner detaljerna under raderna — på en hel sida behövs inte det.
+Tree and details sit side by side, and wide views like report tables and VPP
+lists get the room they need. It was the width of the side panel that once forced
+the details down under the rows — on a whole page that is not needed.
 
-### Hälsokontroll
+### Health check
 
-Slås på med **Hälsokontroll** i inställningarna. Fliken granskar tenantens
-tilldelningar mot regler i `src/health/checks.js`. Varje regel säger hur det
-ska se ut och listar det som avviker. Fel står först, sorterade på allvar;
-regler som gick igenom står under **Rätt**, så att det syns att de kördes.
+Turned on with **Health check** in the settings. The tab reviews the tenant's
+assignments against rules in `src/health/checks.js`. Each rule says how things
+should look and lists what deviates. Errors come first, sorted by severity;
+rules that passed are listed under **Passed**, so you can see they were run.
 
-Utöver trädets data behöver kontrollen veta vad varje grupp innehåller —
-användare eller enheter, vilka plattformar, inaktiverade konton — och om
-okända grupp-id i tilldelningarna är borttagna. Det hämtas med ett
-`$batch`-anrop per 20 grupper. Bara första sidan (999) medlemmar per grupp
-läses, så antal i stora grupper är golv, och texterna säger "minst". Saknas
-underlaget står berörda regler som okända, aldrig som gröna.
+In addition to the tree's data the check needs to know what each group contains
+— users or devices, which platforms, disabled accounts — and whether unknown
+group ids in the assignments have been deleted. That is fetched with one
+`$batch` request per 20 groups. Only the first page (999) of members per group is
+read, so counts in large groups are floors, and the texts say "at least". If the
+input is missing, the affected rules show as unknown, never as green.
 
-Det här fångas bland annat: användarlicens till iPad-vagnar, "tillgänglig"
-till enhetsgrupper, enhetslicens till elevgrupper, fler mottagare än licenser,
-appar och profiler till fel plattform, användare undantagna från
-enhetstilldelningar, installera och avinstallera på samma enheter, tomma och
-borttagna grupper, licenser låsta hos inaktiverade konton, dubbla
-Wi-Fi-profiler, cirkulära medlemskap, kioskläge på stora grupper, överlappande
-uppdateringsringar, plattformar utan efterlevnadsprincip och anslutningar som
-går ut inom 30 dagar.
+Among other things this catches: user licences to iPad carts, "available" to
+device groups, device licences to student groups, more recipients than
+licences, apps and profiles to the wrong platform, users excluded from device
+assignments, install and uninstall on the same devices, empty and deleted
+groups, licences locked up with disabled accounts, duplicate Wi-Fi profiles,
+circular memberships, kiosk mode on large groups, overlapping update rings,
+platforms without a compliance policy and connections that expire within 30
+days.
 
-Varje kontroll har en åtgärd under **Så åtgärdar du det**, med länkar till
-Microsoft Learn. Texterna är utkast byggda på Microsofts dokumentation och
-står samlade i `src/health/guidance.js` — gå igenom dem mot er egen rutin.
+Every check has a fix under **How to fix it**, with links to Microsoft Learn. The
+texts are drafts built on Microsoft's documentation and are collected in
+`src/health/guidance.js` — go through them against your own procedures.
 
-Felen syns också i **Träd**. Varje grupp får en romb bredvid prickarna:
+The errors are also visible in **Tree**. Every group gets a diamond next to the
+dots:
 
-| Romb | Betyder |
+| Diamond | Means |
 | --- | --- |
-| ◆ röd | fel på gruppen |
-| ◆ gul | varning på gruppen |
-| ◆ grå | något att titta på |
-| ◇ röd/gul | fel eller varning längre ner i grenen |
+| ◆ red | error on the group |
+| ◆ yellow | warning on the group |
+| ◆ grey | something worth a look |
+| ◇ red/yellow | error or warning further down the branch |
 
-Klicka på gruppen så står fynden först i detaljpanelen, kort. **Visa i
-Hälsokontroll →** tar dig till fyndet i fliken, där det blinkar gult tre
-gånger. Åt andra hållet är gruppnamnen i Hälsokontroll länkar: ett klick
-fäller ut trädet ner till gruppen, väljer den och blinkar raden.
+Click the group and the findings come first in the details panel, in brief.
+**Show in Health check →** takes you to the finding in the tab, where it flashes
+yellow three times. In the other direction, the group names in Health check are
+links: a click expands the tree down to the group, selects it and flashes the
+row.
 
-## På sidan
+## On the page
 
-- **Behörighetsraden** högst upp visar vad *den aktiva fliken* behöver — inte
-  allt tillägget någonsin kan behöva. Står du i Connections är det APNS du vill
-  se, inte gruppbehörigheter.
+- **The permissions row** at the top shows what *the active tab* needs — not
+  everything the extension might ever need. In Connections it is APNS you want to
+  see, not group permissions.
 
-  | Prick | Betyder |
+  | Dot | Means |
   | --- | --- |
-  | ● grön | Vi har en Graph-token med rätt behörighet |
-  | ● grå | Ingen Graph-behörighet, men Intunes backend *kan* gå att nå. Osäkert. |
-  | ○ gul | Saknas |
+  | ● green | We have a Graph token with the right permission |
+  | ● grey | No Graph permission, but the Intune backend *may* be reachable. Uncertain. |
+  | ○ yellow | Missing |
 
-  Klicka på en knapp så går portalfliken till sidan som hämtar den behörigheten,
-  och raden skriver ut vart i portalens meny det ligger. Bladens djuplänkar är
-  odokumenterade, så första klicket kan landa på startsidan — men så fort en
-  token fångats från ett blad sparas det bladet som rätt adress för just den
-  förmågan och den tenanten. Se `src/background/paths.js`.
+  Click a button and the portal tab goes to the page that obtains that
+  permission, and the row spells out where in the portal's menu it is. The
+  blades' deep links are undocumented, so the first click may land on the home
+  page — but as soon as a token has been captured from a blade, that blade is
+  saved as the right address for that capability and that tenant. See
+  `src/background/paths.js`.
 
-  Saknas något går **Tokens vi sett** att fälla ut i samma rad, med målgrupp och
-  vilka förmågor varje token täcker. Det är första stället att titta på när
-  något uteblir — ingen konsol behövs.
+  If something is missing, **Tokens seen** can be expanded in the same row, with
+  the audience and which capabilities each token covers. It is the first place to
+  look when something fails to appear — no console needed.
 
-  Plupparnas färger i trädet: blå = konfiguration, grön = app. Fylld = tilldelat
-  på gruppen, ihålig ring = tilldelat längre ner i grenen.
-- **Filtret** i trädets verktygsrad listar varje app och konfiguration som är
-  tilldelad någonstans i urvalet, med antalet grupper den träffar. Väljer du en
-  visas bara de grenar som har den. Statusraden säger hur många grupper det
-  blev.
-- **Meddelanden** kan döljas med krysset när du läst dem. De kommer tillbaka om
-  texten ändras, så ett nytt problem tystas inte av ett gammalt bortklickat.
-  Dolda meddelanden ligger kvar under webbläsarsessionen och kan tas fram igen
-  med knappen längst ner i notisblocket.
-- **Detaljpanelen** fälls ihop med chevronen till höger om gruppnamnet. Då blir
-  hela höjden träd. Läget sparas tills du ändrar det.
-- **Utan hierarki** längst ner i trädet är också hopfällbar, och håller sitt
-  läge både när du väljer grupper i den och mellan gångerna.
-- **Öppna i Entra** går till en ny flik. **Öppna i Intune** byter blad i
-  portalfliken du redan står i, och fäller undan AidTune så att bladet syns.
-- **✕** stänger sidan och lämnar tillbaka portalen. Den finns bara när sidan
-  ligger i portalen — i en egen flik finns inget att stänga fram.
+  The colours of the markers in the tree: blue = configuration, green = app.
+  Filled = assigned on the group, hollow ring = assigned further down the branch.
+- **The filter** in the tree's toolbar lists every app and configuration that is
+  assigned somewhere in the selection, with the number of groups it hits. Pick
+  one and only the branches that have it are shown. The status row says how many
+  groups that turned out to be.
+- **Messages** can be hidden with the cross once you have read them. They come
+  back if the text changes, so a new problem is not silenced by an old one that
+  was clicked away. Hidden messages stay for the browser session and can be
+  brought back with the button at the bottom of the notice block.
+- **The details panel** collapses with the chevron to the right of the group
+  name. The whole height then becomes tree. The state is kept until you change
+  it. In the panel, **Open group** switches the blade in the portal tab you are
+  already in, and folds AidTune away so the blade is visible.
+- **Without hierarchy** at the bottom of the tree is also collapsible, and keeps
+  its state both when you select groups in it and between visits.
+- **✕** closes the page and gives the portal back. It only exists when the page
+  is in the portal — in a tab of its own there is nothing to close down to.
 
-## Inställningar
+## Settings
 
-Nås via kugghjulet uppe till höger på sidan.
+Reached via the cogwheel at the top right of the page.
 
-- **Namnprefix** — vilka grupper som tas med, t.ex. `Intune - `. Tomt fält
-  hämtar hela tenanten, vilket fungerar men blir långsamt.
-- **Visa grupper utan hierarki** — grupper utan föräldrar eller barn samlas i
-  en egen lista längst ner.
-- **Visa bara grenar med tilldelningar** — döljer allt som varken har, eller
-  har något under sig med, appar eller konfigurationer.
+- **Name prefix** — which groups are included, e.g. `Intune - `. An empty field
+  fetches the whole tenant, which works but gets slow.
+- **Show groups without hierarchy** — groups with neither parents nor children
+  are collected in a list of their own at the bottom.
+- **Show only branches with assignments** — hides everything that has no apps or
+  configurations and has nothing beneath it that does.
+- **Health check** — adds the Health check tab.
+- **Demo mode** — shows a made-up school instead of your tenant.
 
-## Struktur
+## Structure
 
 ```
 manifest.json
 src/
-  background/   token, cache, orkestrering
-  graph/        Graph-klient, grupper, tilldelningar, inlärda Intune-adresser
-  tree/         skogsbygge och plupp-rollup (rena funktioner)
-  page/         UI — sidan, dess flikar och embed.js som pratar med portalen
-  content/      portal-nav.js (punkten i listen + rutan), token-scan.js (reserv
-                för tokenfångst)
-  options/      inställningar
-  demo/         påhittad tenant och en Graph-klient utan nätverk
-  health/       hälsokontrollens regler (rena funktioner)
-tests/          enhetstester, körs i webbläsaren eller i Node
-spike/          Steg 0 — fristående test av token-lånet
+  background/   token, cache, orchestration
+  graph/        Graph client, groups, assignments, learned Intune addresses
+  tree/         forest building and marker rollup (pure functions)
+  page/         UI — the page, its tabs and embed.js which talks to the portal
+  content/      portal-nav.js (the rail entry + the frame), token-scan.js (fallback
+                for token capture)
+  options/      settings
+  demo/         made-up tenant and a Graph client without a network
+  health/       the health check's rules (pure functions)
+tests/          unit tests, run in the browser or in Node
+spike/          Step 0 — standalone test of the token borrowing
 ```
 
-Trädlogiken ligger medvetet i sidan och inte i servicearbetaren: den är då
-rena funktioner utan beroenden, och kan testas för sig.
+The tree logic deliberately lives in the page and not in the service worker: it
+is then pure functions without dependencies, and can be tested on its own.
 
-## Tester
+## Tests
 
-Inga beroenden och ingen tenant behövs.
+No dependencies and no tenant needed.
 
-Öppna inställningarna → **Kör enhetstesterna**, eller gå direkt till
-`chrome-extension://<tilläggets-id>/tests/tests.html`. Samma tester körs i
-Node med `node tests/run.mjs`, och GitHub Actions kör dem före varje
-paketbygge.
+Open the settings → **Run the unit tests**, or go directly to
+`chrome-extension://<extension-id>/tests/tests.html`. The same tests run in Node
+with `node tests/run.mjs`, and GitHub Actions runs them before every package
+build.
 
-Demotesterna kör den riktiga hämtkedjan mot demotenanten. Läggs en datakälla
-till utan att demot följer med faller de.
+The demo tests run the real fetch chain against the demo tenant. If a data
+source is added without the demo following, they fail.
 
-`node tests/e2e.mjs` är ett klicktest i en riktig webbläsare: det laddar
-tillägget i en huvudlös Edge med demoläge och hälsokontroll påslagna och byter
-mellan flikarna i alla riktningar. Kräver Microsoft Edge — Chrome tar inte
-längre emot `--load-extension` — och körs därför inte i GitHub Actions.
+`node tests/e2e.mjs` is a click test in a real browser: it loads the extension
+in a headless Edge with demo mode and the health check turned on and switches
+between the tabs in every direction. Requires Microsoft Edge — Chrome no longer
+accepts `--load-extension` — and is therefore not run in GitHub Actions.
 
-Testerna täcker trädbygget och plupp-rollupen, inklusive de fall som är lätta
-att få fel: grupper med flera föräldrar, cirkulära medlemskap, kanter till
-grupper utanför urvalet och sortering på svenska tecken.
+The tests cover the tree building and the marker rollup, including the cases that
+are easy to get wrong: groups with several parents, circular memberships, edges
+to groups outside the selection and sorting on Swedish characters.
 
-De täcker också paletten: att ett mörkt tema räknas som mörkt, att vändpunkten
-ligger vid mellangrått, att en obegriplig bakgrund lämnar sidan i utgångsläget i
-stället för halvvägs in i ett tema vi inte förstod, att en textfärg som inte går
-att läsa mot bakgrunden kastas — det var så hela sidan en gång blev vit på vitt
-— och att den dämpade texten håller läsbar kontrast i båda riktningarna. Där
-finns också ett test som binder
-`theme.js` till `page.css`: matar man in utgångspalettens egen bakgrund och
-text ska formlerna ge tillbaka ungefär dess gråskala. Ändrar någon på ett ställe
-och glömmer det andra byter sidan utseende när den flyttar mellan portalen och
-en egen flik — och då faller det testet.
+They also cover the palette: that a dark theme counts as dark, that the turning
+point lies at mid-grey, that an incomprehensible background leaves the page in
+its initial state instead of halfway into a theme we did not understand, that a
+text colour that cannot be read against the background is discarded — that is how
+the whole page once became white on white — and that the muted text keeps
+readable contrast in both directions. There is also a test that ties `theme.js`
+to `page.css`: feed in the initial palette's own background and text and the
+formulas should give back roughly its grey scale. If someone changes one place
+and forgets the other, the page changes appearance when it moves between the
+portal and a tab of its own — and then that test fails.
 
-## Publicering
+## Publishing
 
-`.github/workflows/release.yml` bygger store-paketet — `manifest.json`, `src/`,
-`tests/` och `icons/` — på varje push till `main`, och kontrollerar att
-versionen i `manifest.json` stämmer med översta posten i `CHANGELOG.md`.
+`.github/workflows/release.yml` builds the store package — `manifest.json`,
+`src/`, `tests/` and `icons/` — on every push to `main`, and checks that the
+version in `manifest.json` matches the top entry in `CHANGELOG.md`.
 
-En ny version går ut så här:
+A new version goes out like this:
 
-1. Höj `version` i `manifest.json` och skriv posten i `CHANGELOG.md`.
+1. Raise `version` in `manifest.json` and write the entry in `CHANGELOG.md`.
 2. `git tag v0.13 && git push --tags`
 
-Taggen laddar upp paketet till Chrome Web Store, skickar det till granskning
-och lägger zip-filen på en GitHub-release. Taggen måste stämma med
-`manifest.json`, annars stoppas körningen.
+The tag uploads the package to the Chrome Web Store, submits it for review and
+puts the zip file on a GitHub release. The tag must match `manifest.json`,
+otherwise the run is stopped.
 
-Första versionen laddas upp för hand i Developer Dashboard — API:et kan bara
-uppdatera ett tillägg som redan finns. Workflowet behöver sedan:
+The first version is uploaded by hand in the Developer Dashboard — the API can
+only update an extension that already exists. The workflow then needs:
 
-| Namn | Typ | Innehåll |
+| Name | Type | Contents |
 | --- | --- | --- |
-| `CWS_SERVICE_ACCOUNT_JSON` | secret | Nyckel-JSON för ett servicekonto med Chrome Web Store API påslaget, tillagt under **Account** i Developer Dashboard |
-| `CWS_PUBLISHER_ID` | variable | Utgivar-ID från Developer Dashboard |
-| `CWS_EXTENSION_ID` | variable | Tilläggets ID |
+| `CWS_SERVICE_ACCOUNT_JSON` | secret | Key JSON for a service account with the Chrome Web Store API turned on, added under **Account** in the Developer Dashboard |
+| `CWS_PUBLISHER_ID` | variable | Publisher ID from the Developer Dashboard |
+| `CWS_EXTENSION_ID` | variable | The extension's ID |
 
-Publiceringen körs i miljön `chrome-web-store`. Lägg ett krav på godkännande
-där om en tagg inte ensam ska räcka för att skicka ut en version.
+Publishing runs in the `chrome-web-store` environment. Put an approval
+requirement there if a tag alone should not be enough to send out a version.
 
-## Säkerhet
+## Security
 
-### Vad som sparas, var, och hur länge
+### What is stored, where, and for how long
 
-| Data | Var | Livslängd |
+| Data | Where | Lifetime |
 | --- | --- | --- |
-| Råa access-tokens | Enbart i servicearbetarens minne | Försvinner när servicearbetaren somnar, senast när webbläsaren stängs. Når aldrig disk. |
-| Grupper, medlemskap, tilldelningar | `chrome.storage.session` | Minnesbaserat, rensas när webbläsaren stängs. Cache-TTL 15 min. Skrivs inte till disk. |
-| Inställningar (prefix, UI-läge) | `chrome.storage.local` | Kvar på disk tills tillägget avinstalleras. |
-| Intunes backend-adresser för tenanten | `chrome.storage.local` | Kvar på disk. Innehåller regionvärd, tjänstnamn, api-version och för settings catalog en tenant-GUID. |
-| Portalsidor som gett oss token | `chrome.storage.local` | Kvar på disk. En URL till intune.microsoft.com. |
+| Raw access tokens | Only in the service worker's memory | Disappear when the service worker sleeps, at the latest when the browser closes. Never reach disk. |
+| Groups, memberships, assignments | `chrome.storage.session` | Memory-based, cleared when the browser closes. Cache TTL 15 min. Not written to disk. |
+| Settings (prefix, UI state) | `chrome.storage.local` | Stays on disk until the extension is uninstalled. |
+| The tenant's Intune backend addresses | `chrome.storage.local` | Stays on disk. Contains region host, service name, api version and, for settings catalog, a tenant GUID. |
+| Portal pages that gave us a token | `chrome.storage.local` | Stays on disk. A URL on intune.microsoft.com. |
 
-Det som ligger kvar på disk är alltså inställningar och tenantens
-tjänsteadresser — **inga tokens, inga gruppnamn, inga medlemmar**.
-`chrome.storage.local` är okrypterad LevelDB i webbläsarprofilen och kan läsas
-av den som kommer åt profilmappen. Bedöm innehållet därefter: det är topologi,
-inte hemligheter.
+What stays on disk is therefore settings and the tenant's service addresses —
+**no tokens, no group names, no members**. `chrome.storage.local` is unencrypted
+LevelDB in the browser profile and can be read by anyone who can reach the
+profile folder. Judge the contents accordingly: it is topology, not secrets.
 
-### Vad som skickas, och vart
+### What is sent, and where
 
-Bara läsande anrop mot `graph.microsoft.com` och `*.manage.microsoft.com`.
-Ingen egen server, ingen telemetri, ingen tredje part.
+Only read requests to `graph.microsoft.com` and `*.manage.microsoft.com`. No
+server of its own, no telemetry, no third party.
 
-Den enda `POST` som görs är mot Graphs `$batch`-endpoint, och den innehåller
-uteslutande `GET`-delanrop — så ser man till trafiken finns ett `POST`, men
-ingenting skrivs i tenanten. Adresser som kommer ur svar vi inte
-skrivit själva — `@odata.nextLink` och reservvägens adress ur Graphs felmeddelande
-— kontrolleras mot den värdlistan innan de anropas, eftersom varje anrop bär en
-bärartoken. Spärren sitter i `src/graph/client.js` och `src/graph/endpoints.js`.
+The only `POST` made is to Graph's `$batch` endpoint, and it contains only `GET`
+sub-requests — so if you look at the traffic there is a `POST`, but nothing is
+written to the tenant. Addresses that come from responses we did not write
+ourselves — `@odata.nextLink` and the fallback route's address from Graph's error
+message — are checked against that host list before they are called, since every
+request carries a bearer token. The guard is in `src/graph/client.js` and
+`src/graph/endpoints.js`.
 
-Tillägget skriver aldrig något i tenanten.
+The extension never writes anything to the tenant.
 
-### Behörigheter tillägget begär
+### Permissions the extension requests
 
-| Behörighet | Varför |
+| Permission | Why |
 | --- | --- |
-| `webRequest` + värdarna nedan | Läsa `Authorization`-headern ur portalens egna anrop |
-| `https://intune.microsoft.com/*` | Två content scripts: ett som placerar punkten i listen och rutan sidan bor i, ett som letar token i portalens lagring |
-| `https://graph.microsoft.com/*` | Hämta grupper och tilldelningar |
-| `https://*.manage.microsoft.com/*` | Reservvägen för tilldelningar |
-| `tabs` | Skicka portalfliken till rätt sida, öppna djuplänkar |
-| `storage` | Cache och inställningar |
+| `webRequest` + the hosts below | Read the `Authorization` header from the portal's own requests |
+| `https://intune.microsoft.com/*` | Two content scripts: one that places the rail entry and the frame the page lives in, one that looks for tokens in the portal's storage |
+| `https://graph.microsoft.com/*` | Fetch groups and assignments |
+| `https://*.manage.microsoft.com/*` | The fallback route for assignments |
+| `storage` | Cache and settings |
 
-`web_accessible_resources` räknar upp **en enda fil** — `src/page/page.html` —
-och bara för `https://intune.microsoft.com/*`. Det är sidan som ramen visar.
-Ingen annan webbplats kan därför nå något av tilläggets innehåll, och portalen
-når inte heller mer än den adressen.
+`web_accessible_resources` lists **a single file** — `src/page/page.html` — and
+only for `https://intune.microsoft.com/*`. That is the page the frame shows. No
+other website can therefore reach anything of the extension's content, and the
+portal cannot reach more than that address either.
 
-### Vad ett säkerhetsteam kommer att invända mot
+### What a security team will object to
 
-Var ärlig om detta hellre än att bli påkommen med det: **tillägget läser
-bärartokens som en annan applikation (portalen) skaffat.** Det är användarens
-egna tokens och ger inte mer åtkomst än personen redan har, men det är
-odokumenterat beteende och tekniken i sig är den som används av
-token-stjälande skadlig kod. Många säkerhetsteam säger nej av princip, och det
-är en rimlig hållning.
+Better to be honest about this than to be caught out: **the extension reads
+bearer tokens that another application (the portal) obtained.** They are the
+user's own tokens and give no more access than the person already has, but it is
+undocumented behaviour and the technique itself is the one used by token-stealing
+malware. Many security teams say no on principle, and that is a reasonable
+position.
 
-Ska det användas av fler än en person internt bör det tas upp innan, inte
-efter. Det defensiva alternativet är en egen app-registrering i Entra med
-delegerade läsbehörigheter — då loggas åtkomsten som en namngiven applikation
-och tekniken blir dokumenterad. Bytet rör bara `src/background/token.js`.
+If it is to be used by more than one person internally it should be raised
+beforehand, not afterwards. The defensive alternative is an app registration of
+your own in Entra with delegated read permissions — then the access is logged as
+a named application and the technique becomes documented. The switch touches only
+`src/background/token.js`.
 
-### Vad som *inte* är ett problem
+### What is *not* a problem
 
-- **Varje installation är fristående.** Ingen delad lagring, ingen server,
-  inget som en användare sparar kan nås av en annan.
-- **Ingen rättighetshöjning.** Tillägget ärver din RBAC i Intune och Entra. Ser
-  du inte en grupp i portalen syns den inte i trädet heller.
-- **Ingen kodinjektion från tenantdata.** Sidan bygger allt med DOM-anrop;
-  `innerHTML` och liknande används inte någonstans, så ett gruppnamn kan inte
-  bära med sig markup. Det gäller även punkten i portalens lista.
-- **Portalen och sidan är skilda åt.** Sidan ligger i en ram på tilläggets egen
-  origin, så portalens skript kommer inte åt dess DOM och den kommer inte åt
-  portalens. De två meddelanden som korsar gränsen — *stäng* och *nu syns du
-  igen* — bär ingen data, och båda sidor kontrollerar avsändarens origin.
-- **Content scriptet i portalen läser ingenting ur portalen.** Det placerar en
-  länk och en ruta, mäter var listen och den översta raden slutar, och det är
-  allt. Tokenfångsten är ett eget, separat script.
-- **Enbart läsande.** Inga `POST`, `PATCH` eller `DELETE` mot tenanten.
+- **Every installation is self-contained.** No shared storage, no server,
+  nothing one user saves can be reached by another.
+- **No privilege escalation.** The extension inherits your RBAC in Intune and
+  Entra. If you do not see a group in the portal, it does not show in the tree
+  either.
+- **No code injection from tenant data.** The page builds everything with DOM
+  calls; `innerHTML` and the like are not used anywhere, so a group name cannot
+  carry markup. That also applies to the entry in the portal's rail.
+- **The portal and the page are kept apart.** The page lives in a frame on the
+  extension's own origin, so the portal's scripts cannot reach its DOM and it
+  cannot reach the portal's. The two messages that cross the boundary — *close*
+  and *you are visible again* — carry no data, and both sides check the sender's
+  origin.
+- **The content script in the portal reads nothing from the portal.** It places a
+  link and a frame, measures where the rail and the top bar end, and that is all.
+  Token capture is a separate script of its own.
+- **Read-only.** No `POST`, `PATCH` or `DELETE` against the tenant.
 
-## Kända begränsningar
+## Known limitations
 
-- **Tilldelningarna går i praktiken via Intunes egen backend**, inte via Graph,
-  eftersom portalens Graph-token saknar DeviceManagement-behörigheterna. Det är
-  odokumenterat och kan sluta fungera. Sidans nedre rad visar hur många källor
-  som gick den vägen. Byter Microsoft api-version lär tillägget om sig själv,
-  men byter de svarsformat gör det inte.
-- **Punkten i vänsterlisten hänger på portalens egen markup.** Den sätts in
-  efter `a.fxs-sidebar-home` och ärver dess klasser. Döper Microsoft om dem
-  uteblir punkten — men sidan går fortfarande att nå med tilläggets ikon i
-  verktygsfältet och med **⧉** i en egen flik. Rutans kanter mäts mot
-  `.fxs-sidebar` och portalens översta rad; hittas de inte läggs sidan från
-  fönstrets övre vänstra hörn.
-- **Settings catalog** hämtas från `/beta` respektive DCV2-tjänsten. Fallerar
-  det degraderar bara den datakällan, och sidan säger till.
-- **Tilldelningar till "alla användare"/"alla enheter"** ger ingen plupp,
-  eftersom de träffar allt. De redovisas som en notis i stället.
-- **Grupper utanför namnprefixet** finns inte i trädet, inte heller som
-  föräldrar. Ett för snävt prefix kan därför klippa grenar.
-- Trädet ritar högst 3000 rader åt gången. Sök för att smalna av.
-- Grupp-i-grupp-medlemskap är en DAG, inte ett träd: en grupp med flera
-  föräldrar ritas på flera ställen och märks med `↗`.
+- **Assignments in practice go via the Intune backend**, not via Graph, because
+  the portal's Graph token lacks the DeviceManagement permissions. That is
+  undocumented and may stop working. The page's bottom row shows how many sources
+  went that way. If Microsoft changes the api version the extension relearns it
+  by itself, but if they change the response format it does not.
+- **The entry in the left rail depends on the portal's own markup.** It is
+  inserted after `a.fxs-sidebar-home` and inherits its classes. If Microsoft
+  renames them the entry is missing — but the page can still be reached with the
+  extension's toolbar icon and with **⧉** in a tab of its own. The frame's edges
+  are measured against `.fxs-sidebar` and the portal's top bar; if they are not
+  found the page is placed from the window's top-left corner.
+- **Settings catalog** is fetched from `/beta` and the DCV2 service respectively.
+  If that fails only that data source degrades, and the page says so.
+- **Assignments to "all users"/"all devices"** give no marker, since they hit
+  everything. They are reported as a notice instead.
+- **Groups outside the name prefix** are not in the tree, not even as parents. A
+  prefix that is too narrow can therefore cut branches.
+- The tree draws at most 3000 rows at a time. Search to narrow down.
+- Group-in-group membership is a DAG, not a tree: a group with several parents is
+  drawn in several places and marked with `↗`.

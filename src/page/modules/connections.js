@@ -1,7 +1,7 @@
-// Connections: VPP, enrollment och APNS — allt som går ut och måste förnyas.
+// Connections: VPP, enrollment and APNS — everything that expires and must be renewed.
 //
-// En regel styr hela vyn: det som löper ut först står överst, både i banderollen
-// och inne i varje subträd. Ingen ska behöva leta efter det brådskande.
+// One rule governs the whole view: whatever expires first comes first, both in the banner
+// and inside each subtree. Nobody should have to hunt for what is urgent.
 
 import { el, daysUntil, relativeDays, expiryTone } from "../dom.js";
 import { vppLicences, licenceTotals, licencesForToken } from "../../graph/connections.js";
@@ -27,8 +27,8 @@ let ctx = null;
 let host = null;
 
 function formatDate(iso) {
-  if (!iso) return "okänt";
-  return new Date(iso).toLocaleDateString("sv-SE");
+  if (!iso) return "unknown";
+  return new Date(iso).toLocaleDateString("en-GB");
 }
 
 /** Datum + hur lång tid kvar, färgat efter hur bråttom det är. */
@@ -44,11 +44,11 @@ function expiryCell(iso) {
 
 function renderHeadline(items) {
   const soonest = items.find((item) => item.expires);
-  if (!soonest) return el("div", "d-empty", "Inget med utgångsdatum hittat.");
+  if (!soonest) return el("div", "d-empty", "Nothing with an expiry date found.");
 
   const days = daysUntil(soonest.expires);
   const banner = el("div", `headline exp-${expiryTone(days)}`);
-  banner.append(el("div", "headline-label", "Löper ut först"));
+  banner.append(el("div", "headline-label", "Expires first"));
   banner.append(el("div", "headline-name", soonest.name));
   banner.append(
     el("div", "headline-when", `${soonest.sourceLabel} · ${formatDate(soonest.expires)} · ${relativeDays(days)}`)
@@ -78,7 +78,7 @@ function renderGroup(group, items) {
   box.append(summary);
 
   if (!mine.length) {
-    box.append(el("div", "d-empty", "Inget hittat, eller så saknas behörigheten."));
+    box.append(el("div", "d-empty", "Nothing found, or the permission is missing."));
     return box;
   }
 
@@ -88,8 +88,8 @@ function renderGroup(group, items) {
   const table = el("table", "grid");
   const head = el("tr");
   const columns = isVpp
-    ? ["Namn", "Detaljer", "Går ut", "Totalt", "Använda", "Lediga"]
-    : ["Namn", "Detaljer", "Går ut"];
+    ? ["Name", "Details", "Expires", "Total", "Used", "Free"]
+    : ["Name", "Details", "Expires"];
   for (const label of columns) head.append(el("th", null, label));
   table.append(head);
 
@@ -114,7 +114,7 @@ function renderGroup(group, items) {
 
       // Klick på raden filtrerar licenslistan till just den här poolen.
       tr.classList.add("clickable");
-      tr.title = "Visa bara appar i den här VPP-token";
+      tr.title = "Show only apps in this VPP token";
       tr.addEventListener("click", () => {
         state.vppToken = state.vppToken === item.id ? "" : item.id;
         state.licencesOpen = true;
@@ -143,12 +143,12 @@ function renderLicences(apps, tokens) {
   });
 
   const summary = el("summary");
-  summary.append(el("span", "subtree-name", `Licenser (${apps.length} appar)`));
+  summary.append(el("span", "subtree-name", `Licences (${apps.length} apps)`));
 
   const active = tokens.find((token) => token.id === state.vppToken);
-  if (active) summary.append(el("span", "subtree-when", `filtrerat: ${active.name}`));
+  if (active) summary.append(el("span", "subtree-when", `filtered: ${active.name}`));
   else if (state.vppToken === "__orphans") {
-    summary.append(el("span", "subtree-when", "filtrerat: utan känd token"));
+    summary.append(el("span", "subtree-when", "filtered: no known token"));
   }
 
   box.append(summary);
@@ -159,8 +159,8 @@ function renderLicences(apps, tokens) {
         "div",
         "d-empty",
         state.data?.haveTreeData
-          ? "Inga VPP-appar hittades bland apparna."
-          : "Hämta trädet först — licenserna plockas ur den hämtningen."
+          ? "No VPP apps found among the apps."
+          : "Fetch the tree first — the licences are taken from that fetch."
       )
     );
     return box;
@@ -169,9 +169,9 @@ function renderLicences(apps, tokens) {
   // Filtrera på VPP-token: varje token är en egen licenspool, och frågan är
   // nästan alltid "vilka appar ligger i den här?".
   const picker = el("select", "licence-filter");
-  picker.title = "Visa bara appar i en viss VPP-token";
+  picker.title = "Show only apps in a given VPP token";
 
-  const all = el("option", null, `Alla VPP-tokens (${apps.length} appar)`);
+  const all = el("option", null, `All VPP tokens (${apps.length} apps)`);
   all.value = "";
   picker.append(all);
 
@@ -185,7 +185,7 @@ function renderLicences(apps, tokens) {
     const count = licencesForToken(apps, token.id).length;
     const ambiguous = nameCounts.get(token.name) > 1 && token.appleId;
     const label = ambiguous ? `${token.name} · ${token.appleId}` : token.name;
-    const option = el("option", null, `${label} (${count} appar)`);
+    const option = el("option", null, `${label} (${count} apps)`);
     option.value = token.id;
     picker.append(option);
   }
@@ -193,7 +193,7 @@ function renderLicences(apps, tokens) {
   // Appar utan känd token hamnar annars i ingenmansland.
   const orphans = apps.filter((app) => !tokens.some((token) => token.id === app.tokenId));
   if (orphans.length) {
-    const option = el("option", null, `Utan känd token (${orphans.length} appar)`);
+    const option = el("option", null, `No known token (${orphans.length} apps)`);
     option.value = "__orphans";
     picker.append(option);
   }
@@ -210,7 +210,7 @@ function renderLicences(apps, tokens) {
 
   const search = el("input", "licence-search");
   search.type = "search";
-  search.placeholder = "Sålla bland apparna …";
+  search.placeholder = "Filter the apps …";
   search.value = state.licenceQuery;
 
   const listHost = el("div");
@@ -227,7 +227,7 @@ function renderLicences(apps, tokens) {
 
     const table = el("table", "grid");
     const head = el("tr");
-    for (const label of ["App", "Totalt", "Använda", "Lediga"]) head.append(el("th", null, label));
+    for (const label of ["App", "Total", "Used", "Free"]) head.append(el("th", null, label));
     table.append(head);
 
     for (const app of shown) {
@@ -247,8 +247,8 @@ function renderLicences(apps, tokens) {
       el(
         "div",
         "hint",
-        `${shown.length} av ${inPool.length} appar · ${totals.used} av ${totals.total} ` +
-          `licenser använda · ${totals.free} lediga`
+        `${shown.length} of ${inPool.length} apps · ${totals.used} of ${totals.total} ` +
+          `licences used · ${totals.free} free`
       )
     );
   };
@@ -273,7 +273,7 @@ function draw() {
   const body = el("div", "module-pad");
 
   if (state.loading) {
-    body.append(el("div", "d-empty", "Hämtar …"));
+    body.append(el("div", "d-empty", "Loading …"));
     host.replaceChildren(body);
     return;
   }
@@ -295,11 +295,11 @@ function draw() {
     const capability = ctx.tokenStatus?.capabilities?.[source.capability];
     const notice = el("div", "notice warn");
     notice.append(
-      el("div", null, `${source.label} kunde inte hämtas: ${source.error}`)
+      el("div", null, `${source.label} could not be fetched: ${source.error}`)
     );
     if (capability && !capability.have) {
       notice.append(
-        el("div", "hint", `Behörigheten hämtas från ${capability.where} — knappen ovan tar dig dit.`)
+        el("div", "hint", `The permission is obtained from ${capability.where} — the button above takes you there.`)
       );
     }
     body.append(notice);
@@ -307,10 +307,10 @@ function draw() {
 
   const viaIntune = (state.data?.sources ?? []).filter((s) => s.ok && s.via === "intune").length;
   ctx.setFooter(
-    `${items.length} poster · hämtat ${new Date(state.data?.fetchedAt ?? Date.now()).toLocaleTimeString(
-      "sv-SE",
+    `${items.length} items · fetched ${new Date(state.data?.fetchedAt ?? Date.now()).toLocaleTimeString(
+      "en-GB",
       { hour: "2-digit", minute: "2-digit" }
-    )}${viaIntune ? ` · ${viaIntune} källa(or) via Intunes backend` : ""}`
+    )}${viaIntune ? ` · ${viaIntune} source(s) via the Intune backend` : ""}`
   );
 
   host.replaceChildren(body);
@@ -325,7 +325,7 @@ async function load({ force = false } = {}) {
 
   state.loading = false;
   if (!response?.ok) {
-    state.error = response?.error ?? "Servicearbetaren svarade inte.";
+    state.error = response?.error ?? "The service worker did not respond.";
   } else {
     state.data = response.data;
   }

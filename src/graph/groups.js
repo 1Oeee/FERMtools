@@ -184,14 +184,14 @@ export function isDynamic(group) {
   return Boolean(group?.membershipRule);
 }
 
-/** Kort typbeskrivning, t.ex. "Säkerhet · dynamisk". */
+/** Short type description, e.g. "Security · dynamic". */
 export function describeGroup(group) {
   const kind = group?.groupTypes?.includes("Unified")
     ? "Microsoft 365"
     : group?.securityEnabled
-      ? "Säkerhet"
+      ? "Security"
       : group?.mailEnabled
         ? "Distribution"
-        : "Grupp";
-  return `${kind} · ${isDynamic(group) ? "dynamisk" : "tilldelad"}`;
+        : "Group";
+  return `${kind} · ${isDynamic(group) ? "dynamic" : "assigned"}`;
 }

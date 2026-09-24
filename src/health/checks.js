@@ -1,18 +1,18 @@
-// Hälsokontroll: regler för rätt och fel i en tenants tilldelningar.
+// Health check: rules for what is right and wrong in a tenant's assignments.
 //
-// Varje kontroll beskriver hur det *ska* se ut (`right`) och letar efter det
-// som avviker. Allt är rena funktioner över data som redan hämtats — inget
-// nätverk, ingen DOM — så att reglerna kan testas mot demotenanten.
+// Each check describes how things *should* look (`right`) and looks for what
+// deviates. Everything is pure functions over data already fetched — no
+// network, no DOM — so the rules can be tested against the demo tenant.
 //
-// Underlaget:
-//   groups, edges        trädets grupper och kanter
-//   items, assignments   poster och platta tilldelningar ur assignments.js
-//   composition          vad varje grupp innehåller direkt (groups.js)
-//   outside, deleted     uppslag av grupp-id som inte finns i trädet
-//   connections          Connections-flikens poster, om de hämtats
+// The input:
+//   groups, edges        the tree's groups and edges
+//   items, assignments   items and flat assignments from assignments.js
+//   composition          what each group contains directly (groups.js)
+//   outside, deleted     lookups of group ids that are not in the tree
+//   connections          the Connections tab's items, if fetched
 //
-// Antal medlemmar är golv, inte exakta siffror: bara första sidan per grupp
-// läses. Texterna säger "minst" där det spelar roll.
+// Member counts are floors, not exact numbers: only the first page per group
+// is read. The texts say "at least" where it matters.
 
 import { buildForest } from "../tree/build.js";
 import { GUIDANCE } from "./guidance.js";
@@ -42,7 +42,7 @@ function context(input) {
 
   const nameOf = (id) => {
     const name = forest.nodeById.get(id)?.displayName ?? outside.get(id);
-    if (!name) return deleted.has(id) ? "(borttagen grupp)" : "(okänd grupp)";
+    if (!name) return deleted.has(id) ? "(deleted group)" : "(unknown group)";
     return prefix && name.startsWith(prefix) ? name.slice(prefix.length) : name;
   };
 
@@ -139,9 +139,9 @@ const isVpp = (item) => item.totalLicenses !== null && item.totalLicenses !== un
 const osList = (devices) =>
   Object.entries(devices)
     .filter(([, n]) => n > 0)
-    .map(([os]) => (os === "other" ? "övriga" : os))
+    .map(([os]) => (os === "other" ? "other" : os))
     .join(", ");
-const atLeast = (n, capped) => (capped ? `minst ${n}` : String(n));
+const atLeast = (n, capped) => (capped ? `at least ${n}` : String(n));
 
 /** Längsta vägen ner från en grupp, räknat i nivåer. Cykelsäker. */
 function depthOf(ctx, id, visiting = new Set()) {
@@ -167,9 +167,9 @@ const finding = (text, { groups = [], items = [] } = {}) => ({ text, groups, ite
 export const CHECKS = [
   {
     id: "user-licence-to-devices",
-    title: "Användarlicens till enhetsgrupp",
+    title: "User licence to a device group",
     severity: "bad",
-    right: "Användarlicensierade VPP-appar går till grupper med användare.",
+    right: "User-licensed VPP apps go to groups containing users.",
     needs: ["composition"],
     run: (ctx) =>
       ctx.byItem.flatMap(({ item, includes }) =>
@@ -178,8 +178,8 @@ export const CHECKS = [
               .filter((a) => a.deviceLicensing === false && ctx.kindOf(a.groupId) === "devices")
               .map((a) =>
                 finding(
-                  `${item.name} har användarlicens men går till ${ctx.nameOf(a.groupId)}, som bara innehåller enheter. ` +
-                    "Utan inloggad användare kan licensen aldrig lösas in.",
+                  `${item.name} has a user licence but goes to ${ctx.nameOf(a.groupId)}, which contains only devices. ` +
+                    "Without a signed-in user the licence can never be redeemed.",
                   { groups: [a.groupId], items: [item.id] }
                 )
               )
@@ -188,13 +188,13 @@ export const CHECKS = [
   },
   {
     id: "available-to-devices",
-    title: "\"Tillgänglig\" till enhetsgrupp",
+    title: "\"Available\" to a device group",
     severity: "bad",
-    right: "Appar som väljs i Företagsportalen går till användargrupper.",
+    right: "Apps chosen in the Company Portal go to user groups.",
     needs: ["composition"],
-    // Undantagen enligt Microsoft: Win32-appar, och appar för Android Enterprise
-    // fullt hanterade och COPE-enheter, får vara Tillgängliga för enhetsgrupper.
-    // Vilket Android-läge en app används i syns inte här, så Android hoppas över.
+    // Exceptions according to Microsoft: Win32 apps, and apps for Android Enterprise
+    // fully managed and COPE devices, may be Available to device groups.
+    // Which Android mode an app is used in is not visible here, so Android is skipped.
     run: (ctx) =>
       ctx.byItem
         .filter(({ item }) => item.type !== "win32LobApp" && item.platform !== "Android")
@@ -203,21 +203,21 @@ export const CHECKS = [
           .filter((a) => a.intent === "available" && ctx.kindOf(a.groupId) === "devices")
           .map((a) =>
             finding(
-              `${item.name} är tillgänglig för ${ctx.nameOf(a.groupId)}, som bara innehåller enheter. ` +
-                "Tillgänglig fungerar bara mot användare — appen syns ingenstans.",
+              `${item.name} is available to ${ctx.nameOf(a.groupId)}, which contains only devices. ` +
+                "Available only works against users — the app is not visible anywhere.",
               { groups: [a.groupId], items: [item.id] }
             )
           ),
         ...allDevices
           .filter((a) => a.intent === "available")
-          .map((a) => finding(`${item.name} är tillgänglig för alla enheter — det syns ingenstans.`, { items: [item.id] }))
+          .map((a) => finding(`${item.name} is available to all devices — it is not visible anywhere.`, { items: [item.id] }))
       ])
   },
   {
     id: "device-licence-to-users",
-    title: "Enhetslicens till användargrupp",
+    title: "Device licence to a user group",
     severity: "warn",
-    right: "Enhetslicensierade VPP-appar går till enhetsgrupper.",
+    right: "Device-licensed VPP apps go to device groups.",
     needs: ["composition"],
     run: (ctx) =>
       ctx.byItem.flatMap(({ item, includes }) =>
@@ -226,8 +226,8 @@ export const CHECKS = [
               .filter((a) => a.deviceLicensing === true && a.intent === "required" && ctx.kindOf(a.groupId) === "users")
               .map((a) =>
                 finding(
-                  `${item.name} har enhetslicens men går till ${ctx.nameOf(a.groupId)}, som bara innehåller användare. ` +
-                    "Appen följer användarna och tar en licens per enhet de loggar in på.",
+                  `${item.name} has a device licence but goes to ${ctx.nameOf(a.groupId)}, which contains only users. ` +
+                    "The app follows the users and takes one licence per device they sign in on.",
                   { groups: [a.groupId], items: [item.id] }
                 )
               )
@@ -236,9 +236,9 @@ export const CHECKS = [
   },
   {
     id: "licence-overcommit",
-    title: "Fler mottagare än licenser",
+    title: "More recipients than licences",
     severity: "bad",
-    right: "Varje VPP-app har licenser nog för sina obligatoriska mottagare.",
+    right: "Every VPP app has enough licences for its required recipients.",
     needs: ["composition"],
     run: (ctx) =>
       ctx.byItem.flatMap(({ item, includes }) => {
@@ -246,7 +246,7 @@ export const CHECKS = [
         const required = includes.filter((a) => a.intent === "required");
         if (!required.length) return [];
 
-        // Samma grupp kan nås från flera tilldelningar — räkna den en gång.
+        // The same group can be reached from several assignments — count it once.
         const userGroups = new Set();
         const deviceGroups = new Set();
         for (const a of required) {
@@ -273,11 +273,11 @@ export const CHECKS = [
 
         if (need <= item.totalLicenses) return [];
         const targets = [...new Set(required.map((a) => ctx.nameOf(a.groupId)))];
-        const via = targets.length > 3 ? `${targets.slice(0, 3).join(", ")} och ${targets.length - 3} till` : targets.join(", ");
+        const via = targets.length > 3 ? `${targets.slice(0, 3).join(", ")} and ${targets.length - 3} more` : targets.join(", ");
         return [
           finding(
-            `${item.name}: ${item.totalLicenses} licenser, ${atLeast(need, capped)} obligatoriska mottagare via ${via}. ` +
-              "De som inte får licens får ett installationsfel.",
+            `${item.name}: ${item.totalLicenses} licences, ${atLeast(need, capped)} required recipients via ${via}. ` +
+              "Those who do not get a licence get an install error.",
             { groups: required.map((a) => a.groupId), items: [item.id] }
           )
         ];
@@ -285,21 +285,21 @@ export const CHECKS = [
   },
   {
     id: "licences-exhausted",
-    title: "Slut på licenser",
+    title: "Out of licences",
     severity: "info",
-    right: "Alla VPP-appar har lediga licenser.",
+    right: "All VPP apps have free licences.",
     run: (ctx) =>
       ctx.byItem
         .filter(({ item }) => isVpp(item) && item.totalLicenses > 0 && item.usedLicenses >= item.totalLicenses)
         .map(({ item }) =>
-          finding(`${item.name}: alla ${item.totalLicenses} licenser är förbrukade.`, { items: [item.id] })
+          finding(`${item.name}: all ${item.totalLicenses} licences are used up.`, { items: [item.id] })
         )
   },
   {
     id: "platform-mismatch",
-    title: "Fel plattform",
+    title: "Wrong platform",
     severity: "bad",
-    right: "Appar och profiler går till enheter med rätt plattform.",
+    right: "Apps and profiles go to devices on the right platform.",
     needs: ["composition"],
     run: (ctx) =>
       ctx.byItem.flatMap(({ item, includes }) => {
@@ -308,14 +308,14 @@ export const CHECKS = [
           .filter((a) => {
             if (ctx.kindOf(a.groupId) !== "devices") return false;
             const s = ctx.subtree(a.groupId);
-            // iPadOS och macOS delar ibland appar; räkna dem inte som fel mot varandra.
+            // iPadOS and macOS sometimes share apps; do not count them as wrong for each other.
             const fits = s.devices[item.platform] + (item.platform === "iOS" ? s.devices.macOS : 0);
             return fits === 0;
           })
           .map((a) =>
             finding(
-              `${item.name} är för ${item.platform} men går till ${ctx.nameOf(a.groupId)}, ` +
-                `där enheterna är ${osList(ctx.subtree(a.groupId).devices)}. Ingenting händer.`,
+              `${item.name} is for ${item.platform} but goes to ${ctx.nameOf(a.groupId)}, ` +
+                `where the devices are ${osList(ctx.subtree(a.groupId).devices)}. Nothing happens.`,
               { groups: [a.groupId], items: [item.id] }
             )
           );
@@ -323,9 +323,9 @@ export const CHECKS = [
   },
   {
     id: "mixed-exclusion",
-    title: "Undantag av fel sort",
+    title: "Exclusion of the wrong kind",
     severity: "bad",
-    right: "Undantag är av samma sort som tilldelningen — användare mot användare, enheter mot enheter.",
+    right: "Exclusions are of the same kind as the assignment — users against users, devices against devices.",
     needs: ["composition"],
     run: (ctx) =>
       ctx.byItem.flatMap(({ item, includes, excludes, allDevices, allUsers }) => {
@@ -344,9 +344,9 @@ export const CHECKS = [
           .map((a) => {
             const kind = ctx.kindOf(a.groupId);
             return finding(
-              `${item.name} undantar ${ctx.nameOf(a.groupId)} (${kind === "users" ? "användare" : "enheter"}) ` +
-                `från en tilldelning till ${kind === "users" ? "enheter" : "användare"}. ` +
-                "Intune kan inte blanda sorterna — undantaget gäller inte.",
+              `${item.name} excludes ${ctx.nameOf(a.groupId)} (${kind === "users" ? "users" : "devices"}) ` +
+                `from an assignment to ${kind === "users" ? "devices" : "users"}. ` +
+                "Intune cannot mix the kinds — the exclusion does not apply.",
               { groups: [a.groupId], items: [item.id] }
             );
           });
@@ -354,9 +354,9 @@ export const CHECKS = [
   },
   {
     id: "exclusion-inside-target",
-    title: "Undantag inuti en tilldelad grupp",
+    title: "Exclusion inside an assigned group",
     severity: "info",
-    right: "Inga undantag som behöver dubbelkollas.",
+    right: "No exclusions that need double-checking.",
     run: (ctx) =>
       ctx.byItem.flatMap(({ item, includes, excludes }) =>
         excludes.flatMap((ex) => {
@@ -364,8 +364,8 @@ export const CHECKS = [
           return parent
             ? [
                 finding(
-                  `${item.name} går till ${ctx.nameOf(parent.groupId)} men undantar ${ctx.nameOf(ex.groupId)}, ` +
-                    "som ligger inuti. Stämmer det fortfarande?",
+                  `${item.name} goes to ${ctx.nameOf(parent.groupId)} but excludes ${ctx.nameOf(ex.groupId)}, ` +
+                    "which sits inside it. Is that still right?",
                   { groups: [parent.groupId, ex.groupId], items: [item.id] }
                 )
               ]
@@ -375,9 +375,9 @@ export const CHECKS = [
   },
   {
     id: "intent-conflict",
-    title: "Installera och avinstallera samtidigt",
+    title: "Install and uninstall at the same time",
     severity: "bad",
-    right: "Ingen app installeras och avinstalleras på samma mottagare.",
+    right: "No app is installed and uninstalled on the same recipient.",
     run: (ctx) =>
       ctx.byItem.flatMap(({ item, includes }) => {
         const install = includes.filter((a) => a.intent === "required" || a.intent === "available");
@@ -389,8 +389,8 @@ export const CHECKS = [
             if (!shared) continue;
             found.push(
               finding(
-                `${item.name} installeras till ${ctx.nameOf(a.groupId)} och avinstalleras från ${ctx.nameOf(b.groupId)}. ` +
-                  `De möts i ${ctx.nameOf(shared)}, där utfallet avgörs av Intunes konfliktregler.`,
+                `${item.name} is installed to ${ctx.nameOf(a.groupId)} and uninstalled from ${ctx.nameOf(b.groupId)}. ` +
+                  `They meet in ${ctx.nameOf(shared)}, where the outcome is decided by Intune's conflict rules.`,
                 { groups: [a.groupId, b.groupId], items: [item.id] }
               )
             );
@@ -401,9 +401,9 @@ export const CHECKS = [
   },
   {
     id: "empty-target",
-    title: "Tilldelat till tom grupp",
+    title: "Assigned to an empty group",
     severity: "warn",
-    right: "Alla tilldelade grupper har medlemmar.",
+    right: "All assigned groups have members.",
     needs: ["composition"],
     run: (ctx) => {
       const byGroup = new Map();
@@ -418,8 +418,8 @@ export const CHECKS = [
       return [...byGroup].map(([id, names]) => {
         const rule = ctx.forest.nodeById.get(id)?.membershipRule;
         return finding(
-          `${ctx.nameOf(id)} är tom men har ${names.join(", ")}.` +
-            (rule ? ` Gruppen är dynamisk — stämmer regeln? ${rule}` : ""),
+          `${ctx.nameOf(id)} is empty but has ${names.join(", ")}.` +
+            (rule ? ` The group is dynamic — is the rule right? ${rule}` : ""),
           { groups: [id] }
         );
       });
@@ -427,9 +427,9 @@ export const CHECKS = [
   },
   {
     id: "deleted-target",
-    title: "Tilldelning till borttagen grupp",
+    title: "Assignment to a deleted group",
     severity: "bad",
-    right: "Inga tilldelningar pekar på grupper som tagits bort.",
+    right: "No assignments point to groups that have been deleted.",
     needs: ["lookup"],
     run: (ctx) =>
       ctx.byItem.flatMap(({ item, includes, excludes }) =>
@@ -437,8 +437,8 @@ export const CHECKS = [
           .filter((a) => ctx.deleted.has(a.groupId))
           .map((a) =>
             finding(
-              `${item.name} är tilldelad en grupp som inte finns längre (${a.groupId}). ` +
-                "Den syns inte i portalens grupplistor, och ingen får det som var tänkt.",
+              `${item.name} is assigned to a group that no longer exists (${a.groupId}). ` +
+                "It does not show in the portal's group lists, and nobody gets what was intended.",
               { groups: [a.groupId], items: [item.id] }
             )
           )
@@ -446,9 +446,9 @@ export const CHECKS = [
   },
   {
     id: "disabled-users",
-    title: "Licenser hos inaktiverade konton",
+    title: "Licences held by disabled accounts",
     severity: "warn",
-    right: "Inga VPP-licenser går till grupper där kontona är inaktiverade.",
+    right: "No VPP licences go to groups where the accounts are disabled.",
     needs: ["composition"],
     run: (ctx) =>
       ctx.byItem.flatMap(({ item, includes }) =>
@@ -461,8 +461,8 @@ export const CHECKS = [
               .map((a) => {
                 const s = ctx.subtree(a.groupId);
                 return finding(
-                  `${item.name} går till ${ctx.nameOf(a.groupId)}, där ${s.disabled} av ${s.users} konton är inaktiverade. ` +
-                    "Licenserna ligger låsta hos dem.",
+                  `${item.name} goes to ${ctx.nameOf(a.groupId)}, where ${s.disabled} of ${s.users} accounts are disabled. ` +
+                    "The licences are locked up with them.",
                   { groups: [a.groupId], items: [item.id] }
                 );
               })
@@ -471,9 +471,9 @@ export const CHECKS = [
   },
   {
     id: "duplicate-ssid",
-    title: "Flera Wi-Fi-profiler för samma nätverk",
+    title: "Several Wi-Fi profiles for the same network",
     severity: "warn",
-    right: "Varje Wi-Fi-nätverk har en profil per plattform.",
+    right: "Each Wi-Fi network has one profile per platform.",
     run: (ctx) => {
       const bySsid = new Map();
       for (const entry of ctx.byItem) {
@@ -494,8 +494,8 @@ export const CHECKS = [
             if (!shared) continue;
             found.push(
               finding(
-                `${a.item.name} och ${b.item.name} gäller båda ${a.item.ssid} och möts i ${ctx.nameOf(shared)}. ` +
-                  "Vilken som vinner varierar från enhet till enhet.",
+                `${a.item.name} and ${b.item.name} both apply to ${a.item.ssid} and meet in ${ctx.nameOf(shared)}. ` +
+                  "Which one wins varies from device to device.",
                 { groups: [shared], items: [a.item.id, b.item.id] }
               )
             );
@@ -507,9 +507,9 @@ export const CHECKS = [
   },
   {
     id: "mixed-group",
-    title: "Profil till grupp med både användare och enheter",
+    title: "Profile to a group with both users and devices",
     severity: "warn",
-    right: "Profiler går till grupper med antingen användare eller enheter.",
+    right: "Profiles go to groups with either users or devices.",
     needs: ["composition"],
     run: (ctx) =>
       ctx.byItem.flatMap(({ item, includes }) =>
@@ -521,8 +521,8 @@ export const CHECKS = [
               })
               .map((a) =>
                 finding(
-                  `${item.name} går till ${ctx.nameOf(a.groupId)}, som har både användare och enheter direkt i sig. ` +
-                    "Profilen når då även användarnas egna enheter.",
+                  `${item.name} goes to ${ctx.nameOf(a.groupId)}, which has both users and devices directly in it. ` +
+                    "The profile then also reaches the users' own devices.",
                   { groups: [a.groupId], items: [item.id] }
                 )
               )
@@ -531,9 +531,9 @@ export const CHECKS = [
   },
   {
     id: "redundant-assignment",
-    title: "Dubbel tilldelning via nästling",
+    title: "Double assignment through nesting",
     severity: "info",
-    right: "Ingen post är tilldelad både en grupp och en grupp inuti den.",
+    right: "No item is assigned to both a group and a group inside it.",
     run: (ctx) =>
       ctx.byItem.flatMap(({ item, includes }) => {
         const found = [];
@@ -542,7 +542,7 @@ export const CHECKS = [
             if (outer === inner || outer.groupId === inner.groupId || outer.intent !== inner.intent) continue;
             if (!ctx.descendants(outer.groupId).has(inner.groupId)) continue;
             found.push(
-              finding(`${item.name}: ${ctx.nameOf(inner.groupId)} ingår redan i ${ctx.nameOf(outer.groupId)}.`, {
+              finding(`${item.name}: ${ctx.nameOf(inner.groupId)} is already part of ${ctx.nameOf(outer.groupId)}.`, {
                 groups: [outer.groupId, inner.groupId],
                 items: [item.id]
               })
@@ -554,9 +554,9 @@ export const CHECKS = [
   },
   {
     id: "cycle",
-    title: "Cirkulärt medlemskap",
+    title: "Circular membership",
     severity: "warn",
-    right: "Inga grupper innehåller sig själva via andra grupper.",
+    right: "No groups contain themselves via other groups.",
     run: (ctx) => {
       const inCycle = (id) => (ctx.forest.childrenOf.get(id) ?? []).some((c) => ctx.descendants(c).has(id));
       const seen = new Set();
@@ -573,8 +573,8 @@ export const CHECKS = [
 
         found.push(
           finding(
-            `${ring.map(ctx.nameOf).join(" ↔ ")} innehåller varandra.` +
-              (affected.length ? ` Tilldelat där: ${affected.join(", ")} — oklart vilka som faktiskt får det.` : ""),
+            `${ring.map(ctx.nameOf).join(" ↔ ")} contain each other.` +
+              (affected.length ? ` Assigned there: ${affected.join(", ")} — unclear who actually gets it.` : ""),
             { groups: ring }
           )
         );
@@ -584,9 +584,9 @@ export const CHECKS = [
   },
   {
     id: "deep-nesting",
-    title: "Djup nästling",
+    title: "Deep nesting",
     severity: "info",
-    right: `Tilldelade grupper är högst ${DEEP - 1} nivåer djupa, så räckvidden går att överblicka.`,
+    right: `Assigned groups are at most ${DEEP - 1} levels deep, so the reach can be surveyed.`,
     run: (ctx) => {
       const byGroup = new Map();
       for (const { item, includes } of ctx.byItem) {
@@ -597,8 +597,8 @@ export const CHECKS = [
       }
       return [...byGroup].map(([id, names]) =>
         finding(
-          `${ctx.nameOf(id)} når ${depthOf(ctx, id)} nivåer ner och ${ctx.descendants(id).size - 1} grupper. ` +
-            `Tilldelat: ${[...new Set(names)].join(", ")}.`,
+          `${ctx.nameOf(id)} reaches ${depthOf(ctx, id)} levels down and ${ctx.descendants(id).size - 1} groups. ` +
+            `Assigned: ${[...new Set(names)].join(", ")}.`,
           { groups: [id] }
         )
       );
@@ -606,9 +606,9 @@ export const CHECKS = [
   },
   {
     id: "duplicate-item",
-    title: "Samma app eller profil flera gånger",
+    title: "The same app or profile several times",
     severity: "warn",
-    right: "Varje app och profil finns en gång.",
+    right: "Each app and profile exists once.",
     run: (ctx) => {
       const byName = new Map();
       for (const item of ctx.items.values()) {
@@ -620,8 +620,8 @@ export const CHECKS = [
         .map((list) => {
           const orgs = [...new Set(list.map((i) => i.vppOrganization).filter(Boolean))];
           return finding(
-            `${list[0].name} finns ${list.length} gånger` +
-              (orgs.length > 1 ? `, från olika VPP-tokens: ${orgs.join(" och ")}.` : "."),
+            `${list[0].name} exists ${list.length} times` +
+              (orgs.length > 1 ? `, from different VPP tokens: ${orgs.join(" and ")}.` : "."),
             { items: list.map((i) => i.id) }
           );
         });
@@ -629,21 +629,21 @@ export const CHECKS = [
   },
   {
     id: "restriction-all-users",
-    title: "Begränsningar till alla användare",
+    title: "Restrictions to all users",
     severity: "warn",
-    right: "Begränsningsprofiler går till avgränsade grupper, inte till alla användare.",
+    right: "Restriction profiles go to defined groups, not to all users.",
     run: (ctx) =>
       ctx.byItem
         .filter(({ item, allUsers }) => allUsers.length && /GeneralDeviceConfiguration$|GeneralConfiguration$|Restriction/i.test(item.type ?? ""))
         .map(({ item }) =>
-          finding(`${item.name} går till alla användare — även personalen får begränsningarna.`, { items: [item.id] })
+          finding(`${item.name} goes to all users — staff get the restrictions too.`, { items: [item.id] })
         )
   },
   {
     id: "kiosk-large",
-    title: "Kioskläge på en stor grupp",
+    title: "Kiosk mode on a large group",
     severity: "bad",
-    right: `Kioskprofiler går bara till små enhetsgrupper (högst ${KIOSK_MAX_DEVICES} enheter).`,
+    right: `Kiosk profiles only go to small device groups (at most ${KIOSK_MAX_DEVICES} devices).`,
     needs: ["composition"],
     run: (ctx) =>
       ctx.byItem.flatMap(({ item, includes }) =>
@@ -653,8 +653,8 @@ export const CHECKS = [
               .map((a) => {
                 const s = ctx.subtree(a.groupId);
                 return finding(
-                  `${item.name} går till ${ctx.nameOf(a.groupId)} med ${atLeast(s.deviceCount, s.capped)} enheter. ` +
-                    "Alla låses till kioskens appar vid nästa synk.",
+                  `${item.name} goes to ${ctx.nameOf(a.groupId)} with ${atLeast(s.deviceCount, s.capped)} devices. ` +
+                    "All of them are locked to the kiosk apps at the next sync.",
                   { groups: [a.groupId], items: [item.id] }
                 );
               })
@@ -663,9 +663,9 @@ export const CHECKS = [
   },
   {
     id: "users-in-device-branch",
-    title: "Användargrupp bland enhetsgrupper",
+    title: "User group among device groups",
     severity: "warn",
-    right: "Användargrupper ligger inte nästlade bland enhetsgrupper.",
+    right: "User groups are not nested among device groups.",
     needs: ["composition"],
     run: (ctx) => {
       const found = [];
@@ -677,8 +677,8 @@ export const CHECKS = [
         for (const child of userChildren) {
           found.push(
             finding(
-              `${ctx.nameOf(child)} (användare) ligger i ${ctx.nameOf(id)}, där övriga undergrupper är enheter. ` +
-                "Enhetsprofiler till gruppen når nu användarnas alla enheter.",
+              `${ctx.nameOf(child)} (users) sits in ${ctx.nameOf(id)}, where the other subgroups are devices. ` +
+                "Device profiles for the group now reach all of the users' devices.",
               { groups: [id, child] }
             )
           );
@@ -689,9 +689,9 @@ export const CHECKS = [
   },
   {
     id: "overlapping-rings",
-    title: "Överlappande uppdateringsringar",
+    title: "Overlapping update rings",
     severity: "bad",
-    right: "Varje enhet ligger i en enda uppdateringsring.",
+    right: "Each device is in a single update ring.",
     run: (ctx) => {
       const rings = ctx.byItem.filter(({ item }) => /UpdateForBusiness|updateRing/i.test(item.type ?? ""));
       const found = [];
@@ -704,8 +704,8 @@ export const CHECKS = [
           if (!shared) continue;
           found.push(
             finding(
-              `${rings[i].item.name} och ${rings[j].item.name} träffar båda ${ctx.nameOf(shared)}. ` +
-                "Enheterna där får två uppsättningar uppdateringsregler.",
+              `${rings[i].item.name} and ${rings[j].item.name} both hit ${ctx.nameOf(shared)}. ` +
+                "The devices there get two sets of update rules.",
               { groups: [shared], items: [rings[i].item.id, rings[j].item.id] }
             )
           );
@@ -716,9 +716,9 @@ export const CHECKS = [
   },
   {
     id: "compliance-per-platform",
-    title: "Plattform utan efterlevnadsprincip",
+    title: "Platform without a compliance policy",
     severity: "bad",
-    right: "Varje plattform med enheter har en tilldelad efterlevnadsprincip.",
+    right: "Every platform with devices has an assigned compliance policy.",
     needs: ["composition"],
     run: (ctx) => {
       const devices = EMPTY_DEVICES();
@@ -735,23 +735,23 @@ export const CHECKS = [
         .filter(([os, n]) => os !== "other" && n > 0 && !covered.has(os))
         .map(([os, n]) =>
           finding(
-            `Minst ${n} ${os}-enheter, men ingen efterlevnadsprincip för ${os} är tilldelad. ` +
-              "Enheterna räknas då som kompatibla utan att något kontrollerats."
+            `At least ${n} ${os} devices, but no compliance policy for ${os} is assigned. ` +
+              "The devices are then counted as compliant without anything being checked."
           )
         );
     }
   },
   {
     id: "licences-without-assignment",
-    title: "Förbrukade licenser utan tilldelning",
+    title: "Used licences without an assignment",
     severity: "warn",
-    right: "Inga VPP-licenser är förbrukade av appar som inte längre är tilldelade.",
+    right: "No VPP licences are used by apps that are no longer assigned.",
     run: (ctx) => {
       const assigned = new Set(ctx.byItem.map(({ item }) => item.id));
       return [...ctx.items.values()]
         .filter((item) => isVpp(item) && item.usedLicenses > 0 && !assigned.has(item.id))
         .map((item) =>
-          finding(`${item.name} har ${item.usedLicenses} förbrukade licenser men ingen tilldelning. De frigörs inte av sig själva.`, {
+          finding(`${item.name} has ${item.usedLicenses} used licences but no assignment. They are not freed by themselves.`, {
             items: [item.id]
           })
         );
@@ -759,28 +759,28 @@ export const CHECKS = [
   },
   {
     id: "uninstall-to-everyone",
-    title: "Avinstallation till alla",
+    title: "Uninstall to everyone",
     severity: "bad",
-    right: "Ingen app avinstalleras från alla användare eller alla enheter.",
+    right: "No app is uninstalled from all users or all devices.",
     run: (ctx) =>
       ctx.byItem
         .filter(({ allDevices, allUsers }) => [...allDevices, ...allUsers].some((a) => a.intent === "uninstall"))
         .map(({ item }) =>
-          finding(`${item.name} avinstalleras från alla — även där den behövs.`, { items: [item.id] })
+          finding(`${item.name} is uninstalled from everyone — even where it is needed.`, { items: [item.id] })
         )
   },
   {
     id: "include-and-exclude-same",
-    title: "Samma grupp tilldelad och undantagen",
+    title: "The same group assigned and excluded",
     severity: "warn",
-    right: "Ingen grupp är både tilldelad och undantagen från samma post.",
+    right: "No group is both assigned and excluded for the same item.",
     run: (ctx) =>
       ctx.byItem.flatMap(({ item, includes, excludes }) =>
         excludes
           .filter((ex) => includes.some((a) => a.groupId === ex.groupId))
           .map((ex) =>
             finding(
-              `${item.name} är både tilldelad och undantagen för ${ctx.nameOf(ex.groupId)}. Undantaget vinner — ingen där får den.`,
+              `${item.name} is both assigned and excluded for ${ctx.nameOf(ex.groupId)}. The exclusion wins — nobody there gets it.`,
               { groups: [ex.groupId], items: [item.id] }
             )
           )
@@ -788,9 +788,9 @@ export const CHECKS = [
   },
   {
     id: "expiring-connections",
-    title: "Anslutningar som går ut",
+    title: "Connections that are expiring",
     severity: "warn",
-    right: `Inga tokens eller certifikat går ut inom ${EXPIRY_WARN_DAYS} dagar.`,
+    right: `No tokens or certificates expire within ${EXPIRY_WARN_DAYS} days.`,
     needs: ["connections"],
     run: (ctx) =>
       (ctx.connections?.items ?? [])
@@ -800,8 +800,8 @@ export const CHECKS = [
         .map(({ c, days }) =>
           finding(
             days < 0
-              ? `${c.sourceLabel}: ${c.name} gick ut för ${-days} dagar sedan.`
-              : `${c.sourceLabel}: ${c.name} går ut om ${days} dagar.`
+              ? `${c.sourceLabel}: ${c.name} expired ${-days} days ago.`
+              : `${c.sourceLabel}: ${c.name} expires in ${days} days.`
           )
         )
   }

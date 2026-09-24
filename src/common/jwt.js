@@ -39,7 +39,7 @@ export function scopes(claims) {
 }
 
 /**
- * Förmågorna tillägget kan behöva, och vad var och en kostar i behörighet.
+ * The capabilities the extension may need, and what each costs in permissions.
  *
  * Portalen delar inte ut en token som täcker allt — olika blad hämtar olika
  * tokens. Därför modellerar vi *förmågor* och inte tokens: en modul säger vad
@@ -51,9 +51,9 @@ export function scopes(claims) {
  */
 export const CAPABILITIES = {
   groups: {
-    label: "Grupper",
-    needFor: "Trädet",
-    where: "Grupper → Alla grupper",
+    label: "Groups",
+    needFor: "The tree",
+    where: "Groups → All groups",
     scopes: [
       "Group.Read.All",
       "GroupMember.Read.All",
@@ -62,33 +62,33 @@ export const CAPABILITIES = {
     ]
   },
   apps: {
-    label: "Appar",
-    needFor: "Apptilldelningar och VPP",
-    where: "Appar → Alla appar",
+    label: "Apps",
+    needFor: "App assignments and VPP",
+    where: "Apps → All apps",
     scopes: ["DeviceManagementApps.Read.All", "DeviceManagementApps.ReadWrite.All"]
   },
   config: {
-    label: "Konfiguration",
-    needFor: "Profiler, compliance och Android-enrollment",
-    where: "Enheter → Konfiguration",
+    label: "Configuration",
+    needFor: "Profiles, compliance and Android enrollment",
+    where: "Devices → Configuration",
     scopes: [
       "DeviceManagementConfiguration.Read.All",
       "DeviceManagementConfiguration.ReadWrite.All"
     ]
   },
   serviceConfig: {
-    label: "Anslutningar",
-    needFor: "APNS och Apple-enrollment",
-    where: "Klientadministration → Anslutningsappar och tokens",
+    label: "Connections",
+    needFor: "APNS and Apple enrollment",
+    where: "Tenant administration → Connectors and tokens",
     scopes: [
       "DeviceManagementServiceConfig.Read.All",
       "DeviceManagementServiceConfig.ReadWrite.All"
     ]
   },
   devices: {
-    label: "Enheter",
-    needFor: "Enhetsinventarie i rapporter",
-    where: "Enheter → Alla enheter",
+    label: "Devices",
+    needFor: "Device inventory in reports",
+    where: "Devices → All devices",
     scopes: [
       "DeviceManagementManagedDevices.Read.All",
       "DeviceManagementManagedDevices.ReadWrite.All"

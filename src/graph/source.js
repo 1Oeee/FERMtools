@@ -34,7 +34,7 @@ export function readable(error) {
 }
 
 const MISSING_TOKEN =
-  "Portalens Intune-token saknas. Öppna sidan knappen ovan pekar på, så fångar vi den.";
+  "Intune token missing. Open the page the button above points to and we will capture it.";
 
 /**
  * @param {{key: string, url: string, single?: boolean, params?: object}} source
@@ -64,7 +64,7 @@ export async function fetchSource(source, graphClient, intuneClient, onPage = nu
     try {
       items = await pull(intuneClient, url);
     } catch (intuneError) {
-      if (/Ingen giltig token/i.test(intuneError.message)) throw new Error(MISSING_TOKEN);
+      if (/No valid token/i.test(intuneError.message)) throw new Error(MISSING_TOKEN);
       if (intuneError.status === 404) return { items: [], via: "intune" };
       throw intuneError;
     }

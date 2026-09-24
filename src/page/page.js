@@ -1,5 +1,5 @@
-// Sidans skal: tokenrad, flikar, notiser och den delade hämtningen.
-// Varje modul äger sin egen yta och sitt eget tillstånd.
+// The page shell: token row, tabs, notices and the shared fetch.
+// Each module owns its own surface and its own state.
 
 import { el } from "./dom.js";
 import { embedded, showPortal, closePage, onShown, onTheme } from "./embed.js";
@@ -223,7 +223,7 @@ async function loadHealth({ force = false } = {}) {
   const response = await send({ type: "health", force });
 
   state.health.loading = false;
-  if (!response?.ok) state.health.error = response?.error ?? "Servicearbetaren svarade inte.";
+  if (!response?.ok) state.health.error = response?.error ?? "The service worker did not respond.";
   else state.health.payload = response.data;
 
   computeHealth();
@@ -274,20 +274,20 @@ function renderTokens() {
 
     if (tone === "ok") {
       node.title =
-        `${info.needFor}: behörigheten finns, giltig i ` +
-        `${Math.floor(info.secondsLeft / 60)} min. Klicka för att öppna sidan i portalen.`;
+        `${info.needFor}: permission available, valid for ` +
+        `${Math.floor(info.secondsLeft / 60)} min. Click to open the page in the portal.`;
     } else if (tone === "maybe") {
       node.title =
-        `${info.needFor}: ingen Graph-behörighet, men Intunes backend kan gå att nå. ` +
-        `Osäkert. Klicka för att öppna ${info.where} och hämta rätt token.`;
+        `${info.needFor}: no Graph permission, but the Intune backend may be reachable. ` +
+        `Uncertain. Click to open ${info.where} and pick up the right token.`;
     } else {
-      node.title = `${info.needFor} saknas. Klicka för att öppna ${info.where} i portalen.`;
+      node.title = `${info.needFor} missing. Click to open ${info.where} in the portal.`;
     }
 
     node.addEventListener("click", async () => {
       if (status?.demo) return; // ingen portal att skicka någon till
       await send({ type: "open-path", capability: name });
-      renderStatus(`Väntar på behörighet från ${info.where ?? "portalen"} …`);
+      renderStatus(`Waiting for permission from ${info.where ?? "the portal"} …`);
       // Portalfliken är på väg till bladet — låt den synas, annars ser det ut
       // som att ingenting hände.
       showPortal();
@@ -296,7 +296,7 @@ function renderTokens() {
     return node;
   });
 
-  ui.tokens.replaceChildren(el("span", "tokenbar-label", "Behörigheter"), ...chips);
+  ui.tokens.replaceChildren(el("span", "tokenbar-label", "Permissions"), ...chips);
 
   // Saknas något: säg vart man ska klicka, i klartext. Bladens djuplänkar är
   // odokumenterade, så knappen kan leda till startsidan första gången.
@@ -306,7 +306,7 @@ function renderTokens() {
       .map((name) => status?.capabilities?.[name]?.where)
       .filter(Boolean)
       .join(" · ");
-    if (where) ui.tokens.append(el("div", "tokenbar-where", `Hämtas från: ${where}`));
+    if (where) ui.tokens.append(el("div", "tokenbar-where", `Obtained from: ${where}`));
   }
 
   if (lacking.length && status?.pool?.length) ui.tokens.append(renderPool(status.pool));
@@ -314,17 +314,17 @@ function renderTokens() {
 
 function renderPool(pool) {
   const box = el("details", "pool");
-  box.append(el("summary", null, `Tokens vi sett (${pool.length})`));
+  box.append(el("summary", null, `Tokens seen (${pool.length})`));
 
   const list = el("ul", "d-list");
   for (const held of pool) {
     const li = el("li");
-    li.append(el("span", "d-name", held.aud ?? "(ingen målgrupp)"));
+    li.append(el("span", "d-name", held.aud ?? "(no audience)"));
     li.append(
       el(
         "span",
         "d-src",
-        `${held.kind} · ${held.covers.length ? held.covers.join(", ") : "inga kända förmågor"}` +
+        `${held.kind} · ${held.covers.length ? held.covers.join(", ") : "no known capabilities"}` +
           ` · ${Math.floor(held.secondsLeft / 60)} min`
       )
     );
@@ -355,16 +355,16 @@ function renderNotices() {
       key: "demo",
       tone: "info",
       text:
-        "Demoläge: Contoso kommun, dess skolor, grupper och tilldelningar är påhittade. " +
-        "Ingenting hämtas från någon tenant." +
-        (state.settings?.healthCheck ? "" : " Slå på Hälsokontroll i inställningarna så letas felen upp åt dig."),
+        "Demo mode: Contoso municipality, its schools, groups and assignments are made up. " +
+        "Nothing is fetched from any tenant." +
+        (state.settings?.healthCheck ? "" : " Turn on Health check in the settings and the mistakes are found for you."),
       details: state.demoMistakes.length
         ? {
-            summary: `Inlagda fel att leta efter (${state.demoMistakes.length})`,
+            summary: `Planted mistakes to look for (${state.demoMistakes.length})`,
             items: state.demoMistakes
           }
         : null,
-      action: { label: "Stäng av i inställningarna", run: () => chrome.runtime.openOptionsPage() }
+      action: { label: "Turn off in the settings", run: () => chrome.runtime.openOptionsPage() }
     });
   }
 
@@ -375,10 +375,10 @@ function renderNotices() {
       text: state.error,
       action: state.needsPortal
         ? {
-            label: "Öppna Alla grupper",
+            label: "Open All groups",
             run: async () => {
               await send({ type: "open-path", capability: "groups" });
-              renderStatus("Väntar på token från portalen …");
+              renderStatus("Waiting for a token from the portal …");
               showPortal();
             }
           }
@@ -397,17 +397,17 @@ function renderNotices() {
   }
 
   for (const [reason, list] of byReason) {
-    const missingIntuneToken = /Intune-token saknas/i.test(reason);
+    const missingIntuneToken = /Intune token missing/i.test(reason);
     notices.push({
       key: `source:${list.map((s) => s.key).join(",")}:${reason}`,
       tone: list.every((s) => s.optional) ? "warn" : "bad",
-      text: `${list.map((s) => s.label).join(", ")} kunde inte hämtas: ${reason}`,
+      text: `${list.map((s) => s.label).join(", ")} could not be fetched: ${reason}`,
       action: missingIntuneToken
         ? {
-            label: "Öppna Appar",
+            label: "Open Apps",
             run: async () => {
               await send({ type: "open-path", capability: "apps" });
-              renderStatus("Väntar på Intune-token från portalen …");
+              renderStatus("Waiting for an Intune token from the portal …");
               showPortal();
             }
           }
@@ -420,7 +420,7 @@ function renderNotices() {
     notices.push({
       key: `edges:${failed}`,
       tone: "warn",
-      text: `${failed} grupp(er) gick inte att läsa medlemskap för — deras grenar kan saknas.`
+      text: `Could not read memberships for ${failed} group(s) — their branches may be missing.`
     });
   }
 
@@ -431,8 +431,8 @@ function renderNotices() {
       key: `global:${global.length}`,
       tone: "info",
       text:
-        `${global.length} tilldelning(ar) träffar alla användare eller enheter ` +
-        `(${global.length - apps} konfiguration(er), ${apps} app(ar)) och syns inte som pluppar.`
+        `${global.length} assignment(s) target all users or devices ` +
+        `(${global.length - apps} configuration(s), ${apps} app(s)) and do not show as markers.`
     });
   }
 
@@ -447,8 +447,8 @@ function renderNotices() {
 
     const close = el("button", "notice-close", "×");
     close.type = "button";
-    close.title = "Dölj — kommer tillbaka om meddelandet ändras";
-    close.setAttribute("aria-label", "Dölj meddelande");
+    close.title = "Hide — comes back if the message changes";
+    close.setAttribute("aria-label", "Hide message");
     close.addEventListener("click", () => {
       state.dismissed.add(n.key);
       saveDismissed();
@@ -485,7 +485,7 @@ function renderNotices() {
     const restore = el(
       "button",
       "notice-restore",
-      hidden > 1 ? `Visa ${hidden} dolda meddelanden` : "Visa 1 dolt meddelande"
+      hidden > 1 ? `Show ${hidden} hidden messages` : "Show 1 hidden message"
     );
     restore.type = "button";
     restore.addEventListener("click", () => {
@@ -509,7 +509,7 @@ function saveDismissed() {
 async function load({ force = false } = {}) {
   state.loading = true;
   state.error = null;
-  renderStatus("Hämtar grupper …");
+  renderStatus("Fetching groups …");
   ui.refresh.disabled = true;
 
   const response = await send({ type: "tree", force });
@@ -524,7 +524,7 @@ async function load({ force = false } = {}) {
     state.needsPortal = Boolean(status) && !status.haveToken;
     state.error = state.needsPortal
       ? status.hint
-      : (response?.error ?? "Servicearbetaren svarade inte.");
+      : (response?.error ?? "The service worker did not respond.");
     renderStatus(null);
     renderNotices();
     // Modulen ska ändå upp, så ytan inte står tom bakom notisen.
@@ -594,15 +594,15 @@ chrome.runtime.onMessage.addListener((message) => {
     (state.loading || (ownStage && activeModule().id === ownStage))
   ) {
     const labels = {
-      groups: "Hämtar grupper",
-      edges: "Läser medlemskap",
-      assignments: "Läser tilldelningar",
-      connections: "Läser anslutningar",
-      health: "Hälsokontroll: läser"
+      groups: "Fetching groups",
+      edges: "Reading memberships",
+      assignments: "Reading assignments",
+      connections: "Reading connections",
+      health: "Health check: reading"
     };
     const detail = message.detail;
     const n = typeof detail === "number" || typeof detail === "string" ? ` (${detail})` : "";
-    renderStatus(`${labels[message.stage] ?? "Hämtar"}${n} …`);
+    renderStatus(`${labels[message.stage] ?? "Fetching"}${n} …`);
   }
 });
 

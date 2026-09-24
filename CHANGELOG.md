@@ -1,346 +1,370 @@
-# Ändringslogg
+# Changelog
 
-Versionsstandard: `0.1`, `0.2`, `0.3` … Ett steg per levererad omgång.
-Versionen står i `manifest.json` och ska alltid stämma med översta posten här.
-`1.0` när tillägget är stabilt nog att användas dagligen utan förbehåll.
+Version scheme: `0.1`, `0.2`, `0.3` … One step per delivered batch of work.
+The version lives in `manifest.json` and must always match the top entry here.
+`1.0` when the extension is stable enough to use daily without reservations.
 
 ## 0.14 — 2026-09-24
 
-Hälsokontroll: tilldelningarna granskas mot regler för rätt och fel.
+Health check: the assignments are reviewed against rules for what is right and
+wrong.
 
-- **Ny flik, Hälsokontroll,** som slås på under inställningarna. Avstängd
-  från början, eftersom den läser medlemmarna i varje grupp.
-- **27 kontroller.** Varje kontroll säger hur det ska se ut och listar det
-  som avviker: användarlicens till enhetsgrupper, "tillgänglig" till enheter,
-  enhetslicens till användare, fler mottagare än licenser, fel plattform,
-  undantag av fel sort, installera och avinstallera samtidigt, tomma och
-  borttagna grupper, licenser hos inaktiverade konton, dubbla Wi-Fi-profiler,
-  blandade grupper, cirklar, djup nästling, dubbletter, kioskläge på stora
-  grupper, användargrupper bland enhetsgrupper, överlappande
-  uppdateringsringar, plattformar utan efterlevnadsprincip, anslutningar som
-  går ut med flera.
-- **Fel först, rätt sist.** Fel sorteras på allvar, därefter varningar och
-  sådant att titta på. Kontroller som gick igenom står under **Rätt** — så
-  syns det att de faktiskt kördes. Saknas underlag står kontrollen som okänd,
-  aldrig som grön.
-- **Reglerna är rena funktioner** i `src/health/checks.js`, utan nätverk och
-  DOM. Underlaget — vad varje grupp innehåller och vilka okända grupper som
-  är borttagna — hämtas av servicearbetaren. Bara första sidan medlemmar per
-  grupp läses, så antal i stora grupper är golv: texterna säger "minst".
-- **Demotenantens facit är testfall.** Varje inlagt fel anger vilken kontroll
-  som ska hitta det, och testerna kräver att den gör det. En liten, välskött
-  tenant kräver åt andra hållet att ingenting flaggas.
-- **Felen syns i trädet.** Med hälsokontrollen påslagen får varje grupp en
-  romb bredvid tilldelningarnas prickar: fylld röd för fel, gul för varning,
-  grå för sådant att titta på — och en ram när något är fel längre ner i
-  grenen, så att det syns även när grenen är ihopfälld.
-- **Detaljpanelen visar gruppens fynd först**, kort: kontrollens namn och
-  första meningen av förklaringen. **Visa i Hälsokontroll →** byter flik,
-  fäller ut kontrollen, rullar fram fyndet och blinkar det gult tre gånger.
-- **Gruppnamnen i Hälsokontroll är länkar till trädet.** Ett klick byter
-  flik, nollställer sök och filter som kunde gömma gruppen, fäller ut vägen
-  dit, väljer gruppen och blinkar raden gult — samma blinkning åt båda hållen.
-  Borttagna grupper och grupper utanför prefixet står kvar som text; de har
-  ingen rad att gå till. Licensfynden namnger nu också grupperna de gäller.
-- **Åtgärder för varje kontroll**, under **Så åtgärdar du det** i fliken. En
-  åtgärd per kontroll, inte per fynd; där rätt svar beror på vad som var
-  tänkt står alternativen efter varandra. Varje åtgärd länkar till Microsoft
-  Learn. Texterna är **utkast** — skrivna efter Microsofts dokumentation, inte
-  efter en organisations rutiner — och står samlade i
-  `src/health/guidance.js` för granskning.
-- **Rättat efter dokumentationen:** "Tillgänglig till enhetsgrupp" flaggade
-  även Win32-appar och Android-appar, som enligt Microsoft får vara
-  tillgängliga för enhetsgrupper. De hoppas nu över.
-- **Hälsokontrollen räknas ut en gång**, i sidans skal, och delas av trädet
-  och fliken. Den hämtas efter trädet och blockerar det inte — trädet syns
-  direkt och markeringarna fylls i när de är klara.
+- **A new tab, Health check,** turned on in the settings. Off by default,
+  because it reads the members of every group.
+- **27 checks.** Each check says how things should look and lists what
+  deviates: user licence to device groups, "available" to devices, device
+  licence to users, more recipients than licences, wrong platform, exclusions of
+  the wrong kind, install and uninstall at the same time, empty and deleted
+  groups, licences held by disabled accounts, duplicate Wi-Fi profiles, mixed
+  groups, cycles, deep nesting, duplicates, kiosk mode on large groups, user
+  groups among device groups, overlapping update rings, platforms without a
+  compliance policy, connections that are expiring and more.
+- **Errors first, passes last.** Errors are sorted by severity, then warnings
+  and things worth a look. Checks that passed are listed under **Passed** — so
+  you can see they were actually run. If the input is missing the check shows as
+  unknown, never as green.
+- **The rules are pure functions** in `src/health/checks.js`, with no network
+  and no DOM. The input — what each group contains and which unknown groups have
+  been deleted — is fetched by the service worker. Only the first page of members
+  per group is read, so counts in large groups are floors: the texts say "at
+  least".
+- **The demo tenant's answer key is test cases.** Each planted mistake names the
+  check that should find it, and the tests require that it does. A small,
+  well-kept tenant requires the opposite: that nothing is flagged.
+- **The errors show in the tree.** With the health check turned on, every group
+  gets a diamond next to the assignment dots: filled red for errors, yellow for
+  warnings, grey for things worth a look — and an outline when something is wrong
+  further down the branch, so it shows even when the branch is collapsed.
+- **The details panel shows the group's findings first**, in brief: the check's
+  name and the first sentence of the explanation. **Show in Health check →**
+  switches tab, expands the check, scrolls the finding into view and flashes it
+  yellow three times.
+- **The group names in Health check are links to the tree.** A click switches
+  tab, resets the search and filter that could hide the group, expands the way
+  there, selects the group and flashes the row yellow — the same flash in both
+  directions. Deleted groups and groups outside the prefix stay as text; they
+  have no row to go to. The licence findings now also name the groups they apply
+  to.
+- **A fix for every check**, under **How to fix it** in the tab. One fix per
+  check, not per finding; where the right answer depends on what was intended the
+  alternatives follow one another. Every fix links to Microsoft Learn. The texts
+  are **drafts** — written from Microsoft's documentation, not from an
+  organisation's procedures — and are collected in `src/health/guidance.js` for
+  review.
+- **Corrected against the documentation:** "Available to a device group" also
+  flagged Win32 apps and Android apps, which according to Microsoft may be
+  available to device groups. They are now skipped.
+- **The health check is computed once**, in the page shell, and shared by the
+  tree and the tab. It is fetched after the tree and does not block it — the tree
+  shows immediately and the markers are filled in when they are ready.
+- **The interface is now in English.** All user-visible text, the README and this
+  changelog are translated for publishing on the Chrome Web Store. The demo
+  tenant's group, app and profile names are left in Swedish on purpose.
+- **Group details:** the button **Open in Intune** is renamed **Open group**, and
+  the **Open in Entra** button is removed.
 
-Rättat:
+Fixed:
 
-- **Flikbyten fastnade.** Från Connections eller Hälsokontroll gick det inte
-  att komma tillbaka till Träd eller vidare till Rapporter — fliken markerades
-  men innehållet stod kvar. Flikarna delade en yta, och en flik som redan
-  laddats ritade om i element som den andra fliken slängt. Nu har varje flik
-  en egen yta som göms och visas. En flik som blir klar i bakgrunden skriver
-  inte heller längre över statusraden eller sidfoten för den som är framme.
-- **Demoläget kunde få en riktig hämtnings fel.** Slogs demot på medan en
-  hämtning mot tenanten väntade på token, fick demot dess "Ingen giltig
-  token". En pågående hämtning återanvänds nu bara om den gäller samma läge
-  och prefix.
-- **Klicktest i webbläsaren**, `node tests/e2e.mjs`: laddar tillägget i en
-  huvudlös Edge och byter mellan flikarna i alla riktningar. Mot den gamla
-  flikkoden fallerar det på just de byten som fastnade.
+- **Tab switches got stuck.** From Connections or Health check it was not
+  possible to get back to Tree or on to Reports — the tab was highlighted but the
+  content stayed. The tabs shared one surface, and a tab that had already loaded
+  redrew into elements the other tab had thrown away. Now every tab has a surface
+  of its own that is hidden and shown. A tab that finishes in the background also
+  no longer overwrites the status row or footer of the one that is showing.
+- **Demo mode could get a real fetch's errors.** If demo was turned on while a
+  fetch against the tenant was waiting for a token, the demo got its "No valid
+  token". A fetch in progress is now only reused if it applies to the same mode
+  and prefix.
+- **A click test in the browser**, `node tests/e2e.mjs`: loads the extension in a
+  headless Edge and switches between the tabs in every direction. Against the old
+  tab code it fails on exactly the switches that got stuck.
 
 ## 0.13 — 2026-09-24
 
-Demoläge: AidTune går att använda utan tenant.
+Demo mode: AidTune can be used without a tenant.
 
-- **En påhittad kommun, Contoso,** med fyra grundskolor och två gymnasier:
-  runt 270 grupper i flera nivåer, 44 appar för iPad, Windows, Android och
-  webb, 30 profiler och policyer, fyra VPP-tokens och anslutningar som går ut.
-  Slås på under inställningarna. Inget anrop lämnar webbläsaren.
-- **23 inlagda fel** av det slag som ser rätt ut i portalen: användarlicens
-  till iPad-vagnar, "tillgänglig" till enhetsgrupper, fler mottagare än
-  licenser, iOS-appar till Windows, användargrupper undantagna från
-  enhetstilldelningar, en tom dynamisk grupp med stavfel i regeln, en
-  tilldelning till en borttagen grupp, kioskläge på elevdatorer med flera.
-  Felen bärs av Graphs egna fält — licenstyp, avsikt, plattform, och om en
-  grupp innehåller användare eller enheter. Facit står i demonotisen på sidan.
-- **Den riktiga hämtkedjan körs.** Demot byter bara ut Graph-klienten, så
-  `groups.js`, `assignments.js`, `connections.js`, cachen och sidan är samma
-  kod som mot en riktig tenant. Det är sidan som provas, inte en genväg förbi den.
-- **De svåra fallen finns med:** en grupp med två föräldrar, ett cirkulärt
-  medlemskap, en kant till en grupp utanför prefixet, lösa grupper, en
-  exkludering och tilldelningar till alla. Utgångsdatum räknas från dagens
-  datum, så att "går ut om tre dagar" alltid stämmer.
-- **Utan portal öppnas sidan i en egen flik** när demoläget är på — så ser en
-  granskare i Chrome Web Store, som saknar Intune, hela tillägget.
-- **Sparade inställningar hämtar om direkt** på AidTune-sidan, i stället för
-  att vänta på ⟳.
-- **Testerna går att köra i Node** (`node tests/run.mjs`), och GitHub Actions
-  kör dem före varje paketbygge. Nya tester binder demot till hämtkedjan:
-  läggs en datakälla till utan att demot följer med faller de.
+- **A made-up municipality, Contoso,** with four primary schools and two
+  upper-secondary schools: around 270 groups on several levels, 44 apps for iPad,
+  Windows, Android and web, 30 profiles and policies, four VPP tokens and
+  connections that are expiring. Turned on in the settings. No request leaves the
+  browser.
+- **23 planted mistakes** of the kind that look right in the portal: user
+  licences to iPad carts, "available" to device groups, more recipients than
+  licences, iOS apps to Windows, user groups excluded from device assignments, an
+  empty dynamic group with a typo in the rule, an assignment to a deleted group,
+  kiosk mode on student computers and more. The mistakes are carried by Graph's
+  own fields — licence type, intent, platform, and whether a group contains users
+  or devices. The answer key is in the demo notice on the page.
+- **The real fetch chain runs.** The demo only swaps out the Graph client, so
+  `groups.js`, `assignments.js`, `connections.js`, the cache and the page are the
+  same code as against a real tenant. It is the page that is tested, not a
+  shortcut around it.
+- **The hard cases are included:** a group with two parents, a circular
+  membership, an edge to a group outside the prefix, loose groups, an exclusion
+  and assignments to everyone. Expiry dates are counted from today's date, so
+  "expires in three days" is always right.
+- **Without a portal the page opens in a tab of its own** when demo mode is on —
+  so a Chrome Web Store reviewer, who has no Intune, sees the whole extension.
+- **Saved settings refetch immediately** on the AidTune page, instead of waiting
+  for ⟳.
+- **The tests can be run in Node** (`node tests/run.mjs`), and GitHub Actions
+  runs them before every package build. New tests tie the demo to the fetch
+  chain: if a data source is added without the demo following, they fail.
 
 ## 0.12 — 2026-09-18
 
-AidTune flyttar in i portalen: sidopanelen är borta, och i stället ligger en
-egen sida i Intune med en punkt i vänsterlisten direkt under **Start**.
+AidTune moves into the portal: the side panel is gone, and instead there is a
+page of its own in Intune with an entry in the left rail directly under
+**Home**.
 
-- **En punkt i portalens vänsterlist, under Start.** Den ärver portalens egna
-  klasser, så den får listens mått, färger och tema utan att vi målar om något.
-  Portalen ritar om listen vid bladbyten och slänger då punkten — den sätts
-  tillbaka av en billig kontroll med jämna mellanrum.
-- **Sidan lägger sig över innehållsytan, inte över hela fönstret.** Listen och
-  den översta raden lämnas orörda, så det går fortfarande att byta blad, söka
-  och logga ut medan AidTune står framme. Kanterna mäts i stället för att gissas:
-  listen kan fällas ihop och radens höjd ändras.
-- **Träd och detaljer står nu alltid sida vid sida.** Det var sidopanelens
-  bredd som en gång tvingade ner detaljerna under raderna. Med en hel sida
-  behövs inte det längre, och `body.wide` med sin smala reservlayout är borta.
-- **Sidan är en vanlig tilläggssida i en ram**, inte injicerad markup. Därmed
-  gäller tilläggets egen origin: `chrome.tabs`, `chrome.storage` och
-  modulimporter fungerar precis som förut, och portalens DOM rörs aldrig av
-  något annat än länken och rutan. Content scriptet läser ingenting ur portalen.
-- **Sidan fäller undan sig själv när den skickar fliken någon annanstans** —
-  efter ett klick på en behörighetsknapp eller på *Öppna i Intune* vill man se
-  bladet, inte AidTune. Densamma stänger vid bladbyte i portalen.
-- **Sidan följer portalens tema, inte webbläsarens.** Portalens tema — Azure,
-  Ljust, Mörkt, Hög kontrast — sitter i portalens egna inställningar och har
-  ingenting med `prefers-color-scheme` att göra. Utan det här stod sidan vit
-  mitt i ett mörkt Intune så fort de två inte råkade vara överens.
-- **Temat mäts, det gissas inte.** Temaklasserna är odokumenterade precis som
-  bladnamnen, så vi läser dem inte. I stället mäts bakgrunden en bit in i
-  innehållsytan och textfärgen, och resten av paletten räknas ut ur dem. Det
-  följer med i vilket tema som helst, även ett vi aldrig sett. Signalfärgerna —
-  blått, grönt, rött — räknas inte fram utan väljs ur två uppsättningar efter
-  hur ljus portalen är; de ska synas, inte glida med bakgrunden.
-- **Båda färgerna tas ur samma element.** Första försöket tog bakgrunden ur
-  innehållsytan och texten ur `body`, och då blev hela sidan vit på vitt:
-  portalens `body` bär en textfärg som hör ihop med skalets mörka topprad, inte
-  med den vita ytan under. Allt ritades, ingenting syntes. Nu letas det första
-  elementet uppåt som målar en bakgrund *bred nog att vara sidans egen* — en
-  knapp eller en markerad rad har också en bakgrund, men den säger ingenting om
-  temat — och båda färgerna tas därifrån.
-- **Och under det ett skyddsnät:** en uppmätt textfärg som inte når läsbar
-  kontrast mot bakgrunden kastas till förmån för vår egen. Det är bakgrunden som
-  måste stämma; texten är bara ett förslag. En rad i konsolen säger vad som
-  faktiskt lästes, för den gång det går fel igen.
-- Samma mätning sätter `color-scheme`, så att rullister, rullgardiner och
-  sökfältets kryss ritas i rätt läge.
-- Färgerna följer med i ramens adress, inte bara som meddelande efteråt, så att
-  paletten sitter innan sidan målat sin första bild. Byts temat medan sidan står
-  framme mäts det om direkt.
-- Palettmatematiken är en ren funktion (`portalPalette`) med **fjorton nya
-  enhetstester**. Ett binder `theme.js` till `page.css` så att de två inte kan
-  glida isär, och fyra håller fast skyddsnätet ovan — vitt på vitt var inget man
-  såg i koden, men det är trivialt att testa.
-- **⧉ öppnar sidan i en egen flik** i stället för i ett popup-fönster. Vill man
-  ha AidTune uppe medan man arbetar i portalen är en flik bättre än att växla.
-- **Knappen i verktygsfältet tar dig till portalen** och öppnar sidan där.
-  Finns ingen portalflik öppen startas en.
-- `sidePanel`-behörigheten är borttagen ur manifestet.
+- **An entry in the portal's left rail, under Home.** It inherits the portal's
+  own classes, so it gets the rail's dimensions, colours and theme without us
+  repainting anything. The portal redraws the rail when switching blades and
+  throws the entry away — it is put back by a cheap check at regular intervals.
+- **The page lays itself over the content area, not over the whole window.** The
+  rail and the top bar are left alone, so you can still switch blades, search and
+  sign out while AidTune is showing. The edges are measured instead of guessed:
+  the rail can be collapsed and the bar's height changes.
+- **Tree and details are now always side by side.** It was the side panel's width
+  that once forced the details down under the rows. With a whole page that is no
+  longer needed, and `body.wide` with its narrow fallback layout is gone.
+- **The page is an ordinary extension page in a frame**, not injected markup.
+  That means the extension's own origin applies: `chrome.tabs`, `chrome.storage`
+  and module imports work exactly as before, and the portal's DOM is never
+  touched by anything but the link and the frame. The content script reads
+  nothing from the portal.
+- **The page folds itself away when it sends the tab somewhere else** — after a
+  click on a permission button or on *Open in Intune* you want to see the blade,
+  not AidTune. It also closes on a blade switch in the portal.
+- **The page follows the portal's theme, not the browser's.** The portal's theme
+  — Azure, Light, Dark, High contrast — lives in the portal's own settings and
+  has nothing to do with `prefers-color-scheme`. Without this the page stood
+  white in the middle of a dark Intune as soon as the two happened to disagree.
+- **The theme is measured, not guessed.** The theme classes are undocumented just
+  like the blade names, so we do not read them. Instead the background a little
+  way into the content area and the text colour are measured, and the rest of the
+  palette is computed from them. It follows along in any theme, even one we have
+  never seen. The signal colours — blue, green, red — are not computed but chosen
+  from two sets depending on how light the portal is; they must be visible, not
+  drift with the background.
+- **Both colours are taken from the same element.** The first attempt took the
+  background from the content area and the text from `body`, and the whole page
+  became white on white: the portal's `body` carries a text colour that belongs
+  with the shell's dark top bar, not with the white surface below. Everything was
+  drawn, nothing was visible. Now the first element upwards is looked for that
+  paints a background *wide enough to be the page's own* — a button or a selected
+  row also has a background, but it says nothing about the theme — and both
+  colours are taken from there.
+- **And beneath that a safety net:** a measured text colour that does not reach
+  readable contrast against the background is discarded in favour of our own. It
+  is the background that has to be right; the text is only a suggestion. A line in
+  the console says what was actually read, for the next time it goes wrong.
+- The same measurement sets `color-scheme`, so that scrollbars, dropdowns and the
+  search field's cross are drawn in the right mode.
+- The colours travel along in the frame's address, not just as a message
+  afterwards, so that the palette is in place before the page has painted its
+  first image. If the theme changes while the page is showing it is re-measured
+  immediately.
+- The palette maths is a pure function (`portalPalette`) with **fourteen new unit
+  tests**. One ties `theme.js` to `page.css` so the two cannot drift apart, and
+  four pin down the safety net above — white on white was not something you saw in
+  the code, but it is trivial to test.
+- **⧉ opens the page in a tab of its own** instead of in a popup window. If you
+  want AidTune up while you work in the portal, a tab is better than switching.
+- **The toolbar button takes you to the portal** and opens the page there. If no
+  portal tab is open, one is started.
+- The `sidePanel` permission is removed from the manifest.
 
 ## 0.11 — 2026-09-18
 
-Tokenfångsten begränsad till portalflikar.
+Token capture limited to portal tabs.
 
-- **Vi läste för brett.** `webRequest`-lyssnaren filtrerar på adress, inte på
-  flik. Varje flik som anropade `graph.microsoft.com` — Outlook på webben,
-  Teams, Graph Explorer — fick sin `Authorization`-header avläst av oss, trots
-  att vi bara vill ha portalens. Nu förs ett register över vilka flikar som är
-  `intune.microsoft.com`, och bara de läses.
-- Registret går på **flik och inte på ursprung**, eftersom portalen lägger sina
-  blad i iframes med andra domäner. Ett ursprungsfilter hade brutit fångsten.
-- Content scriptets tokens kontrolleras nu mot avsändarens flik. Manifestet kör
-  det redan bara på portalen, men garantin ska stå i koden.
+- **We read too broadly.** The `webRequest` listener filters on address, not on
+  tab. Every tab that called `graph.microsoft.com` — Outlook on the web, Teams,
+  Graph Explorer — had its `Authorization` header read by us, even though we only
+  want the portal's. Now a register is kept of which tabs are
+  `intune.microsoft.com`, and only those are read.
+- The register goes by **tab and not by origin**, since the portal puts its
+  blades in iframes with other domains. An origin filter would have broken the
+  capture.
+- The content script's tokens are now checked against the sender's tab. The
+  manifest already runs it only on the portal, but the guarantee should be in the
+  code.
 
 ## 0.10 — 2026-09-18
 
-- **VPP visar tokennamnet, inte Apple-ID.** Namnkolumnen tar `displayName` —
-  det man döpt token till i portalen — och faller tillbaka på organisation
-  först därefter. Apple-ID är en identifierare, inte ett namn, och hör hemma i
-  detaljkolumnen.
-- Rullistan över VPP-tokens visar namnet ensamt. Apple-ID läggs bara till när
-  två tokens annars skulle heta likadant.
-- Detaljkolumnen upprepar inte längre namnet som redan står bredvid.
-- **Latent bugg rättad:** namnvalet använde `??`, som bara faller vidare på
-  null. Tjänsterna skickar tomma strängar för fält som inte satts, så ett tomt
-  `displayName` hade gett en namnlös rad i stället för att gå vidare till nästa
-  fält. Nu hoppas tomma värden över.
+- **VPP shows the token name, not the Apple ID.** The name column takes
+  `displayName` — what the token was named in the portal — and only then falls
+  back on organisation. The Apple ID is an identifier, not a name, and belongs in
+  the details column.
+- The dropdown of VPP tokens shows the name alone. The Apple ID is only added
+  when two tokens would otherwise have the same name.
+- The details column no longer repeats the name that is already next to it.
+- **Latent bug fixed:** the name choice used `??`, which only falls through on
+  null. The services send empty strings for fields that have not been set, so an
+  empty `displayName` would have given a nameless row instead of moving on to the
+  next field. Empty values are now skipped.
 
 ## 0.9 — 2026-09-18
 
-Licenserna går att filtrera per VPP-token.
+The licences can be filtered per VPP token.
 
-- **Varje VPP-token visar sin licensstatus direkt i tabellen** — totalt,
-  använda och lediga för just den poolen. Noll lediga markeras rött.
-- **Klicka på en VPP-token** så filtreras licenslistan till apparna i den.
-  Klicka igen för att släppa filtret.
-- **Rullista över VPP-tokens** ovanför licenslistan, med antal appar per token.
-  Appar vars token inte går att härleda samlas under "Utan känd token" i
-  stället för att försvinna.
-- Sökningen bland apparna gäller inom det valda filtret, och summeringen
-  räknar på det man faktiskt ser.
+- **Every VPP token shows its licence status directly in the table** — total,
+  used and free for that pool. Zero free is marked red.
+- **Click a VPP token** and the licence list is filtered to the apps in it. Click
+  again to release the filter.
+- **A dropdown of VPP tokens** above the licence list, with the number of apps
+  per token. Apps whose token cannot be derived are collected under "No known
+  token" instead of disappearing.
+- The search among the apps applies within the chosen filter, and the summary
+  counts what you actually see.
 
-Bakgrunden: en tenant kan ha flera VPP-tokens, och varje token är en egen
-licenspool. Att summera dem i en lista döljer att en pool är slut medan en
-annan har hundratals lediga.
+Background: a tenant can have several VPP tokens, and each token is a licence
+pool of its own. Summing them in one list hides that one pool is exhausted while
+another has hundreds free.
 
 ## 0.8 — 2026-09-18
 
-Connections byggd, och tillägget blev snällare mot prod.
+Connections built, and the extension became kinder to prod.
 
-- **Connections fungerar.** VPP-tokens, Apple ADE/DEP, Android-enrollment och
-  APNS-certifikat, i tre subträd. En regel styr vyn: det som löper ut först
-  står överst, både i banderollen och inne i varje subträd. Färgen följer hur
-  bråttom det är — röd under 30 dagar, gul under 90.
-- **VPP-licenser.** Under VPP ligger en söklista över VPP-apparna med totalt,
-  använda och lediga licenser, plus en summering. Appar med noll lediga
-  markeras rött. Listan kostar inga extra anrop: licensräknarna plockas ur den
-  appdata trädet redan hämtat.
-- **Källorna körs efter varandra i stället för parallellt**, med en kort paus
-  emellan. Vi lånar portalens throttling-budget, och en del av Intunes tak är
-  per tenant — fyra samtidiga svep kunde märkas som seghet för andra
-  administratörer. Gäller både tilldelningar och Connections.
-- Graph-med-reservväg bor nu i `src/graph/source.js` och delas av båda
-  hämtningarna i stället för att finnas i två versioner.
-- ⟳ uppdaterar den modul du står i, inte alltid trädet.
+- **Connections works.** VPP tokens, Apple ADE/DEP, Android enrollment and APNS
+  certificates, in three subtrees. One rule governs the view: whatever expires
+  first comes first, both in the banner and inside each subtree. The colour
+  follows how urgent it is — red under 30 days, yellow under 90.
+- **VPP licences.** Under VPP is a searchable list of the VPP apps with total,
+  used and free licences, plus a summary. Apps with zero free are marked red. The
+  list costs no extra requests: the licence counters are taken from the app data
+  the tree has already fetched.
+- **The sources run one after another instead of in parallel**, with a short
+  pause in between. We borrow the portal's throttling budget, and some of
+  Intune's limits are per tenant — four simultaneous sweeps could be felt as
+  sluggishness by other administrators. Applies to both assignments and
+  Connections.
+- Graph-with-fallback now lives in `src/graph/source.js` and is shared by both
+  fetches instead of existing in two versions.
+- ⟳ refreshes the module you are in, not always the tree.
 
 ## 0.7 — 2026-09-18
 
-Behörigheter per modul.
+Permissions per module.
 
-- **Tokenraden är nu en behörighetsrad, och den är kontextuell.** Den visar vad
-  den aktiva fliken behöver, inte allt tillägget kan behöva. Connections visar
-  Appar, Konfiguration och Anslutningar; Rapporter visar Grupper, Appar och
-  Enheter.
-- **Fem namngivna förmågor** i stället för två grova tokensorter: `groups`,
-  `apps`, `config`, `serviceConfig`, `devices`. Varje modul deklarerar sina
-  behov. Definitionen ligger i `src/common/jwt.js`.
-- **Tre lägen i stället för två.** Grön = Graph-token med rätt behörighet, grå =
-  bara Intunes backend, alltså kanske via reservvägen, gul = saknas. Det grå
-  läget är nytt och ärligare än att måla något grönt vi inte vet fungerar.
-- **Vägarna lärs in per förmåga.** Fångas en token från ett portalblad sparas
-  det bladet som adressen till precis de förmågor token täcker. Startsidan
-  sparas aldrig — den laddar lite av allt och säger ingenting om var något bor.
-- Panelen skriver ut vart i portalens meny en saknad behörighet hämtas, i
-  klartext. Djuplänkarna är odokumenterade och gissas inte.
-- Connections-fliken visar sitt behörighetsläge live i stället för hårdkodat,
-  och uppdaterar sig när en ny token fångas.
+- **The token row is now a permissions row, and it is contextual.** It shows what
+  the active tab needs, not everything the extension may need. Connections shows
+  Apps, Configuration and Connections; Reports shows Groups, Apps and Devices.
+- **Five named capabilities** instead of two coarse token kinds: `groups`,
+  `apps`, `config`, `serviceConfig`, `devices`. Every module declares its needs.
+  The definition lives in `src/common/jwt.js`.
+- **Three states instead of two.** Green = Graph token with the right permission,
+  grey = only the Intune backend, i.e. perhaps via the fallback route, yellow =
+  missing. The grey state is new and more honest than painting something green
+  that we do not know works.
+- **The routes are learned per capability.** If a token is captured from a portal
+  blade, that blade is saved as the address for exactly the capabilities the
+  token covers. The home page is never saved — it loads a little of everything
+  and says nothing about where something lives.
+- The panel spells out where in the portal's menu a missing permission is
+  obtained, in plain text. The deep links are undocumented and are not guessed.
+- The Connections tab shows its permission state live instead of hard-coded, and
+  updates when a new token is captured.
 
 ## 0.6 — 2026-09-18
 
-Projektet heter nu **AidTune**. Modulskal och filter.
+The project is now called **AidTune**. Module shell and filter.
 
-- **Flikar.** Panelen är uppdelad i moduler: **Träd**, **Connections**,
-  **Rapporter**. Aktiv flik sparas. Connections och Rapporter är registrerade
-  men inte byggda — de visar vad de kommer bestå av och vilka behörigheter som
-  saknas, så frågan syns innan koden skrivs.
-- **Filter på app eller konfiguration.** Välj en app eller profil i trädets
-  verktygsrad, så visas bara de grenar som har den tilldelad. Svaret på
-  "vilka grupper ger den här appen?" — frågan man faktiskt har i ett ärende.
-- **⧉ öppnar panelen i ett eget fönster.** Sidopanelens bredd går inte att
-  styra från ett tillägg, så breda vyer får ett fönster i stället. Där ligger
-  träd och detaljer sida vid sida.
-- Trädlogiken flyttad till `src/sidepanel/modules/tree.js`. Panelen är nu bara
-  skal: tokens, flikar, notiser och den delade hämtningen.
+- **Tabs.** The panel is divided into modules: **Tree**, **Connections**,
+  **Reports**. The active tab is remembered. Connections and Reports are
+  registered but not built — they show what they will consist of and which
+  permissions are missing, so the question is visible before the code is written.
+- **Filter on app or configuration.** Pick an app or profile in the tree's
+  toolbar and only the branches that have it assigned are shown. The answer to
+  "which groups give me this app?" — the question you actually have in a case.
+- **⧉ opens the panel in a window of its own.** The side panel's width cannot be
+  controlled from an extension, so wide views get a window instead. There, tree
+  and details sit side by side.
+- The tree logic moved to `src/sidepanel/modules/tree.js`. The panel is now only a
+  shell: tokens, tabs, notices and the shared fetch.
 
-### Behörigheter som saknas för Connections
+### Permissions missing for Connections
 
-APNS-certifikat och Apple enrollment-tokens kräver
-`DeviceManagementServiceConfig.Read.All`, som inte ingår i det portalen lånar
-ut. Den måste läggas till i begäran till IT innan Connections kan byggas klart.
+APNS certificates and Apple enrollment tokens require
+`DeviceManagementServiceConfig.Read.All`, which is not part of what the portal
+lends out. It has to be added to the request to IT before Connections can be
+finished.
 
 ## 0.5 — 2026-09-17
 
-Säkerhetsgenomgång inför intern spridning.
+Security review ahead of internal distribution.
 
-- **Värdlista för alla anrop som bär token.** Reservvägen plockar en adress ur
-  Graphs felmeddelande och anropade den med Intune-token bifogad, utan att
-  kontrollera vart den pekade. Samma sak för `@odata.nextLink`. Ett svar som
-  gick att påverka hade kunnat styra en bärartoken till en annan värd. Nu
-  kontrolleras varje adress mot `graph.microsoft.com` och
-  `*.manage.microsoft.com` innan den anropas, både i klienten och när adresser
-  lärs in eller sparas.
-- Säkerhetsavsnitt i README: vad som sparas var och hur länge, vad som skickas
-  och vart, vilka behörigheter som begärs och varför — och rakt på sak om vad
-  ett säkerhetsteam kommer att invända mot.
+- **A host list for all requests that carry a token.** The fallback route picks
+  an address out of Graph's error message and called it with the Intune token
+  attached, without checking where it pointed. The same for `@odata.nextLink`. A
+  response that could be influenced could have steered a bearer token to another
+  host. Now every address is checked against `graph.microsoft.com` and
+  `*.manage.microsoft.com` before it is called, both in the client and when
+  addresses are learned or saved.
+- A security section in the README: what is stored where and for how long, what
+  is sent and where, which permissions are requested and why — and straight to
+  the point about what a security team will object to.
 
 ## 0.4 — 2026-09-17
 
-- **Utan hierarki** stänger sig inte längre när man väljer en grupp i den.
-  Listan byggs om vid varje omritning, och dess öppna läge fanns ingenstans
-  sparat — så ett klick i listan stängde den lista man just klickat i. Läget
-  ligger nu i panelens eget tillstånd och sparas mellan gångerna.
-- **Öppna i Entra** öppnar i en ny flik i stället för att ta över portalfliken.
-  **Öppna i Intune** byter blad i fliken som redan står öppen, som förut.
+- **Without hierarchy** no longer closes when you select a group in it. The list
+  is rebuilt on every redraw, and its open state was not saved anywhere — so a
+  click in the list closed the list you had just clicked in. The state now lives
+  in the panel's own state and is saved between visits.
+- **Open in Entra** opens in a new tab instead of taking over the portal tab.
+  **Open in Intune** switches the blade in the tab that is already open, as
+  before.
 
 ## 0.3 — 2026-09-17
 
-Rättar varför apparna inte laddade.
+Fixes why the apps did not load.
 
-- **Tokens hålls nu i en pool i stället för en åt gången.** Portalen använder
-  flera Graph-tokens med olika scopes: grupplistan får en med katalog-
-  behörigheter, app-vyn en med DeviceManagement-behörigheter. Vi höll bara en,
-  så den ena slängde alltid den andra. Nu behålls alla giltiga och den som
-  täcker anropet väljs per anrop.
-- Tilldelningarna går därmed via Graph när portalen har en token som duger, och
-  faller tillbaka på Intunes backend först när ingen gör det.
-- Tokenraden visar **Grupper** och **Appar** som förmågor, inte som
-  tokensorter: **Appar** blir grön oavsett om plupparna kan hämtas via Graph
-  eller via Intunes backend.
-- Saknas något går det att fälla ut **Tokens vi sett** direkt i panelen, med
-  målgrupp och scope-täckning per token. Ingen konsol behövs för att felsöka.
+- **Tokens are now held in a pool instead of one at a time.** The portal uses
+  several Graph tokens with different scopes: the group list gets one with
+  directory permissions, the apps view one with DeviceManagement permissions. We
+  held only one, so one always threw away the other. Now all valid ones are kept
+  and the one that covers the request is chosen per request.
+- The assignments therefore go via Graph when the portal has a token that works,
+  and fall back on the Intune backend only when none does.
+- The token row shows **Groups** and **Apps** as capabilities, not as token
+  kinds: **Apps** turns green whether the markers can be fetched via Graph or via
+  the Intune backend.
+- If something is missing, **Tokens seen** can be expanded directly in the panel,
+  with audience and scope coverage per token. No console is needed to
+  troubleshoot.
 
 ## 0.2 — 2026-09-17
 
-Projektet heter nu **Fermtree**.
+The project is now called **Fermtree**.
 
-- Intune-token fångas nu även när dess målgrupp är Microsoft Intunes app-ID
-  (`0000000a-…`) i stället för en URL. Det var därför plupparna uteblev: vi
-  slängde token trots att vi sett portalen skicka den till sin egen backend.
-  Såg vi destinationen litar vi numera på den, oavsett vad målgruppen heter.
-- Tokenrad högst upp med en knapp per token: **Grupper** och **Appar**. Visar
-  vilka som sitter och tar portalfliken till sidan som hämtar den som saknas.
-  Adresserna lärs in per tenant i stället för att gissas.
-- Fyra identiska felnotiser om samma sak slås ihop till en, med knapp som
-  öppnar sidan som löser problemet.
-- Notiser kan döljas med kryss och tas fram igen. Detaljpanelen kan fällas ihop.
-- Färgförklaringen överst är borttagen tills vidare — den tog en rad och var
-  avklippt i en smal panel.
-- Medlemshämtningen begär ny token om den gamla hunnit gå ut.
+- The Intune token is now also captured when its audience is Microsoft Intune's
+  app ID (`0000000a-…`) instead of a URL. That was why the markers were missing:
+  we threw the token away even though we had seen the portal send it to its own
+  backend. If we saw the destination we now trust it, whatever the audience is
+  called.
+- A token row at the top with one button per token: **Groups** and **Apps**.
+  Shows which are held and takes the portal tab to the page that obtains the one
+  that is missing. The addresses are learned per tenant instead of guessed.
+- Four identical error notices about the same thing are merged into one, with a
+  button that opens the page that solves the problem.
+- Notices can be hidden with a cross and brought back. The details panel can be
+  collapsed.
+- The colour legend at the top is removed for now — it took a row and was cut off
+  in a narrow panel.
+- The member fetch requests a new token if the old one has expired.
 
 ## 0.1 — 2026-09-17
 
-Första fungerande version.
+First working version.
 
-- Träd över nästlade Entra-grupper i webbläsarens sidopanel, bredvid den
-  orörda Intune-portalen. Inget byggsteg, inga beroenden.
-- Blå och gröna pluppar per grupp: fylld för tilldelat här, ihålig för
-  tilldelat längre ner i grenen.
-- Token lånas från portalen — ingen app-registrering i Entra.
-- Tilldelningar hämtas via Intunes egen backend när Graph nekar, med adresser
-  som lärs in ur felsvaret i stället för att hårdkodas.
-- Sök med autoutfällning, detaljpanel med medlemmar och djuplänkar,
-  prefixfilter i inställningarna.
-- Enhetstester för trädbygget, körbara i webbläsaren.
+- A tree of nested Entra groups in the browser's side panel, next to the
+  untouched Intune portal. No build step, no dependencies.
+- Blue and green markers per group: filled for assigned here, hollow for assigned
+  further down the branch.
+- The token is borrowed from the portal — no app registration in Entra.
+- Assignments are fetched via Intune's own backend when Graph refuses, with
+  addresses learned from the error response instead of hard-coded.
+- Search with auto-expand, a details panel with members and deep links, a prefix
+  filter in the settings.
+- Unit tests for the tree building, runnable in the browser.

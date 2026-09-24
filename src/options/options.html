@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="sv">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>AidTune – inställningar</title>
+    <title>AidTune – settings</title>
     <link rel="stylesheet" href="../page/page.css" />
     <style>
       body {
@@ -53,23 +53,23 @@
     </style>
   </head>
   <body>
-    <h1>AidTune – inställningar</h1>
+    <h1>AidTune – settings</h1>
 
     <div class="field">
-      <label for="prefix">Visa grupper vars namn börjar med</label>
+      <label for="prefix">Show groups whose name starts with</label>
       <input id="prefix" type="text" spellcheck="false" />
       <div class="hint">
-        Tomt fält hämtar alla grupper i tenanten. Det fungerar, men blir långsamt
-        och rörigt i en stor tenant.
+        An empty field fetches every group in the tenant. That works, but gets slow
+        and cluttered in a large tenant.
       </div>
     </div>
 
     <div class="field check">
       <input id="showLoose" type="checkbox" />
       <div>
-        <label for="showLoose">Visa grupper utan hierarki</label>
+        <label for="showLoose">Show groups without hierarchy</label>
         <div class="hint">
-          Grupper som varken har föräldrar eller barn samlas längst ner i en egen lista.
+          Groups with neither parents nor children are collected in a list of their own at the bottom.
         </div>
       </div>
     </div>
@@ -77,10 +77,10 @@
     <div class="field check">
       <input id="onlyWithAssignments" type="checkbox" />
       <div>
-        <label for="onlyWithAssignments">Visa bara grenar med tilldelningar</label>
+        <label for="onlyWithAssignments">Show only branches with assignments</label>
         <div class="hint">
-          Döljer grupper som varken har, eller har något under sig med, appar eller
-          konfigurationer.
+          Hides groups that have no apps or configurations, and have nothing beneath
+          them that does.
         </div>
       </div>
     </div>
@@ -88,13 +88,13 @@
     <div class="field check">
       <input id="healthCheck" type="checkbox" />
       <div>
-        <label for="healthCheck">Hälsokontroll</label>
+        <label for="healthCheck">Health check</label>
         <div class="hint">
-          Lägger till fliken Hälsokontroll, som granskar tilldelningarna mot
-          regler för rätt och fel: användarlicenser till iPad-vagnar, appar till
-          fel plattform, tomma eller borttagna grupper, överlappande
-          uppdateringsringar och liknande. Läser medlemmarna i varje grupp, så
-          den första hämtningen tar lite längre tid.
+          Adds the Health check tab, which reviews your assignments against
+          rules for what is right and wrong: user licences on iPad carts, apps
+          on the wrong platform, empty or deleted groups, overlapping update
+          rings and the like. Reads the members of every group, so the first
+          fetch takes a little longer.
         </div>
       </div>
     </div>
@@ -102,20 +102,20 @@
     <div class="field check">
       <input id="demo" type="checkbox" />
       <div>
-        <label for="demo">Demoläge</label>
+        <label for="demo">Demo mode</label>
         <div class="hint">
-          Visar en påhittad skola i stället för din tenant. Inget anrop lämnar
-          webbläsaren och ingen inloggning behövs — bra för att prova, testa och
-          ta skärmbilder. Ikonen i verktygsfältet öppnar då sidan i en egen flik.
+          Shows a made-up school instead of your tenant. No request leaves the
+          browser and no sign-in is needed — good for trying it out, testing and
+          taking screenshots. The toolbar icon then opens the page in its own tab.
         </div>
       </div>
     </div>
 
-    <button id="save" type="button" class="secondary">Spara</button>
-    <span id="saved" hidden>Sparat — hämtar om på AidTune-sidan.</span>
+    <button id="save" type="button" class="secondary">Save</button>
+    <span id="saved" hidden>Saved — refreshing the AidTune page.</span>
 
     <p class="hint" style="margin-top: 28px">
-      <a id="tests" href="#">Kör enhetstesterna</a> för trädbygget.
+      <a id="tests" href="#">Run the unit tests</a> for the tree builder.
     </p>
 
     <script type="module" src="options.js"></script>

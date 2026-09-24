@@ -1,4 +1,4 @@
-// Trädmodulen: Entra-gruppernas struktur, med pluppar och filter.
+// Tree module: the structure of the Entra groups, with markers and filters.
 
 import { buildForest } from "../../tree/build.js";
 import { computeFlags } from "../../tree/rollup.js";
@@ -72,7 +72,7 @@ function buildToolbar() {
 
   ui.search = el("input");
   ui.search.type = "search";
-  ui.search.placeholder = "Sök grupp …";
+  ui.search.placeholder = "Search group …";
   ui.search.autocomplete = "off";
   ui.search.spellcheck = false;
   ui.search.value = state.query;
@@ -87,7 +87,7 @@ function buildToolbar() {
   });
 
   ui.filter = el("select", "item-filter");
-  ui.filter.title = "Visa bara grupper som har en viss app eller konfiguration";
+  ui.filter.title = "Show only groups that have a given app or configuration";
   ui.filter.addEventListener("change", () => {
     state.filterKey = ui.filter.value;
     // Ett filter är meningslöst om grenarna är ihopfällda.
@@ -102,13 +102,13 @@ function fillFilter(items) {
   const chosen = state.filterKey;
   ui.filter.replaceChildren();
 
-  const none = el("option", null, "Alla appar och konfigurationer");
+  const none = el("option", null, "All apps and configurations");
   none.value = "";
   ui.filter.append(none);
 
   for (const [kind, label] of [
-    ["config", "Konfigurationer"],
-    ["app", "Appar"]
+    ["config", "Configurations"],
+    ["app", "Apps"]
   ]) {
     const inKind = items.filter((i) => i.kind === kind);
     if (!inKind.length) continue;
@@ -169,8 +169,8 @@ function drawTree(built) {
         "div",
         "d-empty",
         state.query || state.filterKey
-          ? "Ingen grupp matchar urvalet."
-          : "Inga nästlade grupper i urvalet."
+          ? "No group matches the selection."
+          : "No nested groups in the selection."
       )
     );
   }
@@ -187,16 +187,16 @@ function drawTree(built) {
   ui.rows.append(host);
 
   if (truncated) {
-    ui.rows.append(el("div", "d-empty", "Visar de första 3000 raderna. Sök för att smalna av."));
+    ui.rows.append(el("div", "d-empty", "Showing the first 3000 rows. Search to narrow down."));
   }
 
   drawLoose(built, include);
 
   if (state.filterKey) {
     const item = built.items.find((i) => i.key === state.filterKey);
-    ctx.setStatus(`${matches.size} grupp(er) har ${item?.name ?? "urvalet"}.`);
+    ctx.setStatus(`${matches.size} group(s) have ${item?.name ?? "the selection"}.`);
   } else if (state.query) {
-    ctx.setStatus(`${matches.size} träff(ar).`);
+    ctx.setStatus(`${matches.size} match(es).`);
   } else {
     ctx.setStatus(null);
   }
@@ -217,7 +217,7 @@ function drawLoose(built, include) {
     save({ looseOpen: state.looseOpen });
   });
 
-  box.append(el("summary", null, `Utan hierarki (${loose.length})`));
+  box.append(el("summary", null, `Without hierarchy (${loose.length})`));
 
   const host = el("div", "rows");
   renderRows(
@@ -282,7 +282,7 @@ function drawDetails(built) {
 function draw() {
   const data = ctx.data;
   if (!data) {
-    ui.rows.replaceChildren(el("div", "d-empty", "Inget hämtat än."));
+    ui.rows.replaceChildren(el("div", "d-empty", "Nothing fetched yet."));
     ui.details.replaceChildren();
     return;
   }
@@ -293,8 +293,8 @@ function draw() {
   drawDetails(built);
 
   ctx.setFooter(
-    `${data.groups.length} grupper · ${built.assignments.size} med tilldelning · ` +
-      `hämtat ${new Date(data.fetchedAt).toLocaleTimeString("sv-SE", {
+    `${data.groups.length} groups · ${built.assignments.size} with assignments · ` +
+      `fetched ${new Date(data.fetchedAt).toLocaleTimeString("en-GB", {
         hour: "2-digit",
         minute: "2-digit"
       })}`
@@ -423,7 +423,7 @@ function reveal(groupId) {
 
 export const treeModule = {
   id: "tree",
-  label: "Träd",
+  label: "Tree",
   needs: ["groups", "apps", "config"],
 
   async mount(host, context) {
@@ -447,7 +447,7 @@ export const treeModule = {
     draw();
   },
 
-  /** Visa en viss grupp — används när man klickar på ett gruppnamn i Hälsokontroll. */
+  /** Show a given group — used when clicking a group name in Health check. */
   focus(groupId) {
     reveal(groupId);
   }

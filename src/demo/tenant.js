@@ -1,6 +1,8 @@
-// En påhittad tenant för demoläget: Contoso kommuns utbildningsförvaltning,
-// med fyra grundskolor och två gymnasier. Contoso är Microsofts eget
-// låtsasföretag — allt här är fejk: namn, id, adresser och licenser.
+// A made-up tenant for demo mode: the education department of Contoso
+// municipality, with four primary schools and two upper-secondary schools.
+// Contoso is Microsoft's own fictional company — everything here is fake: names, ids,
+// addresses and licences. Group, app and profile names are deliberately left in
+// Swedish, as a Swedish school tenant would have them.
 //
 // Datat har samma form som Graph svarar med, så att hela kedjan från
 // src/graph/ och uppåt körs som vanligt. Det är det som gör demoläget värt
@@ -82,10 +84,10 @@ function group(displayName, options = {}) {
 
 // Förvaltningsgemensamt. Samlingsgrupperna innehåller bara andra grupper.
 const ALLA_ELEVER = group("Intune - Alla elever", {
-  description: "Samtliga elever. Innehåller skolornas elevgrupper."
+  description: "All students. Contains the schools' student groups."
 });
 const ALL_PERSONAL = group("Intune - All personal", {
-  description: "Samtlig personal. Innehåller skolornas personalgrupper."
+  description: "All staff. Contains the schools' staff groups."
 });
 const ALLA_ENHETER = group("Intune - Alla enheter");
 const ALLA_IPADS = group("Intune - Alla iPads", { parents: [ALLA_ENHETER] });
@@ -244,7 +246,7 @@ group("Intune - Licens - A3 personal", { users: 655, tag: "PERS", rule: '(user.e
 const UNDANTAG = group("Intune - Undantag - Begränsningar", {
   users: 6,
   tag: "UND",
-  description: "Personal som ska slippa elevbegränsningarna"
+  description: "Staff who should be spared the student restrictions"
 });
 
 // Sådant som blivit kvar.
@@ -275,7 +277,7 @@ const BLANDAT = group("Intune - Söderskolan - Blandat", {
   devices: 14,
   tag: "SODER-MIX",
   os: "IPad",
-  description: "Lärare och deras iPads, för hemskärmen"
+  description: "Teachers and their iPads, for the home screen"
 });
 
 // Lärarna lades in i iPad-gruppen "så att de också får apparna".
@@ -397,7 +399,7 @@ export const vppTokens = [
   {
     id: guid(),
     displayName: "VPP Grundskola",
-    organizationName: "Contoso kommun – grundskola",
+    organizationName: "Contoso Municipality – primary school",
     appleId: "vpp.grundskola@contoso.com",
     state: "valid",
     expirationDateTime: inDays(143),
@@ -406,7 +408,7 @@ export const vppTokens = [
   {
     id: guid(),
     displayName: "VPP Gymnasiet",
-    organizationName: "Contoso kommun – gymnasium",
+    organizationName: "Contoso Municipality – upper secondary school",
     appleId: "vpp.gymnasiet@contoso.com",
     state: "valid",
     expirationDateTime: inDays(212),
@@ -415,7 +417,7 @@ export const vppTokens = [
   {
     id: guid(),
     displayName: "VPP Förvaltningen",
-    organizationName: "Contoso kommun",
+    organizationName: "Contoso Municipality",
     appleId: "vpp.forvaltning@contoso.com",
     state: "valid",
     expirationDateTime: inDays(9),
@@ -424,7 +426,7 @@ export const vppTokens = [
   {
     id: guid(),
     displayName: "VPP Gamla konto",
-    organizationName: "Contoso skola (före sammanslagningen)",
+    organizationName: "Contoso school (before the merger)",
     appleId: "vpp.gammal@contoso.com",
     state: "expired",
     expirationDateTime: inDays(-41),
@@ -699,9 +701,9 @@ export const applePushNotificationCertificate = {
 
 // --- Inlagda fel ---------------------------------------------------------
 //
-// Facit till demotenanten. Varje post pekar på de objekt som bär felet, så
-// att testerna kan hålla facit och data i takt — och så att en framtida
-// hälsokontroll har något att mätas mot.
+// The answer key for the demo tenant. Each entry points to the objects that carry the
+// mistake, so the tests can keep key and data in step — and so that a future
+// health check has something to be measured against.
 
 const byName = (list, name) => list.find((item) => (item.displayName ?? item.name) === name);
 const appNamed = (name, token) =>
@@ -710,187 +712,187 @@ const configNamed = (name) => byName([...deviceConfigurations, ...configurationP
 
 export const MISTAKES = [
   {
-    title: "Användarlicens till en iPad-vagn",
+    title: "User licence to an iPad cart",
     check: "user-licence-to-devices",
     where: "Book Creator → Norrskolan - iPads - Vagn 1",
-    why: "Delade iPads har ingen inloggad användare med Apple-konto, så en användarlicens kan aldrig lösas in. Appen står som väntande för evigt. Delade enheter behöver enhetslicens.",
+    why: "Shared iPads have no signed-in user with an Apple account, so a user licence can never be redeemed. The app sits as pending forever. Shared devices need a device licence.",
     items: [appNamed("Book Creator")],
     groups: [norr.carts[0]]
   },
   {
-    title: "\"Tillgänglig\" till en enhetsgrupp",
+    title: "\"Available\" to a device group",
     check: "available-to-devices",
     where: "Kahoot! → Västerskolan - iPads",
-    why: "Tillgänglig betyder att användaren väljer appen i Företagsportalen. Det fungerar bara mot användargrupper — mot en enhetsgrupp syns appen ingenstans.",
+    why: "Available means the user picks the app in the Company Portal. That only works against user groups — against a device group the app is not visible anywhere.",
     items: [appNamed("Kahoot!")],
     groups: [vaster.ipads]
   },
   {
-    title: "Enhetslicens till elevgrupper",
+    title: "Device licence to student groups",
     check: "device-licence-to-users",
-    where: "Seesaw → Norrskolan - Åk 1 och Åk 2",
-    why: "Appen följer eleverna i stället för vagnarna och tar en licens per enhet varje elev loggar in på. Licenserna tar slut långt innan alla vagnar fått appen.",
+    where: "Seesaw → Norrskolan - Åk 1 and Åk 2",
+    why: "The app follows the students instead of the carts and takes one licence per device each student signs in on. The licences run out long before all carts have the app.",
     items: [appNamed("Seesaw")],
     groups: grade(norr, "1", "2")
   },
   {
-    title: "Fler mottagare än licenser",
+    title: "More recipients than licences",
     check: "licence-overcommit",
     where: "Duolingo → Alla elever",
-    why: "200 licenser, obligatorisk till ungefär 2 600 elever. De första 200 får appen, resten får ett licensfel. Alla licenser är redan förbrukade.",
+    why: "200 licences, required for roughly 2,600 students. The first 200 get the app, the rest get a licence error. All licences are already used up.",
     items: [appNamed("Duolingo")],
     groups: [ALLA_ELEVER]
   },
   {
-    title: "iOS-app till Windows-datorer",
+    title: "iOS app to Windows computers",
     check: "platform-mismatch",
     where: "Keynote → Västerskolan - Windows - Elev-PC",
-    why: "Intune tillåter tilldelningen men ingenting händer. Den skräpar ner rapporterna och får det att se ut som att Elev-PC har en app de inte har.",
+    why: "Intune allows the assignment but nothing happens. It clutters the reports and makes it look as if Elev-PC has an app it does not have.",
     items: [appNamed("Keynote")],
     groups: [vaster.elevPc]
   },
   {
-    title: "Windows-profil till iPads",
+    title: "Windows profile to iPads",
     check: "platform-mismatch",
     where: "Windows – Begränsningar elev → Söderskolan - iPads",
-    why: "Profilen gäller bara Windows och gör ingenting på iPads. Troligen ett felklick bland liknande gruppnamn — begränsningarna man ville ha på iPads saknas då.",
+    why: "The profile only applies to Windows and does nothing on iPads. Probably a misclick among similar group names — the restrictions intended for the iPads are then missing.",
     items: [configNamed("Windows – Begränsningar elev")],
     groups: [soder.ipads]
   },
   {
-    title: "Användargrupp undantagen från enhetsgrupper",
+    title: "User group excluded from device groups",
     check: "mixed-exclusion",
-    where: "iOS – Begränsningar grundskola, undantag: Undantag - Begränsningar",
-    why: "Intune kan inte undanta användare från en tilldelning till enheter. Personalen i undantagsgruppen får begränsningarna ändå.",
+    where: "iOS – Begränsningar grundskola, exclusion: Undantag - Begränsningar",
+    why: "Intune cannot exclude users from an assignment to devices. The staff in the exclusion group get the restrictions anyway.",
     items: [configNamed("iOS – Begränsningar grundskola")],
     groups: [UNDANTAG]
   },
   {
-    title: "Bortglömt undantag",
+    title: "Forgotten exclusion",
     check: "exclusion-inside-target",
-    where: "Microsoft Teams → All personal, undantag: Söderskolan - Lärare",
-    why: "Undantaget lades in under en pilot och togs aldrig bort. Söderskolans lärare saknar Teams på sina telefoner utan att någon vet varför.",
+    where: "Microsoft Teams → All personal, exclusion: Söderskolan - Lärare",
+    why: "The exclusion was added during a pilot and never removed. Söderskolan's teachers are missing Teams on their phones and nobody knows why.",
     items: [appNamed("Microsoft Teams")],
     groups: [soder.larare]
   },
   {
-    title: "Installera och avinstallera samtidigt",
+    title: "Install and uninstall at the same time",
     check: "intent-conflict",
-    where: "Google Chrome → Söderskolan - Elev-PC (installera) och Söderskolan - Enheter (avinstallera)",
-    why: "Elev-PC ligger inuti Enheter, så datorerna får båda avsikterna. Utfallet avgörs av Intunes konfliktregler och är svårt att förutse.",
+    where: "Google Chrome → Söderskolan - Elev-PC (install) and Söderskolan - Enheter (uninstall)",
+    why: "Elev-PC sits inside Enheter, so the computers get both intents. The outcome is decided by Intune's conflict rules and is hard to predict.",
     items: [appNamed("Google Chrome")],
     groups: [soder.elevPc, soder.enheter]
   },
   {
-    title: "Tilldelat till en tom dynamisk grupp",
+    title: "Assigned to an empty dynamic group",
     check: "empty-target",
     where: "Swift Playgrounds → Västerskolan - iPads - 1:1",
-    why: "Regeln letar efter registreringsprofilen \"Vasterskolan iPad 1:1\" — utan ä. Profilen i ADE heter \"Västerskolan iPad 1:1\", så gruppen är tom och ingen iPad får appen.",
+    why: "The rule looks for the enrolment profile \"Vasterskolan iPad 1:1\" — without the ä. The profile in ADE is called \"Västerskolan iPad 1:1\", so the group is empty and no iPad gets the app.",
     items: [appNamed("Swift Playgrounds")],
     groups: [vaster.ipad11]
   },
   {
-    title: "Tilldelning till en borttagen grupp",
+    title: "Assignment to a deleted group",
     check: "deleted-target",
-    where: "SMART Notebook → (borttagen grupp)",
-    why: "Gruppen \"Hamngymnasiet - Windows - Lärar-PC\" är borttagen, men tilldelningen ligger kvar. Den syns inte i trädet eftersom gruppen inte finns — lärardatorerna där får inte appen.",
+    where: "SMART Notebook → (deleted group)",
+    why: "The group \"Hamngymnasiet - Windows - Lärar-PC\" has been deleted, but the assignment remains. It does not show in the tree because the group does not exist — the teachers' computers there do not get the app.",
     items: [appNamed("SMART Notebook")],
     groups: [],
     deletedGroups: [DELETED_GROUP_ID]
   },
   {
-    title: "Licenser till elever som gått ut",
+    title: "Licences held by students who have left",
     check: "disabled-users",
     where: "Explain Everything → GAMLA - Elever avgång 2023",
-    why: "184 användarlicenser är låsta hos konton som inte används längre. Samtidigt är licenserna nästan slut för lärarna.",
+    why: "184 user licences are locked up with accounts that are no longer used. Meanwhile the licences are nearly out for the teachers.",
     items: [appNamed("Explain Everything")],
     groups: [GAMLA]
   },
   {
-    title: "Två Wi-Fi-profiler för samma nätverk",
+    title: "Two Wi-Fi profiles for the same network",
     check: "duplicate-ssid",
-    where: "iOS – Wi-Fi Elevnät och iOS – Wi-Fi Elevnät (gammal)",
-    why: "Båda gäller SSID Contoso-Elev, en med certifikat och en med lösenord. Söderskolans iPads får båda, och vilken som vinner varierar från iPad till iPad.",
+    where: "iOS – Wi-Fi Elevnät and iOS – Wi-Fi Elevnät (gammal)",
+    why: "Both apply to the SSID Contoso-Elev, one with a certificate and one with a password. Söderskolan's iPads get both, and which one wins varies from iPad to iPad.",
     items: [configNamed("iOS – Wi-Fi Elevnät"), configNamed("iOS – Wi-Fi Elevnät (gammal)")],
     groups: [ALLA_IPADS, soder.ipads]
   },
   {
-    title: "Användare och enheter i samma grupp",
+    title: "Users and devices in the same group",
     check: "mixed-group",
     where: "iOS – Hemskärm Söderskolan → Söderskolan - Blandat",
-    why: "En enhetsprofil mot en blandad grupp träffar både iPadarna och alla enheter lärarna i gruppen använder, även deras egna telefoner.",
+    why: "A device profile against a mixed group hits both the iPads and every device the teachers in the group use, including their own phones.",
     items: [configNamed("iOS – Hemskärm Söderskolan")],
     groups: [BLANDAT]
   },
   {
-    title: "Samma app två gånger via nästling",
+    title: "The same app twice through nesting",
     check: "redundant-assignment",
-    where: "Microsoft 365 Apps → Alla Windows och Contosogymnasiet - Elevdatorer 1:1",
-    why: "Elevdatorerna ingår redan i Alla Windows. Det är ofarligt men skräpar ner, och den dag någon tar bort den ena tilldelningen tror de att appen försvinner.",
+    where: "Microsoft 365 Apps → Alla Windows and Contosogymnasiet - Elevdatorer 1:1",
+    why: "The student computers are already part of Alla Windows. It is harmless but clutters, and the day someone removes one of the assignments they will think the app disappears.",
     items: [appNamed("Microsoft 365 Apps")],
     groups: [cgy.elevPc]
   },
   {
-    title: "Cirkulärt medlemskap",
+    title: "Circular membership",
     check: "cycle",
-    where: "Test A ↔ Test B, med Test – Experimentinställningar",
-    why: "A innehåller B som innehåller A. Entra löser inte upp cirklar på samma sätt överallt, så det är oklart vilka som får policyn.",
+    where: "Test A ↔ Test B, with Test – Experimentinställningar",
+    why: "A contains B which contains A. Entra does not resolve cycles the same way everywhere, so it is unclear who gets the policy.",
     items: [configNamed("Test – Experimentinställningar")],
     groups: [TEST_A, TEST_B]
   },
   {
-    title: "Djup nästling döljer räckvidden",
+    title: "Deep nesting hides the reach",
     check: "deep-nesting",
     where: "iOS – Pilot: ny hemskärm → Projekt - Digitalisering",
-    why: "Fyra nivåer ner ligger två enskilda klasser och Österskolans alla elever. Det syns inte på projektgruppen hur många som faktiskt får profilen.",
+    why: "Four levels down are two individual classes and all of Österskolan's students. It is not visible on the project group how many actually get the profile.",
     items: [configNamed("iOS – Pilot: ny hemskärm")],
     groups: [PROJEKT, oster.elever]
   },
   {
-    title: "Samma app från en utgången VPP-token",
+    title: "The same app from an expired VPP token",
     check: "duplicate-item",
     where: "Numbers (VPP Gamla konto) → Norrskolan - iPads",
-    why: "Token gick ut för över en månad sedan. Norrskolan har Numbers två gånger, och den gamla kopian kan inte synkas eller licensieras om.",
+    why: "The token expired over a month ago. Norrskolan has Numbers twice, and the old copy cannot be synced or relicensed.",
     items: [appNamed("Numbers", VPP_GAMMAL)],
     groups: [norr.ipads]
   },
   {
-    title: "Elevbegränsningar till alla användare",
+    title: "Student restrictions to all users",
     check: "restriction-all-users",
     where: "iOS – Skärmtid elever → Alla användare",
-    why: "\"Alla användare\" betyder även personalen. Lärarnas iPads och telefoner får elevernas skärmtidsgränser.",
+    why: "\"All users\" also means the staff. The teachers' iPads and phones get the students' screen time limits.",
     items: [configNamed("iOS – Skärmtid elever")],
     groups: []
   },
   {
-    title: "Kioskläge på elevernas datorer",
+    title: "Kiosk mode on the students' computers",
     check: "kiosk-large",
     where: "Windows – Kioskläge → Hamngymnasiet - Elevdatorer 1:1",
-    why: "Skulle ha gått till kioskdatorerna. Hundratals elevdatorer låses till en enda app vid nästa synk.",
+    why: "Was meant for the kiosk computers. Hundreds of student computers are locked to a single app at the next sync.",
     items: [configNamed("Windows – Kioskläge")],
     groups: [hamn.elevPc]
   },
   {
-    title: "Lärare nästlade i en iPad-grupp",
+    title: "Teachers nested in an iPad group",
     check: "users-in-device-branch",
-    where: "Österskolan - Lärare inuti Österskolan - iPads",
-    why: "Tanken var att lärarna också skulle få apparna. Men enhetsprofilerna för elevernas iPads följer nu med till lärarnas egna enheter.",
+    where: "Österskolan - Lärare inside Österskolan - iPads",
+    why: "The idea was that the teachers would get the apps too. But the device profiles for the students' iPads now follow along to the teachers' own devices.",
     items: [],
     groups: [oster.larare, oster.ipads]
   },
   {
-    title: "Överlappande uppdateringsringar",
+    title: "Overlapping update rings",
     check: "overlapping-rings",
-    where: "Windows Update – Ring 1 och Ring 2",
-    why: "Ring 2 omfattar Alla Windows, där Söderskolans personaldatorer redan ingår — och de ligger också i Ring 1. De får två uppsättningar uppdateringsregler.",
+    where: "Windows Update – Ring 1 and Ring 2",
+    why: "Ring 2 covers Alla Windows, which already includes Söderskolan's staff computers — and they are also in Ring 1. They get two sets of update rules.",
     items: [configNamed("Windows Update – Ring 1 (Pilot)"), configNamed("Windows Update – Ring 2 (Bred)")],
     groups: [RING1, RING2, soder.personalPc]
   },
   {
-    title: "Anslutningar som går ut",
+    title: "Connections that are expiring",
     check: "expiring-connections",
-    where: "Anslutningar: APNS om 12 dagar, Android-kiosk om 3 dagar, VPP Förvaltningen om 9 dagar",
-    why: "Går APNS-certifikatet ut slutar alla Apple-enheter att ta emot något från Intune, och förnyelsen måste göras med samma Apple-ID. Ett utgånget Android-token och en utgången VPP-token finns redan.",
+    where: "Connections: APNS in 12 days, Android kiosk in 3 days, VPP Förvaltningen in 9 days",
+    why: "If the APNS certificate expires, all Apple devices stop receiving anything from Intune, and the renewal must be done with the same Apple ID. An expired Android token and an expired VPP token already exist.",
     items: [],
     groups: []
   }
