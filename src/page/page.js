@@ -272,7 +272,12 @@ function renderTokens() {
     node.type = "button";
     node.append(el("span", "chip-dot"), el("span", null, info.label ?? name));
 
-    if (tone === "ok") {
+    if (signInMode()) {
+      node.title =
+        tone === "ok"
+          ? `${info.needFor}: permission granted, valid for ${Math.floor(info.secondsLeft / 60)} min.`
+          : `${info.needFor} missing. Needs ${info.where}. Click to sign in again.`;
+    } else if (tone === "ok") {
       node.title =
         `${info.needFor}: permission available, valid for ` +
         `${Math.floor(info.secondsLeft / 60)} min. Click to open the page in the portal.`;
@@ -286,6 +291,10 @@ function renderTokens() {
 
     node.addEventListener("click", async () => {
       if (status?.demo) return; // ingen portal att skicka någon till
+      if (signInMode()) {
+        if (tone !== "ok") await signIn();
+        return;
+      }
       await send({ type: "open-path", capability: name });
       renderStatus(`Waiting for permission from ${info.where ?? "the portal"} …`);
       // Portalfliken är på väg till bladet — låt den synas, annars ser det ut
@@ -297,6 +306,10 @@ function renderTokens() {
   });
 
   ui.tokens.replaceChildren(el("span", "tokenbar-label", "Permissions"), ...chips);
+
+  if (signInMode() && status?.signedIn) {
+    ui.tokens.append(el("span", "tokenbar-where", `Signed in as ${status.upn ?? "your account"} · own app registration`));
+  }
 
   // Saknas något: säg vart man ska klicka, i klartext. Bladens djuplänkar är
   // odokumenterade, så knappen kan leda till startsidan första gången.
@@ -376,7 +389,12 @@ function renderNotices() {
       key: `error:${state.error}`,
       tone: state.needsPortal ? "info" : "bad",
       text: state.error,
-      action: state.needsPortal
+      action: state.needsPortal && signInMode()
+        ? {
+            label: state.tokenStatus?.configured ? "Sign in" : "Open Settings",
+            run: signIn
+          }
+        : state.needsPortal
         ? {
             label: "Open All groups",
             run: async () => {
@@ -401,11 +419,18 @@ function renderNotices() {
 
   for (const [reason, list] of byReason) {
     const missingIntuneToken = /Intune token missing/i.test(reason);
+    // I inloggningsläget finns ingen Intune-token att hämta i portalen — det
+    // som saknas är en behörighet på app-registreringen.
+    const shown =
+      missingIntuneToken && signInMode()
+        ? "your app registration is missing the Intune permission (DeviceManagementApps.Read.All or " +
+          "DeviceManagementConfiguration.Read.All). Ask an admin to grant it, then sign in again."
+        : reason;
     notices.push({
       key: `source:${list.map((s) => s.key).join(",")}:${reason}`,
       tone: list.every((s) => s.optional) ? "warn" : "bad",
-      text: `${list.map((s) => s.label).join(", ")} could not be fetched: ${reason}`,
-      action: missingIntuneToken
+      text: `${list.map((s) => s.label).join(", ")} could not be fetched: ${shown}`,
+      action: missingIntuneToken && !signInMode()
         ? {
             label: "Open Apps",
             run: async () => {
@@ -654,8 +679,36 @@ onShown(() => {
 const REPO_URL = "https://github.com/1Oeee/FERMtools";
 const POLICY_URL = `${REPO_URL}/blob/main/PRIVACY.md`;
 
-/** Until the user has chosen, nothing reads the portal's tokens. Demo needs no consent. */
-const needsConsent = () => Boolean(state.settings) && !state.settings.consent && !state.settings.demo;
+/**
+ * Until the user has chosen, nothing reads the portal's tokens. Demo needs no
+ * consent, and neither does sign-in mode — it never touches the portal.
+ */
+const needsConsent = () =>
+  Boolean(state.settings) &&
+  !state.settings.consent &&
+  !state.settings.demo &&
+  state.settings.authMode !== "msal";
+
+const signInMode = () => !state.tokenStatus?.demo && state.tokenStatus?.authMode === "msal";
+
+/** Sign-in mode: open Microsoft's sign-in, or Settings if there is no client ID yet. */
+async function signIn() {
+  if (!state.tokenStatus?.configured) {
+    chrome.runtime.openOptionsPage();
+    return;
+  }
+  renderStatus("Waiting for sign-in …");
+  const response = await send({ type: "sign-in" });
+  renderStatus(null);
+  if (response?.status) state.tokenStatus = response.status;
+  if (!response?.ok) {
+    state.needsPortal = !state.tokenStatus?.haveToken;
+    state.error = `Sign-in failed: ${response?.error ?? "no response"}`;
+    renderNotices();
+  }
+  renderTokens();
+  // Lyckad inloggning sänder token-changed, som hämtar trädet.
+}
 
 function renderConsent() {
   ui.tabs.replaceChildren();
@@ -675,8 +728,8 @@ function renderConsent() {
       "p",
       null,
       "AidTune gives you a powerful overview of how your Intune tenant is put together, right inside the " +
-        "portal you already work in. There is nothing to set up and nothing to sign in to, because it works " +
-        "through the session you already have. Here is exactly how:"
+        "portal you already work in. It can read your tenant in one of two ways — you choose. The quickest " +
+        "needs nothing set up, because it works through the session you already have. Here is exactly how:"
     )
   );
 
@@ -720,14 +773,31 @@ function renderConsent() {
   );
   card.append(audit);
 
+  const alternative = el("p");
+  alternative.append(
+    el("strong", null, "Prefer not to borrow the portal's tokens? "),
+    "Sign in with your organisation's own app registration instead. An Entra admin registers the app " +
+      "once and grants it read-only Graph permissions; AidTune then signs you in through Microsoft and " +
+      "never looks at the portal's tokens or storage. It's the route a security review will find easiest " +
+      "to approve, and it keeps working if Microsoft changes the portal. Still read-only, still no server of ours."
+  );
+  card.append(alternative);
+
   const actions = el("div", "consent-actions");
   const allow = el("button", "primary", "Allow and use with my tenant");
   allow.type = "button";
   allow.addEventListener("click", () => send({ type: "save-settings", patch: { consent: true, demo: false } }));
+  const own = el("button", "secondary", "Use my own app registration");
+  own.type = "button";
+  own.addEventListener("click", async () => {
+    const next = await send({ type: "save-settings", patch: { authMode: "msal", demo: false } });
+    // Utan klient-ID går det inte att logga in — det fylls i under Settings.
+    if (!next?.msalClientId) chrome.runtime.openOptionsPage();
+  });
   const demo = el("button", "secondary", "Try the demo first");
   demo.type = "button";
   demo.addEventListener("click", () => send({ type: "save-settings", patch: { demo: true } }));
-  actions.append(allow, demo);
+  actions.append(allow, own, demo);
   card.append(actions);
   card.append(
     el(

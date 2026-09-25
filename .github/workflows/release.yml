@@ -64,7 +64,7 @@ jobs:
         # tests/ följer med eftersom inställningarna länkar dit — men inte Node-skripten.
         run: |
           mkdir -p dist
-          paths=(manifest.json src tests)
+          paths=(manifest.json managed_schema.json src tests)
           [[ -d icons ]] && paths+=(icons)
           zip -r -X "dist/aidtune-${{ steps.check.outputs.version }}.zip" "${paths[@]}" -x "tests/*.mjs"
           unzip -l dist/*.zip

@@ -1,0 +1,21 @@
+{
+  "type": "object",
+  "properties": {
+    "authMode": {
+      "title": "How AidTune gets its access",
+      "description": "\"portal\" borrows the Intune portal's tokens; \"msal\" signs in to your organisation's own app registration.",
+      "type": "string",
+      "enum": ["portal", "msal"]
+    },
+    "msalClientId": {
+      "title": "App registration client ID",
+      "description": "Application (client) ID of the Entra app registration used in sign-in mode.",
+      "type": "string"
+    },
+    "msalTenant": {
+      "title": "Tenant",
+      "description": "Tenant ID or primary domain. Use \"organizations\" only for a multi-tenant app registration.",
+      "type": "string"
+    }
+  }
+}

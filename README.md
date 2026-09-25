@@ -21,7 +21,7 @@ even when the branch is collapsed.
 The extension is **read-only**. It only makes `GET` requests to Microsoft Graph
 and the Intune backend, and writes nothing to the tenant.
 
-Current version: **0.14**. The version scheme is `0.1`, `0.2`, `0.3` … with one
+Current version: **0.17**. The version scheme is `0.1`, `0.2`, `0.3` … with one
 step per delivered batch of work, and `1.0` when the extension can be used
 daily without reservations. What changed when is in [CHANGELOG.md](CHANGELOG.md),
 and the version there must always match `manifest.json`.
@@ -42,13 +42,16 @@ The extension's toolbar icon does the same thing: it takes you to the portal tab
 and opens the page there. If you have no portal tab open, one is started.
 
 Requires Node or npm to be installed: no. Requires an app registration in
-Entra: no, see below.
+Entra: no — but you can use one if you prefer, see
+[Sign-in mode](#sign-in-mode-own-app-registration).
 
 ### First run
 
 On first install a tab opens explaining exactly how Inu+ gets its data, and
-asks whether to use your own tenant or try the demo first. **Until you allow
-it, Inu+ reads nothing from the portal** — no request headers, no storage.
+offers three choices: borrow the portal's session, sign in with your
+organisation's own app registration, or try the demo first. **Until you allow
+it, Inu+ reads nothing from the portal** — no request headers, no storage. In
+sign-in mode it never reads the portal at all.
 The choice can be changed in Settings, where revoking consent also discards any
 tokens held. See [PRIVACY.md](PRIVACY.md).
 
@@ -143,6 +146,24 @@ work in the portal, a tab is better than switching back and forth.
 
 ## How tokens work
 
+There are two ways, and the user (or an admin, by policy) chooses:
+
+| | Portal mode (default) | Sign-in mode |
+| --- | --- | --- |
+| Setup | None | An admin registers an app in Entra once and grants admin consent |
+| Where tokens come from | Borrowed from the Intune portal tab | Issued to your app registration via Microsoft sign-in (code flow + PKCE) |
+| Permissions | Whatever the portal's tokens happen to carry | Exactly what the admin granted the app |
+| Reads the portal | Request headers and storage, after consent | Nothing |
+| Shows in Entra logs as | The portal | Your app registration |
+| Depends on undocumented behaviour | Yes | No |
+
+Both are read-only, and both run entirely in the browser — there is no server.
+The two sources share one interface, so everything above them (Graph client,
+fetching, cache, page) is the same code. Portal mode is `src/background/token.js`,
+sign-in mode is `src/background/msal.js`.
+
+### Portal mode
+
 The extension registers no app of its own in Entra. Instead it borrows the
 tokens the Intune portal has already obtained for you.
 
@@ -208,6 +229,59 @@ Consequences:
 
 Run `spike/` first if you want to check that the borrowing works in your tenant
 before using the extension for real.
+
+## Sign-in mode (own app registration)
+
+For organisations whose security policy does not accept an extension reading the
+portal's tokens. The access is then a named application in Entra, with
+permissions an admin chose, visible and revocable under **Enterprise
+applications**, and logged under its own name in the sign-in logs.
+
+**Admin, once per tenant:**
+
+1. Entra admin center → **App registrations** → **New registration**. Name it
+   e.g. *Inu+*. Single tenant is fine.
+2. **Authentication** → **Add a platform** → **Single-page application**. Redirect
+   URI: `https://<extension-id>.chromiumapp.org/` — Settings shows the exact
+   value for your installation. The store version and an unpacked copy have
+   different IDs; add both if both are used.
+3. **API permissions** → Microsoft Graph → **Delegated**:
+   - `Group.Read.All` — the tree (required)
+   - `DeviceManagementApps.Read.All` — app assignments and VPP
+   - `DeviceManagementConfiguration.Read.All` — profiles, compliance, Android enrollment
+   - `DeviceManagementServiceConfig.Read.All` — APNS and Apple enrollment
+
+   Then **Grant admin consent**. Only read permissions; leave out what you don't
+   want Inu+ to see and that part of the page simply stays grey.
+4. Copy the **Application (client) ID** and the **Directory (tenant) ID**.
+
+**User:** Settings → *Sign in with my organisation's app registration* → paste the
+client ID and tenant → **Sign in**.
+
+**Or push it by policy.** Inu+ reads `authMode`, `msalClientId` and `msalTenant`
+from managed storage (`managed_schema.json`), and a policy value locks the field
+in Settings. With Intune, set it with a script or a custom profile under the
+browser's extension policy key, e.g. for Edge:
+
+```
+HKLM\Software\Policies\Microsoft\Edge\3rdparty\extensions\<extension-id>\policy
+  authMode      = "msal"
+  msalClientId  = "<client id>"
+  msalTenant    = "<tenant id>"
+```
+
+(Chrome: `...\Policies\Google\Chrome\3rdparty\extensions\<extension-id>\policy`.)
+
+**How it works.** MSAL.js cannot run in an MV3 service worker (no window, no DOM),
+so the protocol is done by hand in `src/background/msal.js`: authorization code
+with PKCE, public client, no secret, through `chrome.identity.launchWebAuthFlow`.
+It asks for `https://graph.microsoft.com/.default`, so the token carries exactly
+what the app was granted. Access and refresh token live in
+`chrome.storage.session` — memory-only, gone when the browser closes, not
+reachable by content scripts — so they survive the service worker going to
+sleep. A refresh token for a single-page app lives 24 hours; after that Inu+
+tries a silent sign-in (`prompt=none`) against the browser's existing Microsoft
+session, and only if that fails does the page show **Sign in**.
 
 ## Modules
 
@@ -319,7 +393,9 @@ Reached via the cogwheel at the top right of the page.
   are collected in a list of their own at the bottom.
 - **Show only branches with assignments** — hides everything that has no apps or
   configurations and has nothing beneath it that does.
-- **Health check** — adds the Health check tab.
+- **How Inu+ reads your tenant** — portal mode (with its consent toggle) or
+  sign-in mode (client ID, tenant, the redirect URI to register, Sign in / Sign
+  out). Fields set by policy are locked.
 - **Demo mode** — shows a made-up school instead of your tenant.
 
 ## Structure
@@ -327,7 +403,8 @@ Reached via the cogwheel at the top right of the page.
 ```
 manifest.json
 src/
-  background/   token, cache, orchestration
+  background/   token sources (token.js = portal, msal.js = sign-in), cache,
+                orchestration
   graph/        Graph client, groups, assignments, learned Intune addresses
   tree/         forest building and marker rollup (pure functions)
   page/         UI — the page, its tabs and embed.js which talks to the portal
@@ -351,6 +428,13 @@ Open the settings → **Run the unit tests**, or go directly to
 `chrome-extension://<extension-id>/tests/tests.html`. The same tests run in Node
 with `node tests/run.mjs`, and GitHub Actions runs them before every package
 build.
+
+`node tests/consent.mjs` and `node tests/signin.mjs` load the extension in
+Playwright's Chromium and check the consent gate and sign-in mode: that no
+header listener exists until the user consents, that sign-in mode never starts
+one, and that the page asks for the right thing in each mode. Microsoft's
+sign-in itself is covered by unit tests with a faked `chrome.identity` and
+token endpoint (`tests/msal.test.js`), not against a real tenant.
 
 The demo tests run the real fetch chain against the demo tenant. If a data
 source is added without the demo following, they fail.
@@ -408,7 +492,8 @@ requirement there if a tag alone should not be enough to send out a version.
 
 | Data | Where | Lifetime |
 | --- | --- | --- |
-| Raw access tokens | Only in the service worker's memory | Disappear when the service worker sleeps, at the latest when the browser closes. Never reach disk. |
+| Raw access tokens (portal mode) | Only in the service worker's memory | Disappear when the service worker sleeps, at the latest when the browser closes. Never reach disk. |
+| Access and refresh token (sign-in mode) | `chrome.storage.session` | Memory-based, cleared when the browser closes or on **Sign out**. Not reachable by content scripts. Never reach disk. |
 | Groups, memberships, assignments | `chrome.storage.session` | Memory-based, cleared when the browser closes. Cache TTL 15 min. Not written to disk. |
 | Settings (prefix, UI state) | `chrome.storage.local` | Stays on disk until the extension is uninstalled. |
 | The tenant's Intune backend addresses | `chrome.storage.local` | Stays on disk. Contains region host, service name, api version and, for settings catalog, a tenant GUID. |
@@ -421,7 +506,8 @@ profile folder. Judge the contents accordingly: it is topology, not secrets.
 
 ### What is sent, and where
 
-Only read requests to `graph.microsoft.com` and `*.manage.microsoft.com`. No
+Only read requests to `graph.microsoft.com` and `*.manage.microsoft.com`, and in
+sign-in mode the sign-in and token requests to `login.microsoftonline.com`. No
 server of its own, no telemetry, no third party.
 
 The only `POST` made is to Graph's `$batch` endpoint, and it contains only `GET`
@@ -442,7 +528,8 @@ The extension never writes anything to the tenant.
 | `https://intune.microsoft.com/*` | Two content scripts: one that places the rail entry and the frame the page lives in, one that looks for tokens in the portal's storage |
 | `https://graph.microsoft.com/*` | Fetch groups and assignments |
 | `https://*.manage.microsoft.com/*` | The fallback route for assignments |
-| `storage` | Cache and settings |
+| `storage` | Cache and settings, and reading policy (managed storage) |
+| `identity` | Sign-in mode: `launchWebAuthFlow` opens Microsoft's sign-in and catches the redirect. Unused in portal mode. |
 
 `web_accessible_resources` lists **a single file** — `src/page/page.html` — and
 only for `https://intune.microsoft.com/*`. That is the page the frame shows. No
@@ -459,10 +546,10 @@ malware. Many security teams say no on principle, and that is a reasonable
 position.
 
 If it is to be used by more than one person internally it should be raised
-beforehand, not afterwards. The defensive alternative is an app registration of
-your own in Entra with delegated read permissions — then the access is logged as
-a named application and the technique becomes documented. The switch touches only
-`src/background/token.js`.
+beforehand, not afterwards. That is what [sign-in mode](#sign-in-mode-own-app-registration)
+is for: an app registration of your own in Entra with delegated read
+permissions, so the access is logged as a named application and the technique
+is the documented one. An admin can enforce it for everyone by policy.
 
 ### What is *not* a problem
 
@@ -485,6 +572,16 @@ a named application and the technique becomes documented. The switch touches onl
 - **Read-only.** No `POST`, `PATCH` or `DELETE` against the tenant.
 
 ## Known limitations
+
+- **Sign-in mode has no Intune backend fallback.** An app registration cannot get
+  the portal's Intune backend token, so everything goes through Graph. With the
+  DeviceManagement permissions granted that covers the same data; without them,
+  assignments stay grey.
+- **Sign-in mode has not yet been tried against a live tenant from this repo's
+  tests.** The protocol is unit-tested with a faked token endpoint. The token
+  request relies on Entra's CORS support for single-page-app redirect URIs,
+  which is why the redirect URI must be registered as *Single-page application*
+  and not *Mobile and desktop*.
 
 - **Assignments in practice go via the Intune backend**, not via Graph, because
   the portal's Graph token lacks the DeviceManagement permissions. That is

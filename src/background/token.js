@@ -294,6 +294,7 @@ export class PortalTokenSource {
     }
 
     return {
+      authMode: "portal",
       capabilities,
       // Utan grupp-token finns inget träd att visa alls.
       haveToken: Boolean(groupToken),

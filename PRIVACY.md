@@ -1,6 +1,6 @@
 # AidTune Privacy Policy
 
-_Last updated: 2026-09-24_
+_Last updated: 2026-09-25_
 
 AidTune is a browser extension that shows the group structure of your
 Microsoft Entra / Intune tenant as a tree inside the Intune admin portal
@@ -14,7 +14,20 @@ nothing). Until you allow it, AidTune does not listen to any request and does
 not look at the portal's storage. You can withdraw consent at any time in
 Settings, which stops all reading and discards the tokens it holds.
 
-AidTune has no app registration and no sign-in of its own. It works by
+AidTune can read your tenant in one of two ways, and you (or your
+organisation's policy) choose which:
+
+- **Sign-in mode.** You sign in through Microsoft's own sign-in page to an app
+  registration that your organisation created and controls. The access token is
+  issued to that app and carries only the read permissions your administrator
+  granted it. In this mode AidTune does not read the portal's tokens, request
+  headers or storage at all. The only extra network destination is Microsoft's
+  sign-in service, `login.microsoftonline.com`.
+- **Portal mode**, described below.
+
+### Portal mode
+
+In portal mode AidTune has no sign-in of its own. It works by
 **borrowing the access tokens the Intune portal already holds for you**, and it
 gets them in two ways. Both apply only to tabs on `intune.microsoft.com`.
 
@@ -49,21 +62,27 @@ It does not read anything else on the page and does not read other websites.
 - It does **not** send tokens, tenant data or anything about you to the
   developer or any third party. There is no analytics, telemetry, advertising
   or tracking, and no server operated by us. The only network destinations are
-  Microsoft's own endpoints listed above.
+  Microsoft's own endpoints listed above (and, in sign-in mode,
+  `login.microsoftonline.com`).
 - It does **not** write to, change or delete anything in your tenant.
 - It does **not** use the tokens for anything other than the read-only requests
   described here.
 
 ## What is stored
 
-- **Access tokens** are held in the extension's memory only, are never written
-  to disk, and are discarded when they expire or the browser closes.
+- **Access tokens** borrowed in portal mode are held in the extension's memory
+  only, are never written to disk, and are discarded when they expire or the
+  browser closes.
+- **Access and refresh tokens** from sign-in mode are held in session storage
+  (`chrome.storage.session`), which is memory-only and cleared when the browser
+  closes or when you sign out. They are never written to disk.
 - **Tenant data** fetched for display is cached in session storage
   (`chrome.storage.session`), which is memory-only and cleared when the
   browser closes.
-- **Settings and navigation hints** (your options, and portal page addresses
-  that worked) are stored locally in `chrome.storage.local` on your device.
-  They contain no tenant content.
+- **Settings and navigation hints** (your options including, in sign-in mode,
+  the app registration's client ID and tenant, and portal page addresses that
+  worked) are stored locally in `chrome.storage.local` on your device. They
+  contain no tenant content and no tokens.
 
 Removing the extension deletes everything it stored.
 
@@ -76,8 +95,8 @@ network requests.
 
 AidTune is open source. Don't take this policy on trust — read the code:
 https://github.com/1Oeee/FERMtools. Token handling is in
-`src/background/token.js` (request headers) and `src/content/token-scan.js`
-(portal storage scan); the requests it makes are in `src/graph/`. The package
+`src/background/token.js` (request headers), `src/content/token-scan.js`
+(portal storage scan) and `src/background/msal.js` (sign-in mode); the requests it makes are in `src/graph/`. The package
 on the Chrome Web Store is built from this repository by the workflow in
 `.github/workflows/release.yml`.
 

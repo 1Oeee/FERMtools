@@ -50,10 +50,16 @@
   // Ingenting i portalens lagring läses förrän användaren har samtyckt. Samtycket
   // ligger i tilläggets inställningar och följs live, så ett godkännande (eller
   // ett återkallande) gäller direkt utan att portalfliken laddas om.
+  //
+  // I inloggningsläget (egen app-registrering) läses portalens lagring inte
+  // alls. Läget kan vara användarens val eller låst av en policy.
   let allowed = false;
+  let local = null;
+  let managedMode = null;
 
-  const readConsent = (settings) => {
-    const next = Boolean(settings?.consent);
+  const update = () => {
+    const mode = managedMode ?? local?.authMode ?? "portal";
+    const next = Boolean(local?.consent) && mode !== "msal";
     if (next === allowed) return;
     allowed = next;
     if (allowed) {
@@ -62,12 +68,19 @@
     }
   };
 
-  chrome.storage.local.get("settings").then(
-    (stored) => readConsent(stored?.settings),
-    () => {}
-  );
+  Promise.all([
+    chrome.storage.local.get("settings").catch(() => ({})),
+    (chrome.storage.managed?.get("authMode") ?? Promise.resolve({})).catch(() => ({}))
+  ]).then(([stored, managed]) => {
+    local = stored?.settings ?? null;
+    managedMode = managed?.authMode || null;
+    update();
+  });
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === "local" && changes.settings) readConsent(changes.settings.newValue);
+    if (area === "local" && changes.settings) local = changes.settings.newValue ?? null;
+    else if (area === "managed" && changes.authMode) managedMode = changes.authMode.newValue || null;
+    else return;
+    update();
   });
 
   function scan() {

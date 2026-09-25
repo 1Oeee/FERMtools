@@ -3,6 +3,7 @@
 // kan testas som rena funktioner.
 
 import { PortalTokenSource, INTUNE } from "./token.js";
+import { MsalTokenSource } from "./msal.js";
 import { GROUP_SCOPES, INTUNE_SCOPES } from "../common/jwt.js";
 import {
   classify,
@@ -47,7 +48,18 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 });
 chrome.tabs.onRemoved.addListener((tabId) => portalTabs.delete(tabId));
 
-const tokens = new PortalTokenSource();
+// Två källor med samma yta. Användaren väljer: låna portalens tokens (ingen
+// uppsättning) eller logga in mot organisationens egen app-registrering.
+// Allt nedanför frågar den aktiva källan och bryr sig inte om vilken det är.
+const portalTokens = new PortalTokenSource();
+const msalTokens = new MsalTokenSource();
+let authMode = "portal";
+const tokens = () => (authMode === "msal" ? msalTokens : portalTokens);
+
+function applyAuthSettings(settings) {
+  authMode = settings.authMode === "msal" ? "msal" : "portal";
+  msalTokens.configure({ clientId: settings.msalClientId, tenant: settings.msalTenant });
+}
 
 // Lär av portalens egna anrop: dels var Intunes backend ligger i den här
 // tenanten, dels vilka sidor i portalen som matar oss med vilken token.
@@ -76,7 +88,7 @@ function learnPaths(capabilities, tabId) {
     });
 }
 
-tokens.onAccepted(({ capabilities, tabId }) => learnPaths(capabilities, tabId));
+portalTokens.onAccepted(({ capabilities, tabId }) => learnPaths(capabilities, tabId));
 
 // Portalens anrop mot Intunes backend lär oss både var tjänsten ligger och
 // vilket blad som når den.
@@ -95,7 +107,7 @@ let capturing = false;
 function startCapture() {
   if (capturing) return;
   capturing = true;
-  tokens.start((tabId) => portalTabs.has(tabId));
+  portalTokens.start((tabId) => portalTabs.has(tabId));
   chrome.webRequest.onBeforeRequest.addListener(learnEndpoint, {
     urls: ["https://*.manage.microsoft.com/*"]
   });
@@ -104,11 +116,28 @@ function startCapture() {
 function stopCapture() {
   if (!capturing) return;
   capturing = false;
-  tokens.stop();
+  portalTokens.stop();
   chrome.webRequest.onBeforeRequest.removeListener(learnEndpoint);
 }
 
-readSettings().then((settings) => settings.consent && startCapture());
+// Portalens trafik läses bara i portalläget, och bara efter samtycke. I
+// inloggningsläget rörs portalen inte alls.
+const shouldCapture = (settings) => settings.consent && settings.authMode !== "msal";
+
+const settingsReady = readSettings().then((settings) => {
+  applyAuthSettings(settings);
+  if (shouldCapture(settings)) startCapture();
+});
+
+// En policy kan ändras medan tillägget kör.
+chrome.storage.onChanged.addListener(async (changes, area) => {
+  if (area !== "managed") return;
+  const settings = await readSettings();
+  applyAuthSettings(settings);
+  if (shouldCapture(settings)) startCapture();
+  else stopCapture();
+  broadcast({ type: "settings-changed", settings, status: await currentStatus() });
+});
 
 // Första starten: öppna en välkomstflik med förklaringen. Där väljer
 // användaren mellan att godkänna och att prova demot först.
@@ -118,9 +147,18 @@ chrome.runtime.onInstalled.addListener(({ reason }) => {
 
 // Tre klienter, tre behov. Portalen har olika Graph-tokens för katalog och
 // för device management, och en helt egen token mot Intunes backend.
-const graphGroups = createGraphClient(() => tokens.getGraphToken(GROUP_SCOPES));
-const graphApps = createGraphClient(() => tokens.getGraphToken(INTUNE_SCOPES));
-const intuneBackend = createGraphClient(() => tokens.getToken(INTUNE));
+const graphGroups = createGraphClient(async () => {
+  await settingsReady;
+  return tokens().getGraphToken(GROUP_SCOPES);
+});
+const graphApps = createGraphClient(async () => {
+  await settingsReady;
+  return tokens().getGraphToken(INTUNE_SCOPES);
+});
+const intuneBackend = createGraphClient(async () => {
+  await settingsReady;
+  return tokens().getToken(INTUNE);
+});
 
 const CACHE_KEY = "tree-data";
 const CONNECTIONS_KEY = "connections-data";
@@ -160,10 +198,12 @@ function broadcast(message) {
 
 // I demoläget är behörigheterna påhittade och ska inte skrivas över av
 // riktiga tokens som råkar fångas från en öppen portalflik.
-tokens.onChange(async (status) => {
-  if ((await readSettings()).demo) return;
-  broadcast({ type: "token-changed", status });
-});
+for (const [mode, source] of [["portal", portalTokens], ["msal", msalTokens]]) {
+  source.onChange(async (status) => {
+    if (mode !== authMode || (await readSettings()).demo) return;
+    broadcast({ type: "token-changed", status });
+  });
+}
 
 // Demoläget byter bara ut klienterna. Allt ovanför dem — hämtning, tolkning,
 // cache — är samma kod som mot en riktig tenant.
@@ -175,7 +215,8 @@ function clientsFor(settings) {
 }
 
 async function currentStatus() {
-  return (await readSettings()).demo ? demoStatus() : tokens.describe();
+  await settingsReady;
+  return (await readSettings()).demo ? demoStatus() : tokens().describe();
 }
 
 /** Be öppna portalflikar att leta igenom sin lagring på nytt. */
@@ -201,6 +242,17 @@ async function requestRescan() {
  * frivillig: saknas den faller plupparna bort, men trädet står kvar.
  */
 async function ensureTokens() {
+  await settingsReady;
+
+  // Inloggningsläget har ingen portal att fråga. Källan förnyar själv med
+  // refresh-token eller tyst inloggning; lyckas inget visar sidan en knapp.
+  if (authMode === "msal") {
+    await msalTokens.getGraphToken(null);
+    return;
+  }
+
+  const tokens = portalTokens;
+
   // Trädet behöver katalogbehörigheter. Plupparna kan komma antingen från en
   // Graph-token med DeviceManagement-behörigheter eller från Intunes backend.
   const haveGroups = async () => Boolean(await tokens.getGraphToken(GROUP_SCOPES));
@@ -382,7 +434,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // portalen: garantin ska stå i koden, inte bara vara underförstådd.
     "token-from-page": async () => {
       if (!capturing || !PORTAL_URL.test(sender?.tab?.url ?? "")) return { accepted: false };
-      return { accepted: tokens.offer(message.token, null, "portalens sessionStorage") };
+      return { accepted: portalTokens.offer(message.token, null, "portalens sessionStorage") };
     },
 
     "portal-blade": async () => {
@@ -390,7 +442,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       // Står användaren på grupplistan är det överväldigande sannolikt att
       // trädet är det de vill se. Värm cachen så sidan öppnas ifylld.
-      if ((portalBlade === "all-groups" || portalBlade === "groups") && (await tokens.getToken())) {
+      if ((portalBlade === "all-groups" || portalBlade === "groups") && (await tokens().getToken())) {
         loadTree().catch(() => {
           // Misslyckas förhämtningen får sidan visa felet när den öppnas.
         });
@@ -454,11 +506,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
     },
 
-    settings: async () => readSettings(),
+    settings: async () => ({ ...(await readSettings()), redirectUri: chrome.identity.getRedirectURL() }),
+
+    // Inloggningsläget. Interaktivt öppnar Microsofts inloggningsfönster.
+    "sign-in": async () => {
+      try {
+        await settingsReady;
+        return { ok: true, status: await msalTokens.signIn({ interactive: true }) };
+      } catch (e) {
+        return { ok: false, error: e.message ?? String(e), status: msalTokens.describe() };
+      }
+    },
+
+    "sign-out": async () => {
+      await msalTokens.signOut();
+      await clearCache(CACHE_KEY);
+      await clearCache(CONNECTIONS_KEY);
+      await clearCache(HEALTH_KEY);
+      return { ok: true, status: msalTokens.describe() };
+    },
 
     "save-settings": async () => {
+      await settingsReady;
       const next = await writeSettings(message.patch ?? {});
-      if (next.consent) startCapture();
+      applyAuthSettings(next);
+      if (shouldCapture(next)) startCapture();
       else stopCapture();
       // Prefixet styr urvalet och demoläget källan — cachen är ogiltig.
       await clearCache(CACHE_KEY);

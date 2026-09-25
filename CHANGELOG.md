@@ -4,6 +4,33 @@ Version scheme: `0.1`, `0.2`, `0.3` … One step per delivered batch of work.
 The version lives in `manifest.json` and must always match the top entry here.
 `1.0` when the extension is stable enough to use daily without reservations.
 
+## 0.17 — 2026-09-25
+
+Sign-in mode: read the tenant through your organisation's own app registration
+instead of borrowing the portal's tokens. Both ways stay available; the user,
+or an admin by policy, chooses.
+
+- **Sign-in mode.** Microsoft sign-in (authorization code with PKCE, public
+  client, no secret) through `chrome.identity.launchWebAuthFlow`, against an
+  Entra app registration with delegated read permissions. Asks for Graph
+  `.default`, so the token carries exactly what the admin granted. Tokens live in
+  memory-only session storage, refresh on their own, and fall back to a silent
+  sign-in when the 24-hour refresh token runs out. In this mode the portal's
+  headers and storage are never read.
+- **Welcome panel** offers three choices: borrow the portal session, use my own
+  app registration, or try the demo.
+- **Settings:** a "How AidTune reads your tenant" section — portal mode with its
+  consent toggle, or sign-in mode with client ID, tenant, the redirect URI to
+  register, and Sign in / Sign out.
+- **Policy:** `authMode`, `msalClientId` and `msalTenant` can be set through
+  managed storage (`managed_schema.json`), e.g. pushed with Intune. Policy values
+  are locked in Settings.
+- The page's permission chips and notices ask for sign-in, or point to the app
+  registration's missing permission, instead of sending the user to a portal
+  blade.
+- New permission: `identity`. Tests: `tests/msal.test.js` (protocol and token
+  refresh, faked endpoints) and `tests/signin.mjs` (browser).
+
 ## 0.16.1 — 2026-09-25
 
 Fixes for 0.16. The Health check tab and the tree markers were hidden, because

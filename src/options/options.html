@@ -56,6 +56,46 @@
         cursor: pointer;
         font-weight: 600;
       }
+      [hidden] {
+        display: none !important;
+      }
+      fieldset {
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 10px 14px 4px;
+        margin: 0 0 18px;
+      }
+      legend {
+        font-weight: 600;
+        padding: 0 4px;
+      }
+      .choice {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        margin-bottom: 12px;
+      }
+      .choice label {
+        margin: 0;
+      }
+      .indent {
+        margin-left: 24px;
+      }
+      code.copy {
+        display: block;
+        padding: 6px 8px;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        background: var(--card);
+        word-break: break-all;
+        user-select: all;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
       #saved {
         color: var(--app);
         font-size: 12px;
@@ -96,16 +136,73 @@
       </div>
     </div>
 
-    <div class="field check">
-      <input id="consent" type="checkbox" />
-      <div>
-        <label for="consent">Allow AidTune to use the portal's access tokens</label>
-        <div class="hint">
-          Required to read your tenant. Untick to stop AidTune from reading the
-          portal's tokens — see "How AidTune reads data" below.
+    <fieldset id="access">
+      <legend>How AidTune reads your tenant</legend>
+      <div id="managedNote" class="hint" hidden>
+        Some of these settings are set by your organisation's policy and can't be changed here.
+      </div>
+
+      <div class="choice">
+        <input id="modePortal" type="radio" name="authMode" value="portal" />
+        <div>
+          <label for="modePortal">Borrow the Intune portal's session</label>
+          <div class="hint">Nothing to set up. Works as soon as you are signed in to the portal.</div>
         </div>
       </div>
-    </div>
+
+      <div class="field check indent" id="portalFields">
+        <input id="consent" type="checkbox" />
+        <div>
+          <label for="consent">Allow AidTune to use the portal's access tokens</label>
+          <div class="hint">
+            Required in this mode. Untick to stop AidTune from reading the portal's
+            tokens — see "How AidTune reads data" below.
+          </div>
+        </div>
+      </div>
+
+      <div class="choice">
+        <input id="modeMsal" type="radio" name="authMode" value="msal" />
+        <div>
+          <label for="modeMsal">Sign in with my organisation's app registration</label>
+          <div class="hint">
+            An Entra admin registers an app once and grants it read-only Graph
+            permissions. AidTune then never touches the portal's tokens.
+          </div>
+        </div>
+      </div>
+
+      <div class="indent" id="msalFields">
+        <div class="field">
+          <label for="msalClientId">Application (client) ID</label>
+          <input id="msalClientId" type="text" spellcheck="false" placeholder="00000000-0000-0000-0000-000000000000" />
+        </div>
+        <div class="field">
+          <label for="msalTenant">Tenant</label>
+          <input id="msalTenant" type="text" spellcheck="false" placeholder="contoso.onmicrosoft.com" />
+          <div class="hint">
+            Tenant ID or primary domain. <code>organizations</code> works only if the
+            app registration is multi-tenant.
+          </div>
+        </div>
+        <div class="field">
+          <label>Redirect URI to register (platform: Single-page application)</label>
+          <code class="copy" id="redirectUri">…</code>
+          <div class="hint">
+            It contains this extension's ID, so an unpacked copy and the store
+            version need their own entry. Permissions to grant (delegated, with admin
+            consent): <code>Group.Read.All</code>, <code>DeviceManagementApps.Read.All</code>,
+            <code>DeviceManagementConfiguration.Read.All</code>,
+            <code>DeviceManagementServiceConfig.Read.All</code>.
+          </div>
+        </div>
+        <div class="field row">
+          <button id="signIn" type="button" class="secondary">Sign in</button>
+          <button id="signOut" type="button" class="secondary">Sign out</button>
+          <span id="account" class="hint"></span>
+        </div>
+      </div>
+    </fieldset>
 
     <div class="field check">
       <input id="demo" type="checkbox" />
@@ -122,7 +219,16 @@
     <details class="disclosure">
       <summary>How AidTune reads data</summary>
       <p>
-        AidTune has no sign-in and no app registration of its own. It borrows the
+        <strong>Sign-in mode.</strong> AidTune signs you in to your organisation's
+        own app registration through Microsoft's sign-in page (OAuth code flow with
+        PKCE, no client secret). The token is issued to that app, carries only the
+        permissions your admin granted it, and appears under that app in Entra's
+        sign-in logs. The access and refresh tokens are kept in memory-only session
+        storage and are gone when the browser closes. The portal's tokens and
+        storage are not read at all.
+      </p>
+      <p>
+        <strong>Portal mode.</strong> AidTune has no sign-in of its own. It borrows the
         access tokens the Intune portal already holds for you, and only from tabs on
         <code>intune.microsoft.com</code>:
       </p>
@@ -160,8 +266,9 @@
       <p>
         Don't take our word for it — AidTune is open source, so audit the code
         yourself: <a id="repo" href="https://github.com/1Oeee/FERMtools" target="_blank" rel="noopener">github.com/1Oeee/FERMtools</a>.
-        Token handling is in <code>src/background/token.js</code> and
-        <code>src/content/token-scan.js</code>.
+        Token handling is in <code>src/background/token.js</code>,
+        <code>src/content/token-scan.js</code> and (sign-in mode)
+        <code>src/background/msal.js</code>.
       </p>
     </details>
 

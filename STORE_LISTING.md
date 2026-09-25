@@ -33,8 +33,11 @@ Also included:
 - Follows the portal's theme (light, dark, high contrast)
 
 HOW IT READS YOUR DATA: nothing is read until you agree on first run (or you can
-try the demo, which reads nothing). AidTune has no app registration or sign-in of its own.
-It borrows the access tokens the Intune portal already holds for you. It reads
+try the demo, which reads nothing). You choose how AidTune reads your tenant:
+sign in with your organisation's own Entra app registration (read-only
+permissions your admin grants; the portal is not read at all), or, with no
+setup, let it borrow the access tokens the Intune portal already holds for you.
+In that mode it reads
 the Authorization header of the portal's own requests to Microsoft Graph and
 Intune, and as a fallback scans the portal's browser storage for those tokens.
 It then makes read-only requests to Microsoft with them (GETs, batched through Graph's $batch endpoint), so it can read
@@ -51,8 +54,12 @@ Visualise the nested structure of Entra groups, and where apps and
 configurations are assigned, inside the Intune admin portal.
 
 ## Permission justifications
-- **storage**: Saves the user's settings and caches fetched tenant data in
-  memory for the session.
+- **storage**: Saves the user's settings, caches fetched tenant data in
+  memory for the session, and reads settings an administrator sets by policy.
+- **identity**: Optional sign-in mode. Opens Microsoft's sign-in page with
+  launchWebAuthFlow so the user can sign in to their organisation's own app
+  registration (OAuth code flow with PKCE, read-only Graph permissions). Not
+  used unless the user or their administrator chooses sign-in mode.
 - **webRequest** (+ host permissions for graph.microsoft.com and
   *.manage.microsoft.com): Reads the Authorization header of requests that the
   Intune portal tab itself sends to Microsoft Graph and Intune, so the

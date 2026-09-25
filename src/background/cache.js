@@ -41,20 +41,55 @@ export const DEFAULT_SETTINGS = {
   // Fliken Hälsokontroll: regler för rätt och fel i tilldelningarna.
   // Användaren har läst och godkänt att tillägget lånar portalens tokens.
   // Utan det läser tillägget inga tokens alls; demoläget kräver inget samtycke.
-  consent: false
+  consent: false,
+  // Var tokens kommer ifrån: "portal" lånar portalens, "msal" loggar in mot
+  // organisationens egen app-registrering. Se token.js och msal.js.
+  authMode: "portal",
+  msalClientId: "",
+  msalTenant: "organizations"
 };
 
-export async function readSettings() {
+// Inställningar som en administratör kan låsa via policy (Intune eller GPO,
+// se managed_schema.json). En låst inställning vinner över användarens val,
+// så att en hel organisation kan köras mot samma app-registrering.
+export const MANAGEABLE = ["authMode", "msalClientId", "msalTenant"];
+
+async function readManaged() {
   try {
-    const stored = await chrome.storage.local.get("settings");
-    return { ...DEFAULT_SETTINGS, ...(stored?.settings ?? {}) };
+    const managed = (await chrome.storage.managed?.get(MANAGEABLE)) ?? {};
+    return Object.fromEntries(
+      Object.entries(managed).filter(
+        ([key, value]) => MANAGEABLE.includes(key) && typeof value === "string" && value.trim()
+      )
+    );
   } catch {
-    return { ...DEFAULT_SETTINGS };
+    // Ingen policy, eller en webbläsare utan managed storage.
+    return {};
   }
 }
 
+export async function readSettings() {
+  const managed = await readManaged();
+  let stored = {};
+  try {
+    stored = (await chrome.storage.local.get("settings"))?.settings ?? {};
+  } catch {
+    /* standardvärden */
+  }
+  const settings = { ...DEFAULT_SETTINGS, ...stored, ...managed, managed: Object.keys(managed) };
+  if (settings.authMode !== "msal") settings.authMode = "portal";
+  return settings;
+}
+
 export async function writeSettings(patch) {
-  const next = { ...(await readSettings()), ...patch };
-  await chrome.storage.local.set({ settings: next });
-  return next;
+  let stored = {};
+  try {
+    stored = (await chrome.storage.local.get("settings"))?.settings ?? {};
+  } catch {
+    /* börja om */
+  }
+  // Det som kommer från policy sparas aldrig som användarens eget val.
+  const { managed: _ignored, ...rest } = patch ?? {};
+  await chrome.storage.local.set({ settings: { ...stored, ...rest } });
+  return readSettings();
 }
