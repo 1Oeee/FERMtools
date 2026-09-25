@@ -82,7 +82,7 @@ try {
   await sleep(1500);
   await page
     .evaluate(
-      `chrome.storage.local.set({ settings: { prefix: "Intune - ", showLoose: true, onlyWithAssignments: false, demo: true, healthCheck: true }, activeModule: "tree" }).then(() => location.reload())`
+      `chrome.storage.local.set({ settings: { prefix: "Intune - ", showLoose: true, onlyWithAssignments: false, demo: true }, activeModule: "tree" }).then(() => location.reload())`
     )
     .catch(() => {}); // omladdningen river sessionens kontext
   await sleep(4000);

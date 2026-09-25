@@ -23,7 +23,7 @@ if (!sw) sw = await ctx.waitForEvent("serviceworker", { timeout: 15000 });
 const id = new URL(sw.url()).host;
 const page = await ctx.newPage();
 await page.goto(`chrome-extension://${id}/src/page/page.html`);
-await page.evaluate(() => chrome.storage.local.set({ settings: { prefix: "Intune - ", showLoose: true, onlyWithAssignments: false, demo: true, healthCheck: true }, activeModule: "tree" }));
+await page.evaluate(() => chrome.storage.local.set({ settings: { prefix: "Intune - ", showLoose: true, onlyWithAssignments: false, demo: true }, activeModule: "tree" }));
 await page.reload();
 await page.waitForSelector(".row", { timeout: 20000 });
 await page.waitForTimeout(1500);

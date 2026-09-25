@@ -272,8 +272,6 @@ function draw() {
 export const healthModule = {
   id: "health",
   label: "Health check",
-  // Only shown when turned on in the settings.
-  setting: "healthCheck",
   needs: ["groups", "apps", "config"],
 
   async mount(node, context) {

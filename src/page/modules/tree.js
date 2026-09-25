@@ -250,7 +250,6 @@ function drawLoose(built, include) {
  * plats för markeringen direkt och inte hoppar när resultatet kommer.
  */
 function healthIndex() {
-  if (!ctx.settings?.healthCheck) return null;
   return ctx.health?.index ?? { direct: new Map(), below: new Map() };
 }
 
