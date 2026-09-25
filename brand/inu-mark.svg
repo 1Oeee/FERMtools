@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <title>Inu+</title>
+  <rect width="128" height="128" rx="28" fill="#1f2a44"/>
+  <g stroke="#c9d3ea" stroke-width="8" stroke-linecap="round" fill="none"><path d="M32 30v66M32 96h26M32 58h30"/></g>
+  <circle cx="32" cy="30" r="12" fill="#c9d3ea"/>
+  <circle cx="68" cy="96" r="11" fill="#3b8cff"/>
+  <path d="M88 38v40M68 58h40" stroke="#2fbf71" stroke-width="13" stroke-linecap="round"/>
+</svg>
