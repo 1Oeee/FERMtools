@@ -21,7 +21,7 @@ even when the branch is collapsed.
 The extension is **read-only**. It only makes `GET` requests to Microsoft Graph
 and the Intune backend, and writes nothing to the tenant.
 
-Current version: **0.17**. The version scheme is `0.1`, `0.2`, `0.3` … with one
+Current version: **0.18**. The version scheme is `0.1`, `0.2`, `0.3` … with one
 step per delivered batch of work, and `1.0` when the extension can be used
 daily without reservations. What changed when is in [CHANGELOG.md](CHANGELOG.md),
 and the version there must always match `manifest.json`.
@@ -290,6 +290,7 @@ The page is divided into tabs. The active tab is remembered between visits.
 | Tab | Needs | Status |
 | --- | --- | --- |
 | **Tree** | Groups, Apps, Configuration | Built. Group structure, markers, search, filter, details panel. |
+| **Score** | Groups, Apps, Configuration | Built. The tenant graded like a Lighthouse report against Microsoft's Intune guidance — see below. |
 | **Connections** | Apps, Configuration, Connections | Built. VPP tokens, Apple ADE/DEP, Android enrollment and APNS in three subtrees, sorted by what expires first. Licences per VPP token: total, used and free, filterable and searchable. |
 | **Health check** | Groups, Apps, Configuration | Built, turned on in the settings. 27 rules for what is right and wrong in the assignments — see below. |
 | _Reports (hidden)_ | Groups, Apps, Devices | Not built. Excel export per group with devices, serial numbers, users, inventory and apps. A custom xlsx writer with no dependencies. |
@@ -297,6 +298,30 @@ The page is divided into tabs. The active tab is remembered between visits.
 Tree and details sit side by side, and wide views like report tables and VPP
 lists get the room they need. It was the width of the side panel that once forced
 the details down under the rows — on a whole page that is not needed.
+
+### Score
+
+A Lighthouse report for the tenant. Where Lighthouse grades a web page against
+what Chrome considers good practice, Score grades the tenant against what
+Microsoft's Intune documentation says it should look like.
+
+- **One gauge per category and one for the tenant**, 0–100. Bands as in
+  Lighthouse: ▲ 0–49 poor, ■ 50–89 needs work, ● 90–100 good.
+- **Categories:** Security & compliance · Targeting · Conflicts & duplicates ·
+  Group structure · Licences & connections.
+- **The audits are the health check's rules** (below). Score only weighs them,
+  so the two tabs always agree. A category starts at 100 and each failed audit
+  costs its share: errors weigh 10, warnings 3. Tips are shown as *worth a look*
+  and not scored. An audit that could not run is left out, not counted as a
+  pass; a category with nothing to run shows "–". The tenant score is the mean
+  of the categories.
+- **Per category:** failed audits first, each with what it costs, how Microsoft
+  wants it, the first findings, links to Microsoft Learn and **Show in Health
+  check** for the full list; then passed audits and what could not be checked.
+
+The mapping from rule to category and the weights are in `src/health/score.js`.
+It is our reading of Microsoft Learn, not a score Microsoft publishes. The demo
+tenant scores low on purpose — it has 23 planted mistakes.
 
 ### Health check
 
@@ -412,7 +437,7 @@ src/
                 for token capture)
   options/      settings
   demo/         made-up tenant and a Graph client without a network
-  health/       the health check's rules (pure functions)
+  health/       the health check's rules and the Score weighting (pure functions)
 tests/          unit tests, run in the browser or in Node
 spike/          Step 0 — standalone test of the token borrowing
 ```

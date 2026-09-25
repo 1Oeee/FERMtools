@@ -7,11 +7,12 @@ import { applyPortalTheme } from "./theme.js";
 import { treeModule } from "./modules/tree.js";
 import { connectionsModule } from "./modules/connections.js";
 import { healthModule } from "./modules/health.js";
+import { scoreModule } from "./modules/score.js";
 import { analyse, findingsByGroup } from "../health/checks.js";
 import { buildForest } from "../tree/build.js";
 
 // reportsModule is not listed until the Excel export is built.
-const MODULES = [treeModule, connectionsModule, healthModule];
+const MODULES = [treeModule, scoreModule, connectionsModule, healthModule];
 
 /** Moduler med en `setting` visas bara när den inställningen är på. */
 const availableModules = () => MODULES.filter((m) => !m.setting || state.settings?.[m.setting]);
@@ -227,6 +228,8 @@ async function loadHealth({ force = false } = {}) {
   else state.health.payload = response.data;
 
   computeHealth();
+  // Framstegsraden ("analyzing …") ska inte bli stående när underlaget är klart.
+  if (!state.loading && ["health", "score"].includes(activeModule().id)) renderStatus(null);
   refreshActive();
 }
 
@@ -624,10 +627,11 @@ chrome.runtime.onMessage.addListener((message) => {
   // ska synas på samma ställe.
   // Trädhämtningen gäller alla flikar. Connections och Hälsokontroll hämtar
   // för sig själva, och deras framsteg hör bara hemma när de är framme.
-  const ownStage = { connections: "connections", health: "health" }[message?.stage];
+  // Poängen bygger på hälsokontrollens underlag och visar samma framsteg.
+  const ownStage = { connections: ["connections"], health: ["health", "score"] }[message?.stage];
   if (
     message?.type === "progress" &&
-    (state.loading || (ownStage && activeModule().id === ownStage))
+    (state.loading || (ownStage && ownStage.includes(activeModule().id)))
   ) {
     const labels = {
       groups: "Fetching groups",

@@ -11,6 +11,7 @@ await import("./theme.test.js");
 await import("./demo.test.js");
 await import("./health.test.js");
 await import("./msal.test.js");
+await import("./score.test.js");
 
 const { passed, total } = await runAll(({ name, ok, error }) => {
   console.log(`${ok ? "✓" : "✗"} ${name}${ok ? "" : `\n    ${error}`}`);

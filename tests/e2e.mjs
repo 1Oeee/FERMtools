@@ -103,13 +103,14 @@ try {
   const expect = {
     Tree: (s) => s.rows > 0,
     Connections: (s) => /Expires first|Fetch/.test(s.content),
-    "Health check": (s) => /errors and/.test(s.content)
+    "Health check": (s) => /errors and/.test(s.content),
+    Score: (s) => /Tenant score/.test(s.content)
   };
 
-  const route = ["Connections", "Tree", "Connections", "Health check", "Tree", "Health check", "Tree"];
+  const route = ["Connections", "Tree", "Score", "Connections", "Health check", "Score", "Tree", "Health check", "Tree"];
   for (const label of route) {
     await page.evaluate(`[...document.querySelectorAll(".tab")].find((t) => t.textContent === ${JSON.stringify(label)})?.click()`);
-    await sleep(label === "Health check" ? 2500 : 900);
+    await sleep(label === "Health check" || label === "Score" ? 2500 : 900);
     const s = await snapshot();
     const ok = s.active === label && s.visible.length === 1 && expect[label](s);
     if (!ok) failures += 1;

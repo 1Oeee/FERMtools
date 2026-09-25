@@ -9,6 +9,7 @@
 // focus(): the check expands, the finding scrolls into view and flashes yellow three times.
 
 import { el } from "../dom.js";
+import { groupLabels as labelsFor, findingText as textFor, renderDocs } from "../findings.js";
 
 /** Så många fynd per kontroll ritas; resten sammanfattas. */
 const MAX_FINDINGS = 100;
@@ -44,58 +45,12 @@ function renderSummary({ counts }) {
   return box;
 }
 
+const groupLabels = () => labelsFor(ctx.data, ctx.settings?.prefix ?? "");
+const findingText = (finding, labels) => textFor(finding, labels, ctx.openGroup);
+
 const FIX_NOTE =
   "The fixes are suggestions based on Microsoft's documentation, not on your organisation's procedures — " +
   "read them as a starting point.";
-
-/**
- * Gruppnamn som de står i fyndens text: utan prefix, precis som reglerna
- * skriver dem. Bara grupper som finns i trädet — en borttagen grupp, eller en
- * utanför prefixet, har ingen rad att gå till.
- */
-function groupLabels() {
-  const prefix = ctx.settings?.prefix ?? "";
-  const labels = new Map();
-  for (const g of ctx.data?.groups ?? []) {
-    const name = g.displayName ?? "";
-    labels.set(g.id, prefix && name.startsWith(prefix) ? name.slice(prefix.length) : name);
-  }
-  return labels;
-}
-
-/**
- * Fyndets text, med gruppernas namn som länkar till trädet. Längsta namnet
- * först, så att "Söderskolan - Enheter" inte klyvs av en träff på en kortare
- * grupp med samma början.
- */
-function findingText(finding, labels) {
-  const names = [...new Set(finding.groups)]
-    .map((id) => [id, labels.get(id)])
-    .filter(([, name]) => name)
-    .sort((a, b) => b[1].length - a[1].length);
-
-  let parts = [finding.text];
-  for (const [id, name] of names) {
-    parts = parts.flatMap((part) => {
-      if (typeof part !== "string" || !part.includes(name)) return [part];
-      return part.split(name).flatMap((piece, i) => (i ? [{ id, name }, piece] : [piece]));
-    });
-  }
-
-  const fragment = document.createDocumentFragment();
-  for (const part of parts) {
-    if (typeof part === "string") {
-      if (part) fragment.append(part);
-      continue;
-    }
-    const link = el("button", "linklike group-link", part.name);
-    link.type = "button";
-    link.title = "Show the group in the tree";
-    link.addEventListener("click", () => ctx.openGroup(part.id));
-    fragment.append(link);
-  }
-  return fragment;
-}
 
 /**
  * Åtgärden för kontrollen, med länkar till Microsofts dokumentation. Texterna
@@ -115,19 +70,7 @@ function renderFix(check) {
     box.append(list);
   }
 
-  if (check.docs?.length) {
-    const docs = el("div", "health-docs");
-    docs.append("Microsoft: ");
-    check.docs.forEach((doc, i) => {
-      if (i) docs.append(" · ");
-      const link = el("a", null, `${doc.label} ↗`);
-      link.href = doc.url;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      docs.append(link);
-    });
-    box.append(docs);
-  }
+  if (check.docs?.length) box.append(renderDocs(check.docs));
   return box;
 }
 
