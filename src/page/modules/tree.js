@@ -12,6 +12,7 @@ import {
 } from "../tree-view.js";
 import { renderDetails } from "../details.js";
 import { el } from "../dom.js";
+import { matchesPlatform, platformLabel } from "../../common/platforms.js";
 
 const state = {
   expanded: new Set(),
@@ -43,14 +44,28 @@ const save = (patch) => chrome.storage.local.set(patch).catch(() => {});
 
 // --- Härledd data --------------------------------------------------------
 
-function build(data) {
-  if (state.built?.stamp === data.fetchedAt) return state.built;
+/** Bara de appar och konfigurationer som gäller plattformen i filtret. */
+function forPlatform(entries, platform) {
+  if (!platform) return new Map(entries);
+  const keep = (list) => (list ?? []).filter((item) => matchesPlatform(item.platform ?? null, platform));
+  const filtered = new Map();
+  for (const [groupId, bucket] of entries) {
+    const next = { configs: keep(bucket.configs), apps: keep(bucket.apps), excludedBy: keep(bucket.excludedBy) };
+    if (next.configs.length || next.apps.length || next.excludedBy.length) filtered.set(groupId, next);
+  }
+  return filtered;
+}
 
-  const assignments = new Map(data.assignments);
+function build(data) {
+  const platform = ctx.platform ?? "";
+  const stamp = `${data.fetchedAt}|${platform}`;
+  if (state.built?.stamp === stamp) return state.built;
+
+  const assignments = forPlatform(data.assignments, platform);
   const forest = buildForest(data.groups, new Map(data.edges));
 
   state.built = {
-    stamp: data.fetchedAt,
+    stamp,
     assignments,
     forest,
     flags: computeFlags(forest, assignments),
@@ -254,6 +269,13 @@ function healthIndex() {
 }
 
 function drawDetails(built) {
+  // Ingen vald grupp: panelen stängs helt och trädet får hela bredden.
+  ui.details.hidden = !state.selectedId;
+  if (!state.selectedId) {
+    ui.details.replaceChildren();
+    return;
+  }
+
   const index = healthIndex();
   renderDetails(ui.details, {
     forest: built.forest,
@@ -292,7 +314,9 @@ function draw() {
   drawDetails(built);
 
   ctx.setFooter(
-    `${data.groups.length} groups · ${built.assignments.size} with assignments · ` +
+    `${data.groups.length} groups · ${built.assignments.size} with assignments` +
+      (ctx.platform ? ` for ${platformLabel(ctx.platform)}` : "") +
+      " · " +
       `fetched ${new Date(data.fetchedAt).toLocaleTimeString("en-GB", {
         hour: "2-digit",
         minute: "2-digit"
@@ -301,6 +325,11 @@ function draw() {
 }
 
 // --- Interaktion ---------------------------------------------------------
+
+function deselect() {
+  state.selectedId = null;
+  draw();
+}
 
 function select(id) {
   state.selectedId = id;
@@ -315,14 +344,24 @@ function toggle(key) {
 }
 
 function wireEvents() {
+  // Klick på den valda gruppen avmarkerar den och stänger panelen. Väntar en
+  // stund först: ett dubbelklick fäller ut grenen och ska inte avmarkera.
+  let deselectTimer = null;
+
   ui.rows.addEventListener("click", (event) => {
     const row = event.target.closest(".row");
     if (!row) return;
-    if (event.target.closest('[data-action="toggle"]')) toggle(row.dataset.key);
-    else select(row.dataset.id);
+    if (event.target.closest('[data-action="toggle"]')) return toggle(row.dataset.key);
+    if (event.detail > 1) return; // andra klicket i ett dubbelklick
+    if (row.dataset.id === state.selectedId) {
+      deselectTimer = setTimeout(deselect, 250);
+      return;
+    }
+    select(row.dataset.id);
   });
 
   ui.rows.addEventListener("dblclick", (event) => {
+    clearTimeout(deselectTimer);
     const row = event.target.closest(".row");
     if (row) toggle(row.dataset.key);
   });
@@ -339,6 +378,13 @@ function wireEvents() {
     };
 
     switch (event.key) {
+      case "Escape":
+        // Esc avmarkerar och stänger detaljpanelen, precis som ett klick på den valda raden.
+        if (state.selectedId) {
+          event.preventDefault();
+          deselect();
+        }
+        return;
       case "ArrowDown":
         return move(index + 1);
       case "ArrowUp":

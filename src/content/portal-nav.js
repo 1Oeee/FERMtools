@@ -1,17 +1,20 @@
 // Inu+ som en egen sida i Intune-portalen.
 //
-// Två saker görs här, och ingenting mer:
+// Tre saker görs här, och ingenting mer:
 //
 //   1. En punkt läggs i portalens vänsterlist, direkt under **Start**.
 //   2. Klick på den lägger Inu+:s sida över portalens innehållsyta —
 //      listen och den översta raden lämnas orörda, så det ser ut och känns
 //      som ännu ett blad i portalen.
+//   3. På sidans begäran skrivs ett namn in i en listas sökruta (ett konto i
+//      enhetslistan, en token i VPP-listan), och för en token klickas sedan
+//      raden med exakt det namnet — så att tokenen öppnas.
 //
 // Själva sidan är en vanlig tilläggssida i en iframe. Det är medvetet: där
 // gäller tilläggets egen origin, så `chrome.tabs`, `chrome.storage` och
 // modulimporter fungerar precis som förut. Content scriptet rör aldrig
-// portalens data och läser ingenting ur den — det placerar bara ut en länk
-// och en ruta.
+// portalens data och läser ingenting ur den — det placerar ut en länk och
+// en ruta, och skriver i sökrutan när man bett om det.
 //
 // Klassiskt script (content scripts kan inte vara ES-moduler i manifestet).
 
@@ -300,6 +303,9 @@
     frame = document.createElement("iframe");
     frame.src = url.href;
     frame.title = "Inu+";
+    // Kopiera-knapparna i sidan skriver till urklipp, och en ram från en
+    // annan origin får bara det om portalen uttryckligen tillåter det.
+    frame.allow = "clipboard-write";
 
     // Hann portalen inte måla färdigt innan vi mätte blev det inga färger i
     // adressen. Mät om när ramen står klar — `sendTheme` tiger om inget ändrats.
@@ -372,13 +378,157 @@
     if (event.data.type === "close" || event.data.type === "show-portal") hide();
   });
 
-  // Tilläggets knapp i verktygsfältet öppnar sidan i den portalflik som redan
-  // står öppen, i stället för att starta ännu en.
+  // --- Sökning i enhetslistan --------------------------------------------
+
+  // Portalen har ingen adress för "listan, sökt på X". Sidan skickar
+  // fliken till listan och ber oss sedan skriva in texten i sökrutan, precis
+  // som man gör för hand. Vi skriver bara i den rutan, och läser ingenting.
+  const SEARCH_BOX =
+    "input[type='search'], input[role='searchbox'], input[aria-label*='Search' i], input[placeholder*='Search' i]";
+
+  function visible(node) {
+    const rect = node.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0 && !node.closest("#" + HOST_ID);
+  }
+
+  /** Sökrutor i dokumentet och i ramar vi får se in i, nyast sist. */
+  function searchBoxes(doc = document) {
+    const found = [...doc.querySelectorAll(SEARCH_BOX)].filter(visible);
+    for (const iframe of doc.querySelectorAll("iframe")) {
+      try {
+        if (iframe.contentDocument) found.push(...searchBoxes(iframe.contentDocument));
+      } catch {
+        // En ram från en annan origin går inte att nå — då får urklipp duga.
+      }
+    }
+    return found;
+  }
+
+  function type(input, text) {
+    // Portalens listor är React: ett vanligt `value =` ser de inte.
+    const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input), "value")?.set;
+    input.focus();
+    if (setter) setter.call(input, text);
+    else input.value = text;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    for (const kind of ["keydown", "keyup"]) {
+      input.dispatchEvent(new KeyboardEvent(kind, { key: "Enter", code: "Enter", bubbles: true }));
+    }
+  }
+
+  function toast(text) {
+    const note = document.createElement("div");
+    note.className = "inuplus-toast";
+    note.textContent = text;
+    document.body.append(note);
+    setTimeout(() => note.remove(), 6000);
+  }
+
+  // Rader och länkar i portalens listor. Namnet står i en cell eller en länk.
+  const ROW_TEXT = "[role='gridcell'], [role='link'], a, [role='row']";
+
+  /** Element i dokumentet och i ramar vi når, vars egen text är exakt `text`. */
+  function exactMatches(text, doc = document) {
+    const wanted = text.trim().toLowerCase();
+    const found = [...doc.querySelectorAll(ROW_TEXT)].filter(
+      (node) => visible(node) && !node.closest("input") && node.textContent.trim().toLowerCase() === wanted
+    );
+    for (const iframe of doc.querySelectorAll("iframe")) {
+      try {
+        if (iframe.contentDocument) found.push(...exactMatches(text, iframe.contentDocument));
+      } catch {
+        // En ram från en annan origin går inte att nå.
+      }
+    }
+    return found;
+  }
+
+  /**
+   * Öppna raden som heter exakt `text` — som att klicka på den själv. Bara
+   * när det finns en enda sådan: två tokens med samma namn ska inte gissas.
+   */
+  function openMatch(text, onDone) {
+    const started = Date.now();
+    const timer = setInterval(() => {
+      const hits = exactMatches(text);
+      // En länk eller cell går före hela raden; flera träffar i samma rad räknas en gång.
+      const rows = new Set(hits.map((node) => node.closest("[role='row']") ?? node));
+      if (rows.size === 1) {
+        clearInterval(timer);
+        const target = hits.find((node) => node.matches("a, [role='link']")) ?? hits[0];
+        target.click();
+        onDone(true);
+        return;
+      }
+      if (Date.now() - started > 8000) {
+        clearInterval(timer);
+        onDone(false);
+      }
+    }, 300);
+  }
+
+  /**
+   * Vänta tills listan ritats, och ta då den sökruta som kom sist —
+   * det är det nyss öppnade bladets. Rutor som fanns innan vi började hör
+   * till bladet vi lämnade. Med `open` klickas sedan raden med namnet.
+   */
+  function fillSearch(text, blade, open = false) {
+    const before = new Set(searchBoxes());
+    const started = Date.now();
+    const timer = setInterval(() => {
+      let fresh = searchBoxes().filter((box) => !before.has(box));
+      // Stod listan redan öppen blir det ingen ny ruta — då är det dess egen.
+      if (
+        !fresh.length &&
+        Date.now() - started > 3000 &&
+        blade &&
+        location.hash.toLowerCase().includes(blade.toLowerCase())
+      ) {
+        fresh = searchBoxes();
+      }
+      if (fresh.length) {
+        clearInterval(timer);
+        // Listan hämtar sig själv strax efter att rutan ritats; vänta in den.
+        setTimeout(() => {
+          type(fresh[fresh.length - 1], text);
+          if (open) {
+            openMatch(text, (ok) => {
+              if (!ok) toast(`Inu+: "${text}" is searched for — click it in the list to open it.`);
+            });
+          }
+        }, 600);
+        return;
+      }
+      if (Date.now() - started > 15_000) {
+        clearInterval(timer);
+        // Ingen sökruta — men en kort lista kan ändå visa raden.
+        const giveUp = () =>
+          toast(`Inu+: the search box could not be reached. "${text}" is on the clipboard — paste it with Ctrl+V.`);
+        if (open) openMatch(text, (ok) => ok || giveUp());
+        else giveUp();
+      }
+    }, 300);
+  }
+
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (message?.type !== "inuplus-open") return false;
-    ensureLink();
-    show();
-    sendResponse({ ok: true });
+    // Tilläggets knapp i verktygsfältet öppnar sidan i den portalflik som
+    // redan står öppen, i stället för att starta ännu en.
+    if (message?.type === "inuplus-open") {
+      ensureLink();
+      show();
+      sendResponse({ ok: true });
+      return false;
+    }
+    if (message?.type === "inuplus-fill-search" && typeof message.text === "string") {
+      fillSearch(
+        message.text.slice(0, 256),
+        typeof message.blade === "string" ? message.blade : "",
+        message.open === true
+      );
+      sendResponse({ ok: true });
+      return false;
+    }
     return false;
   });
 

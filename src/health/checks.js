@@ -16,12 +16,15 @@
 
 import { buildForest } from "../tree/build.js";
 import { GUIDANCE } from "./guidance.js";
+import { matchesPlatform } from "../common/platforms.js";
 
 export const SEVERITIES = ["bad", "warn", "info"];
 
 const DEEP = 4;
 const KIOSK_MAX_DEVICES = 25;
 const EXPIRY_WARN_DAYS = 30;
+/** Under så här många dagar kvar — eller redan ute — är det ett fel, inte en varning. */
+export const EXPIRY_CRITICAL_DAYS = 10;
 const DAY = 86_400_000;
 
 const EMPTY_DEVICES = () => ({ iOS: 0, Windows: 0, Android: 0, macOS: 0, other: 0 });
@@ -139,6 +142,8 @@ function context(input) {
 
 /** En post (app eller profil) som del av en fyndtext — blir en länk i sidan. */
 const app = (item) => ({ item: item.id, name: item.name });
+/** En token eller ett certifikat i fyndets rad — sidan länkar den till Intune. */
+const conn = (c) => ({ connection: c.id, name: c.name });
 
 /**
  * Taggad mall för fyndens korta rad. Grupper och poster behålls som objekt,
@@ -278,8 +283,11 @@ export const CHECKS = [
   {
     id: "device-licence-to-users",
     title: "Device licence to a user group",
-    severity: "warn",
-    right: "Device-licensed VPP apps go to device groups.",
+    // Ett tips, inte ett fel: det stöds fullt ut, och för delade konton
+    // (del1 med sin vagn) är det precis rätt. Risken är bara licenser på
+    // enheter man inte räknat med.
+    severity: "info",
+    right: "A device-licensed app to a user group lands on every device those users have — fine when that is the intent.",
     needs: ["composition"],
     run: (ctx) =>
       ctx.byItem.flatMap(({ item, includes }) =>
@@ -291,11 +299,12 @@ export const CHECKS = [
                   groups: [a.groupId],
                   items: [item.id],
                   detail:
-                    "Device licensing ties each licence to a device's serial number, not to a person. The assignment " +
-                    `is Required and targets ${ctx.nameOf(a.groupId)}, which contains only users, so Intune installs ` +
-                    `${item.name} on every device those users are enrolled with — one licence per device. A user with ` +
-                    "an iPad and a Mac takes two licences, and licences end up on devices outside the intended setup " +
-                    "(personal devices, old devices that were never retired)."
+                    "This is supported, and often right. Device licensing ties each licence to a device, and the " +
+                    `assignment is Required to ${ctx.nameOf(a.groupId)}, a user group — so Intune installs ${item.name} ` +
+                    "on every device those users are enrolled with, one licence per device. For a shared account " +
+                    "with its cart, or 1:1 iPads with user affinity, that is exactly the point. Worth a look only if " +
+                    "the group also holds people with devices that shouldn't get the app: a user with an iPad and an " +
+                    "iPhone takes two licences, and personal or never-retired devices take one each."
                 })
               )
           : []
@@ -958,32 +967,47 @@ export const CHECKS = [
       )
   },
   {
+    id: "expired-connections",
+    title: `Connections that have expired or expire within ${EXPIRY_CRITICAL_DAYS} days`,
+    severity: "bad",
+    right: `No token or certificate has expired or expires within ${EXPIRY_CRITICAL_DAYS} days.`,
+    needs: ["connections"],
+    run: (ctx) => expiring(ctx, (days) => days < EXPIRY_CRITICAL_DAYS)
+  },
+  {
     id: "expiring-connections",
     title: "Connections that are expiring",
     severity: "warn",
     right: `No tokens or certificates expire within ${EXPIRY_WARN_DAYS} days.`,
     needs: ["connections"],
-    run: (ctx) =>
-      (ctx.connections?.items ?? [])
-        .filter((c) => c.expires)
-        .map((c) => ({ c, days: Math.floor((new Date(c.expires).getTime() - ctx.now) / DAY) }))
-        .filter(({ days }) => days <= EXPIRY_WARN_DAYS)
-        .map(({ c, days }) =>
-          finding(
-            days < 0
-              ? say`${c.sourceLabel}: ${c.name} expired ${-days} days ago`
-              : say`${c.sourceLabel}: ${c.name} expires in ${days} days`,
-            {
-              detail:
-                `${c.name} ${days < 0 ? "expired" : "expires"} on ${new Date(c.expires).toISOString().slice(0, 10)}. ` +
-                "When a connection expires, whatever depends on it stops: without APNS, Apple devices stop receiving " +
-                "anything from Intune; without a valid VPP token, app licences stop syncing; without an Android " +
-                "enrolment token, new devices cannot enrol."
-            }
-          )
-        )
+    run: (ctx) => expiring(ctx, (days) => days >= EXPIRY_CRITICAL_DAYS && days <= EXPIRY_WARN_DAYS)
   }
 ];
+
+/**
+ * Anslutningar vars återstående dagar `within` släpper igenom, som fynd.
+ * Delas av felet (under tio dagar) och varningen (inom en månad).
+ */
+function expiring(ctx, within) {
+  return (ctx.connections?.items ?? [])
+    .filter((c) => c.expires)
+    .map((c) => ({ c, days: Math.floor((new Date(c.expires).getTime() - ctx.now) / DAY) }))
+    .filter(({ days }) => within(days))
+    .map(({ c, days }) =>
+      finding(
+        days < 0
+          ? say`${c.sourceLabel}: ${conn(c)} expired ${-days} days ago`
+          : say`${c.sourceLabel}: ${conn(c)} expires in ${days} days`,
+        {
+          detail:
+            `${c.name} ${days < 0 ? "expired" : "expires"} on ${new Date(c.expires).toISOString().slice(0, 10)}. ` +
+            "When a connection expires, whatever depends on it stops: without APNS, Apple devices stop receiving " +
+            "anything from Intune; without a valid VPP token, app licences stop syncing; without an Android " +
+            "enrolment token, new devices cannot enrol."
+        }
+      )
+    );
+}
 
 const RANK = { bad: 0, warn: 1, info: 2 };
 
@@ -1084,5 +1108,34 @@ export function analyse(input) {
     else counts[check.status] += 1;
   }
 
+  return { checks, counts };
+}
+
+/**
+ * Samma analys, avgränsad till en plattform. Ett fynd står kvar om någon av
+ * dess poster gäller plattformen, eller om det inte handlar om någon post
+ * alls (t.ex. gruppstruktur). Poster utan känd plattform gäller alla.
+ *
+ * @param {ReturnType<typeof analyse>} analysis
+ * @param {Array<{id: string, platform: string|null}>} items
+ * @param {string} platform tomt = ingen avgränsning
+ */
+export function forPlatform(analysis, items, platform) {
+  if (!platform || !analysis) return analysis;
+  const platformOf = new Map(items.map((item) => [item.id, item.platform ?? null]));
+  const keep = (finding) =>
+    !finding.items?.length || finding.items.some((id) => matchesPlatform(platformOf.get(id) ?? null, platform));
+
+  const checks = analysis.checks.map((check) => {
+    if (check.status !== "found") return check;
+    const findings = check.findings.filter(keep);
+    return { ...check, status: findings.length ? "found" : "ok", findings };
+  });
+
+  const counts = { bad: 0, warn: 0, info: 0, ok: 0, unknown: 0 };
+  for (const check of checks) {
+    if (check.status === "found") counts[check.severity] += 1;
+    else counts[check.status] += 1;
+  }
   return { checks, counts };
 }

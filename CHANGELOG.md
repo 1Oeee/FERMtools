@@ -4,6 +4,86 @@ Version scheme: `0.1`, `0.2`, `0.3` … One step per delivered batch of work.
 The version lives in `manifest.json` and must always match the top entry here.
 `1.0` when the extension is stable enough to use daily without reservations.
 
+## 0.19 — 2026-09-26
+
+Sortable lists, panels on the right, and VPP tokens by their real names.
+
+- **Sortable columns.** Click a column heading in Licenses (App, Assignments,
+  Total, Used, Free), Shared accounts (Account, iPads, iPhones, Android,
+  Devices, Free slots, and the devices' Last sync) or Connections (Name,
+  Expires, and Total/Used/Free for VPP) to sort — numbers highest first,
+  click again for lowest first. Names sort naturally: `skola_del2` before
+  `skola_del10`.
+- **Details on the right.** In Licenses and Shared accounts, clicking a row
+  shows its details in a panel on the right, like the tree — the list stays
+  where you scrolled instead of jumping to the top.
+- **Phones in Shared accounts.** iPhones and Android get columns of their own
+  next to iPads, with totals.
+- **Name matching for shared accounts.** Stems match `del1`, `skola_del1`,
+  `skoladel1` and `skola_del1a`, but never `adele`. Names that follow the
+  standard always show, even with a single device; looser matches like
+  `fidel1` need more than one device. A selector shows only accounts with one
+  device, or every match, for troubleshooting.
+- **VPP tokens by name.** Tokens show the name they have in the portal,
+  fetched from Graph beta — v1.0 only has the organisation name, which is
+  often the same for every token in the tenant. If beta can't be reached, v1.0
+  is used, with the Apple ID as the name.
+- **Apps find their VPP token.** Graph v1.0 doesn't say which token an app
+  belongs to, so every token showed 0 apps. Apps are now matched by the
+  token's Apple ID, or its organisation name when the Apple ID is shared — and
+  left without a token rather than put in the wrong one.
+- **VPP token links.** A VPP token's name opens that token in Intune: there is
+  no address per token, so the extension opens Apple VPP tokens, searches for
+  the name and clicks the matching row. Tokens and certificates in Health
+  check's expiry findings link the same way.
+- **Expiry is red under ten days.** A token or certificate that has expired
+  or has less than ten days left is an error in Health check and red in
+  Connections; ten to thirty days is a warning.
+- **Device licence to a user group is a tip.** It is supported, and right for
+  a shared account with its cart; Health check now says so and only asks you
+  to check that the group holds no one whose every device shouldn't get the app.
+- **Deselect in the tree.** Clicking the selected group again, or pressing
+  Esc, deselects it and closes the details panel, so the tree gets the full
+  width. A double-click still just unfolds the branch.
+- **Hidden by the platform filter.** Connections says how many tokens the
+  platform filter hides, with a button to show all platforms.
+
+## 0.18 — 2026-09-25
+
+Everything you see by name can be opened, and shared accounts are counted.
+
+- **Licenses tab.** VPP licences moved out of Connections into a tab of their
+  own, filtered per VPP token, showing how each app is distributed: which
+  groups get it, required or available, device or user licensing, and which
+  groups are excluded. The app name opens the app in Intune.
+- **Shared accounts tab.** Every account named like `del1` or `delad2`, with
+  its number of iPads and devices — the same count Intune shows when you
+  search for the account under Devices. Each account's devices (model, serial
+  number, last sync; stale ones marked) open in Intune. The name stems are set
+  in Settings. A second mode lists any account with more than one device,
+  whatever its name. Devices are fetched only when the tab is opened.
+- **Free slots.** Each account shows how many more devices it can enroll under
+  the device limit (15 by default, set in Settings), marks full accounts and
+  those over the limit, and can be narrowed to accounts with room left. The
+  limit counts every device on the account, whatever the platform filter shows.
+- **Account → Devices.** Clicking a shared account opens Devices → All devices
+  in Intune with the account typed into the search box. The name is also put
+  on the clipboard, in case the box can't be reached.
+- **Platform filter.** A selector in the header — Windows, iOS/iPadOS, macOS,
+  Android, Linux — narrows every tab at once: the tree's markers and details,
+  licences, connections, shared accounts' devices and health check findings.
+  Items without a known platform (web apps, some policies) always show. The
+  choice is remembered.
+- **Connections links.** Each enrollment token and Android enrollment profile
+  opens its own blade in Intune by name. Clicking a VPP token's row shows its
+  apps under Licenses.
+- **Tree links.** In the details panel, apps and configurations open the item
+  itself in Intune. Subgroups and parent groups jump to the group in the tree,
+  and ↗ next to them opens the group in Intune.
+- The portal addresses for enrollment tokens, configuration profiles, settings
+  catalog, compliance policies, users and All devices are unverified guesses,
+  all kept in `portal.js`.
+
 ## 0.17 — 2026-09-25
 
 Health check findings are short, linked and explained.

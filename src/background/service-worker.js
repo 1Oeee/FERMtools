@@ -21,6 +21,7 @@ import {
 import { fetchAssignments } from "../graph/assignments.js";
 import { fetchConnections } from "../graph/connections.js";
 import { fetchIntuneAudit, fetchEntraAudit } from "../graph/audit.js";
+import { fetchManagedDevices } from "../graph/devices.js";
 import { readCache, writeCache, clearCache, readSettings, writeSettings } from "./cache.js";
 import { createDemoClient, demoStatus } from "../demo/client.js";
 
@@ -153,6 +154,7 @@ function singleFlight() {
 const treeFlight = singleFlight();
 const connectionsFlight = singleFlight();
 const healthFlight = singleFlight();
+const devicesFlight = singleFlight();
 
 /** Vilket läge en hämtning gäller. Samma nyckel = samma svar. */
 const modeKey = (settings) => `${settings.demo ? "demo" : "tenant"}|${settings.prefix}`;
@@ -374,6 +376,34 @@ async function loadHealth({ force = false } = {}) {
   });
 }
 
+const DEVICES_KEY = "devices-data";
+
+/**
+ * Alla hanterade enheter, för Shared accounts. Hämtas först när fliken
+ * öppnas — i en skolkommun är det tusentals enheter, och trädet behöver dem inte.
+ */
+async function loadDevices({ force = false } = {}) {
+  const settings = await readSettings();
+
+  if (!force) {
+    const cached = await readCache(DEVICES_KEY);
+    if (cached && cached.demo === settings.demo) return cached;
+  }
+
+  return devicesFlight(modeKey(settings), async () => {
+    const clients = clientsFor(settings);
+    if (!settings.demo) await ensureTokens();
+
+    const data = await fetchManagedDevices(clients.apps, clients.backend, (n) =>
+      broadcast({ type: "progress", stage: "devices", detail: n })
+    );
+
+    const payload = { ...data, demo: settings.demo };
+    await writeCache(DEVICES_KEY, payload);
+    return payload;
+  });
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const handlers = {
     status: currentStatus,
@@ -438,6 +468,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
     },
 
+    devices: async () => {
+      try {
+        return { ok: true, data: await loadDevices({ force: Boolean(message.force) }) };
+      } catch (e) {
+        return { ok: false, error: e.message ?? String(e) };
+      }
+    },
+
     health: async () => {
       try {
         return { ok: true, data: await loadHealth({ force: Boolean(message.force) }) };
@@ -480,6 +518,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       await clearCache(CACHE_KEY);
       await clearCache(CONNECTIONS_KEY);
       await clearCache(HEALTH_KEY);
+      await clearCache(DEVICES_KEY);
       broadcast({ type: "settings-changed", settings: next, status: await currentStatus() });
       return next;
     }

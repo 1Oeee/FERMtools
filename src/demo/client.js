@@ -48,6 +48,7 @@ const ROUTES = [
     tenant.androidDeviceOwnerEnrollmentProfiles],
   [/^\/deviceManagement\/applePushNotificationCertificate$/, () =>
     tenant.applePushNotificationCertificate],
+  [/^\/deviceManagement\/managedDevices$/, () => tenant.managedDevices],
   [/^\/deviceManagement\/auditEvents$/, () => tenant.auditEvents],
   // Bara filtret audit.js själv skickar: targetResources/any(t: t/id eq '…').
   [/^\/auditLogs\/directoryAudits$/, (_, query) => {

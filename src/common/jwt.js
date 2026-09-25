@@ -87,7 +87,7 @@ export const CAPABILITIES = {
   },
   devices: {
     label: "Devices",
-    needFor: "Device inventory in reports",
+    needFor: "Shared accounts",
     where: "Devices → All devices",
     scopes: [
       "DeviceManagementManagedDevices.Read.All",

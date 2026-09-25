@@ -53,3 +53,18 @@ a.inuplus-sidebar-link.inuplus-selected::before {
   margin: 0;
   color-scheme: light dark;
 }
+
+/* Besked från Inu+ när sökrutan i enhetslistan inte gick att nå. */
+.inuplus-toast {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 100000;
+  max-width: 360px;
+  padding: 10px 14px;
+  border-radius: 4px;
+  background: #323130;
+  color: #fff;
+  font: 13px/1.4 "Segoe UI", system-ui, sans-serif;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}

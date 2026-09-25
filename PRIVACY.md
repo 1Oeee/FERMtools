@@ -34,7 +34,9 @@ Microsoft endpoints. Every request is a GET, except that Microsoft Graph
 requests are grouped through Graph's `$batch` endpoint, which is itself a POST
 but contains nothing except GET sub-requests. Inu+ uses them to read: groups, group memberships, and the apps,
 configuration profiles, policies, connectors and tokens (VPP, enrolment) that
-are assigned to them. A token carries **your** admin permissions, so Inu+
+are assigned to them, and — only when you open the Shared accounts tab — the
+managed devices (name, model, serial number, OS, last sync and primary user).
+A token carries **your** admin permissions, so Inu+
 can read whatever your account can read there. It never sends a
 create, update or delete request.
 
@@ -43,6 +45,13 @@ Besides tokens and tenant data, the extension also reads on the portal page:
 - the portal's background and text colours, to match the light/dark theme;
 - the position of the portal's left menu and top bar, to place its own page.
 It does not read anything else on the page and does not read other websites.
+
+The only things it does in the portal itself: when you click a shared
+account or a VPP token in Inu+, it opens the list it belongs in (Devices → All
+devices, or Apple VPP tokens) and types that name into the list's search box,
+as you would by hand. For a VPP token it then clicks the row with exactly that
+name, so the token opens. The name is also placed on your clipboard, in case
+the search box can't be reached.
 
 ## What Inu+ does not do
 

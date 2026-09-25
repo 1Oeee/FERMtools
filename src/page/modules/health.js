@@ -14,7 +14,7 @@
 // flashes yellow three times.
 
 import { el, section } from "../dom.js";
-import { URLS, itemLink, openInIntuneTab, openInNewTab } from "../portal.js";
+import { URLS, itemLinkButton, connectionButton, openInIntuneTab, openInNewTab } from "../portal.js";
 
 /** Så många fynd per kontroll ritas; resten sammanfattas. */
 const MAX_FINDINGS = 100;
@@ -97,28 +97,25 @@ function groupLink(id, name) {
   return link;
 }
 
-function itemLinkButton(item, name) {
-  const target = itemLink(item);
-  const link = el("button", "linklike item-link", name);
-  link.type = "button";
-  link.title = target.exact
-    ? `Open ${item.sourceLabel ?? "the item"} in Intune`
-    : `Open ${item.sourceLabel ?? "the list"} in Intune — find the item by name there`;
-  link.addEventListener("click", () => openInIntuneTab(target.url));
-  return link;
-}
-
 /**
  * Fyndets korta rad, med grupper och poster som länkar. Grupper går till
  * trädet, poster öppnas i Intune. Fynd utan `parts` — äldre cache — visas
  * som ren text.
  */
+/** Tokens och certifikat ur hälsokontrollens underlag, för länkarna. */
+function connectionById(id) {
+  return (ctx.health?.payload?.connections?.items ?? []).find((c) => c.id === id) ?? null;
+}
+
 function renderParts(finding, labels, items) {
   const fragment = document.createDocumentFragment();
   for (const part of finding.parts ?? [finding.text]) {
     if (typeof part === "string") fragment.append(part);
     else if (part.group && labels.has(part.group)) fragment.append(groupLink(part.group, part.name));
     else if (part.item && items.has(part.item)) fragment.append(itemLinkButton(items.get(part.item), part.name));
+    else if (part.connection && connectionById(part.connection)) {
+      fragment.append(connectionButton(connectionById(part.connection), part.name));
+    }
     else fragment.append(el("strong", null, part.name));
   }
   return fragment;

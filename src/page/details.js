@@ -1,7 +1,7 @@
 // Details panel for the selected group.
 
 import { describeGroup, isDynamic } from "../graph/groups.js";
-import { URLS, openInIntuneTab } from "./portal.js";
+import { URLS, openInIntuneTab, itemLinkButton, groupPortalButton } from "./portal.js";
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -23,7 +23,10 @@ function itemList(items, emptyText) {
   const list = el("ul", "d-list");
   for (const item of items) {
     const li = el("li");
-    li.append(el("span", "d-name", item.name));
+    // The name opens the app or profile itself in Intune.
+    const name = el("span", "d-name");
+    name.append(itemLinkButton(item));
+    li.append(name);
     li.append(el("span", "d-src", item.sourceLabel));
     list.append(li);
   }
@@ -35,11 +38,13 @@ function groupLinks(ids, nodeById, onPick, emptyText) {
 
   const list = el("ul", "d-list");
   for (const id of ids) {
+    // The name jumps to the group in the tree; ↗ opens it in Intune.
     const li = el("li");
-    const link = el("button", "linklike", nodeById.get(id)?.displayName ?? id);
+    const link = el("button", "linklike group-link", nodeById.get(id)?.displayName ?? id);
     link.type = "button";
+    link.title = "Show the group in the tree";
     link.addEventListener("click", () => onPick(id));
-    li.append(link);
+    li.append(link, " ", groupPortalButton(id));
     list.append(li);
   }
   return list;

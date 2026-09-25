@@ -7,11 +7,14 @@ import { applyPortalTheme } from "./theme.js";
 import { treeModule } from "./modules/tree.js";
 import { connectionsModule } from "./modules/connections.js";
 import { healthModule } from "./modules/health.js";
-import { analyse, findingsByGroup } from "../health/checks.js";
+import { licensesModule } from "./modules/licenses.js";
+import { accountsModule } from "./modules/accounts.js";
+import { analyse, findingsByGroup, forPlatform } from "../health/checks.js";
+import { PLATFORMS } from "../common/platforms.js";
 import { buildForest } from "../tree/build.js";
 
 // reportsModule is not listed until the Excel export is built.
-const MODULES = [treeModule, connectionsModule, healthModule];
+const MODULES = [treeModule, connectionsModule, licensesModule, accountsModule, healthModule];
 
 /** Moduler med en `setting` visas bara när den inställningen är på. */
 const availableModules = () => MODULES.filter((m) => !m.setting || state.settings?.[m.setting]);
@@ -26,7 +29,8 @@ const ui = {
   settings: document.getElementById("settings"),
   close: document.getElementById("close"),
   module: document.getElementById("module"),
-  footer: document.getElementById("footer")
+  footer: document.getElementById("footer"),
+  platform: document.getElementById("platform")
 };
 
 const state = {
@@ -37,6 +41,8 @@ const state = {
   needsPortal: false,
   tokenStatus: null,
   activeId: MODULES[0].id,
+  /** Plattformsfiltret. Gäller alla flikar, sparas mellan besöken. */
+  platform: "",
   mounted: new Set(),
   // Lästa notiser. Nyckeln innehåller texten, så ett meddelande som ändrar
   // sig dyker upp igen i stället för att tystas.
@@ -101,9 +107,13 @@ function moduleContext(module) {
     tokenStatus: state.tokenStatus,
     send,
     health: state.health,
+    /** Plattformsfiltret i sidhuvudet. Tomt = alla plattformar. */
+    platform: state.platform,
+    setPlatform,
     reloadHealth: (options) => loadHealth(options),
     openFinding,
     openGroup,
+    openLicences,
     setStatus: (text) => {
       if (isActive()) renderStatus(text);
     },
@@ -186,6 +196,12 @@ function openGroup(groupId) {
   showModule("tree");
 }
 
+/** Från en VPP-token i Connections till dess appar i Licenses. */
+function openLicences(tokenId) {
+  state.pendingFocus = { module: "licenses", target: tokenId };
+  showModule("licenses");
+}
+
 function computeHealth() {
   const payload = state.health.payload;
   if (!payload || !state.data) {
@@ -194,7 +210,7 @@ function computeHealth() {
     return;
   }
 
-  state.health.analysis = analyse({
+  const full = analyse({
     groups: state.data.groups,
     edges: state.data.edges,
     items: state.data.items ?? [],
@@ -205,6 +221,8 @@ function computeHealth() {
     connections: payload.connections,
     prefix: state.settings?.prefix ?? ""
   });
+  // Plattformsfiltret gäller både fliken och trädets markeringar.
+  state.health.analysis = forPlatform(full, state.data.items ?? [], state.platform);
   const { parentsOf } = buildForest(state.data.groups, state.data.edges);
   state.health.index = findingsByGroup(state.health.analysis, parentsOf);
 }
@@ -234,6 +252,37 @@ async function loadHealth({ force = false } = {}) {
 function invalidateModules() {
   state.mounted.clear();
 }
+
+// --- Plattformsfilter ----------------------------------------------------
+
+function renderPlatform() {
+  const all = el("option", null, "All platforms");
+  all.value = "";
+  ui.platform.replaceChildren(
+    all,
+    ...PLATFORMS.map(({ id, label }) => {
+      const option = el("option", null, label);
+      option.value = id;
+      return option;
+    })
+  );
+  ui.platform.value = state.platform;
+  // Ett aktivt filter ska synas — annars undrar man vart hälften tog vägen.
+  ui.platform.classList.toggle("active", Boolean(state.platform));
+}
+
+/** Byt plattformsfilter — från rullistan, eller från en flik som vill visa allt. */
+function setPlatform(platform) {
+  state.platform = platform;
+  ui.platform.value = platform;
+  ui.platform.classList.toggle("active", Boolean(platform));
+  chrome.storage.local.set({ platform }).catch(() => {});
+  computeHealth();
+  // Flikarna som inte är framme ritas om med det nya filtret när de visas.
+  refreshActive();
+}
+
+ui.platform.addEventListener("change", () => setPlatform(ui.platform.value));
 
 function renderTabs() {
   ui.tabs.replaceChildren(
@@ -599,7 +648,7 @@ chrome.runtime.onMessage.addListener((message) => {
   // ska synas på samma ställe.
   // Trädhämtningen gäller alla flikar. Connections och Hälsokontroll hämtar
   // för sig själva, och deras framsteg hör bara hemma när de är framme.
-  const ownStage = { connections: "connections", health: "health" }[message?.stage];
+  const ownStage = { connections: "connections", health: "health", devices: "accounts" }[message?.stage];
   if (
     message?.type === "progress" &&
     (state.loading || (ownStage && activeModule().id === ownStage))
@@ -609,7 +658,8 @@ chrome.runtime.onMessage.addListener((message) => {
       edges: "Reading memberships",
       assignments: "Reading assignments",
       connections: "Reading connections",
-      health: "Health check: analyzing"
+      health: "Health check: analyzing",
+      devices: "Reading devices"
     };
     const detail = message.detail;
     const n = typeof detail === "number" || typeof detail === "string" ? ` (${detail})` : "";
@@ -751,11 +801,13 @@ function renderConsent() {
   }
 
   try {
-    const stored = await chrome.storage.local.get("activeModule");
+    const stored = await chrome.storage.local.get(["activeModule", "platform"]);
     if (MODULES.some((m) => m.id === stored?.activeModule)) state.activeId = stored.activeModule;
+    if (PLATFORMS.some((p) => p.id === stored?.platform)) state.platform = stored.platform;
   } catch {
     /* strunt samma */
   }
+  renderPlatform();
 
   state.settings = await send({ type: "settings" });
   if (needsConsent()) {

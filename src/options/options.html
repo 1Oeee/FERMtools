@@ -75,6 +75,30 @@
       </div>
     </div>
 
+    <div class="field">
+      <label for="sharedPatterns">Shared accounts are named</label>
+      <input id="sharedPatterns" type="text" spellcheck="false" />
+      <div class="hint">
+        Name stems, separated by commas. <code>del, delad</code> finds del1, del10,
+        delad2, school_del3, schooldel1 and school_del1a — but not adele, delia or
+        delete. A stem followed by a digit matches anywhere in the username; without
+        a digit it has to stand alone between dots, underscores or hyphens.
+        Accounts that follow the naming standard (del3, school_del3) always show, even
+        with a single device. Looser matches (schooldel1, fidel1) count only with more
+        than one device, since a person with a laptop is not a shared account. Case doesn't
+        matter, and the domain after @ is ignored.
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="deviceLimit">Device limit per account</label>
+      <input id="deviceLimit" type="number" min="1" max="15" step="1" />
+      <div class="hint">
+        The device limit in your Intune enrollment restriction (Intune allows at most
+        15). Shared accounts shows how many free slots each account has left.
+      </div>
+    </div>
+
     <div class="field check">
       <input id="showLoose" type="checkbox" />
       <div>

@@ -731,7 +731,7 @@ export const MISTAKES = [
     title: "Device licence to student groups",
     check: "device-licence-to-users",
     where: "Seesaw → Norrskolan - Åk 1 and Åk 2",
-    why: "The app follows the students instead of the carts and takes one licence per device each student signs in on. The licences run out long before all carts have the app.",
+    why: "Supported, but here it follows the students instead of the carts and takes one licence per device each student is enrolled with — worth checking that this is the intent.",
     items: [appNamed("Seesaw")],
     groups: grade(norr, "1", "2")
   },
@@ -957,4 +957,70 @@ export const directoryAudits = [
       ]
     }))
   )
+];
+// --- Hanterade enheter ---------------------------------------------------
+//
+// Delade konton (del1, delad2 …) med en vagn iPads var, personal med en
+// dator och en telefon, och några iPads utan användare. Ett konto utan
+// mönstret har ändå flera iPads — det är det "flera enheter"-läget ska hitta.
+
+let deviceSerial = 0;
+
+function managedDevice(upn, displayName, kind, { lastSyncDays = -0.5 } = {}) {
+  const n = ++deviceSerial;
+  const ipad = kind === "ipad";
+  const iphone = kind === "iphone";
+  const android = kind === "android";
+  const look = {
+    ipad: { name: `IPAD-${String(n).padStart(4, "0")}`, os: "iOS", version: "17.6.1", model: "iPad (9th generation)" },
+    iphone: { name: `iPhone ${n}`, os: "iOS", version: "17.6.1", model: "iPhone 13" },
+    android: { name: `AND-${String(n).padStart(4, "0")}`, os: "Android", version: "14", model: "Galaxy A35" },
+    pc: { name: `PC-${String(n).padStart(4, "0")}`, os: "Windows", version: "10.0.22631.4169", model: "Latitude 5440" }
+  }[ipad || iphone || android ? kind : "pc"];
+  return {
+    id: `30000000-0000-4000-8000-${String(n).padStart(12, "0")}`,
+    deviceName: look.name,
+    userId: upn ? `40000000-0000-4000-8000-${String(upn.length * 97 + upn.charCodeAt(0)).padStart(12, "0")}` : "",
+    userPrincipalName: upn ?? "",
+    userDisplayName: displayName ?? "",
+    operatingSystem: look.os,
+    osVersion: look.version,
+    model: look.model,
+    serialNumber: `DMPX${String(n * 7919).padStart(8, "0")}`,
+    lastSyncDateTime: inDays(lastSyncDays),
+    enrolledDateTime: inDays(-200 - (n % 90))
+  };
+}
+
+const cart = (upn, name, count, stale = 0, kind = "ipad") =>
+  Array.from({ length: count }, (_, i) => managedDevice(upn, name, kind, { lastSyncDays: i < stale ? -45 : -0.5 }));
+
+export const managedDevices = [
+  ...cart("del1@contoso.com", "Delat konto 1", 15),
+  ...cart("del2@contoso.com", "Delat konto 2", 12, 1),
+  ...cart("del10@contoso.com", "Delat konto 10", 9),
+  ...cart("delad2@contoso.com", "Delad 2", 14),
+  ...cart("delad4@contoso.com", "Delad 4", 6),
+  // Namnstandarden med bara en iPad kvar — ska ändå synas, med 14 lediga platser.
+  ...cart("del3@contoso.com", "Delat konto 3", 1),
+  // Delade telefoner: jourtelefoner på iPhone, fritids på Android.
+  ...cart("del7@contoso.com", "Jourtelefoner", 5, 0, "iphone"),
+  ...cart("delad6@contoso.com", "Fritids telefoner", 4, 0, "android"),
+  ...cart("delad6@contoso.com", "Fritids telefoner", 2),
+  // Över taket: registrerade innan gränsen sänktes. Två har inte synkat på länge.
+  ...cart("norr.del5@contoso.com", "Norrskolan del 5", 17, 2),
+  // Liknar mönstret men är personer med en egen enhet — inte delade konton.
+  managedDevice("fidel1@contoso.com", "Fidel Ek", "pc"),
+  managedDevice("andel2@contoso.com", "Andel Holm", "pc"),
+  managedDevice("adele.berg@contoso.com", "Adele Berg", "pc"),
+  managedDevice("adele.berg@contoso.com", "Adele Berg", "iphone"),
+  // Inget mönster i namnet, men en hel vagn — hittas bara med "flera enheter".
+  ...cart("oster.lanvagn@contoso.com", "Österskolan lånevagn", 12),
+  ...["anna.lind", "per.berg", "sara.holm", "jonas.ek"].flatMap((user) => [
+    managedDevice(`${user}@contoso.com`, user.replace(".", " "), "pc"),
+    managedDevice(`${user}@contoso.com`, user.replace(".", " "), "iphone")
+  ]),
+  managedDevice("maria.sjo@contoso.com", "maria sjo", "ipad"),
+  // Enheter utan användare räknas inte på något konto.
+  ...cart(null, null, 5)
 ];

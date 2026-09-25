@@ -44,7 +44,8 @@ export function relativeDays(days) {
 export function expiryTone(days) {
   if (days === null) return "unknown";
   if (days < 0) return "expired";
-  if (days <= 30) return "critical";
+  // Rött under tio dagar — samma gräns som felet i Health check.
+  if (days < 10) return "critical";
   if (days <= 90) return "warn";
   return "ok";
 }

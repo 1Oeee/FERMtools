@@ -45,8 +45,9 @@ export const GUIDANCE = {
   },
   "device-licence-to-users": {
     fix: [
-      "Assign the app to the device group — the cart or the 1:1 iPads — instead of to the student group.",
-      "Or: switch to a user licence if the app should follow the student. That requires each student to have their own Apple account."
+      "Nothing to do if the group holds shared accounts or 1:1 users whose every device should have the app.",
+      "If licences land on devices that shouldn't have the app (personal phones, old devices): assign to the device group instead.",
+      "Or: switch to a user licence if the app should follow the person. That requires each user to have their own Apple account."
     ],
     docs: [DOCS.vpp]
   },
@@ -201,6 +202,15 @@ export const GUIDANCE = {
   "include-and-exclude-same": {
     fix: ["Remove either the assignment or the exclusion. Exclusions win, so as it stands nobody in the group gets the item."],
     docs: [DOCS.appScope]
+  },
+  "expired-connections": {
+    fix: [
+      "Renew it today — see the steps below. An expired APNS certificate cuts every Apple device off from Intune; an expired VPP token stops licences syncing; an expired enrolment token stops new devices.",
+      "APNS certificate: renew it with the same Apple ID that created it — a new Apple ID means re-enrolling every Apple device.",
+      "VPP token: download a new token from Apple School or Business Manager and upload it to the existing token in Intune.",
+      "Android enrolment: replace the token in the enrolment profile."
+    ],
+    docs: [DOCS.apns, DOCS.vpp]
   },
   "expiring-connections": {
     fix: [

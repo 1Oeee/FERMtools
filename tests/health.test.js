@@ -254,3 +254,37 @@ test("granskning: id som inte är GUID:er skickas aldrig i ett filter", async ()
   const entra = await fetchEntraAudit(client, ["x') or true or ('"]);
   assert.same(entra, { ok: true, events: [], total: 0 }, "ingen fråga alls");
 });
+test("hälsa: under tio dagar kvar är ett fel, inom en månad en varning", () => {
+  const input = tidyTenant();
+  const at = (days) => new Date(Date.now() + days * 86_400_000 + 3_600_000).toISOString();
+  input.connections = {
+    items: [
+      { name: "Gamla VPP", sourceLabel: "VPP-tokens", expires: at(-5) },
+      { name: "Snart VPP", sourceLabel: "VPP-tokens", expires: at(9) },
+      { name: "ADE", sourceLabel: "Apple ADE/DEP", expires: at(10) },
+      { name: "Android", sourceLabel: "Android enrollment", expires: at(25) },
+      { name: "APNS", sourceLabel: "APNS", expires: at(200) }
+    ]
+  };
+  const checks = analyse(input).checks;
+  const names = (id) => checks.find((c) => c.id === id).findings.map((f) => f.text.split(": ")[1].split(" ex")[0]);
+
+  assert.equal(checks.find((c) => c.id === "expired-connections").severity, "bad", "rött");
+  assert.same(names("expired-connections"), ["Gamla VPP", "Snart VPP"], "utgångna och under tio dagar");
+  assert.same(names("expiring-connections"), ["ADE", "Android"], "tio dagar och uppåt är en varning");
+});
+
+test("hälsa: enhetslicens till användargrupp är ett tips, inte ett fel", () => {
+  const check = CHECKS.find((c) => c.id === "device-licence-to-users");
+  assert.equal(check.severity, "info", "delade konton med vagnar är ett giltigt upplägg");
+});
+
+test("hälsa: token i ett utgångsfynd är en länkbar del", () => {
+  const input = tidyTenant();
+  input.connections = {
+    items: [{ id: "vpp-1", sourceKey: "vppTokens", name: "VPP Skola", sourceLabel: "VPP-tokens", expires: new Date(Date.now() + 3 * 86_400_000).toISOString() }]
+  };
+  const [f] = analyse(input).checks.find((c) => c.id === "expired-connections").findings;
+  assert.ok(f.parts.some((p) => p.connection === "vpp-1" && p.name === "VPP Skola"), "tokenen som del");
+  assert.ok(f.text.includes("VPP Skola"), "och som text");
+});

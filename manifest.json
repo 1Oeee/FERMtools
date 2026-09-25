@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Inu+",
-  "version": "0.17",
+  "version": "0.19",
   "description": "Adds a page to the Intune portal showing your nested Entra groups as a tree, with markers for assigned apps and configurations.",
   "permissions": [
     "storage",
