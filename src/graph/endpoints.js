@@ -25,7 +25,8 @@ const PATTERNS = [
   ["androidEnrollment", /\/deviceManagement\/androidDeviceOwnerEnrollmentProfiles$/i],
   ["appleEnrollment", /\/deviceManagement\/depOnboardingSettings$/i],
   ["apns", /\/deviceManagement\/applePushNotificationCertificate$/i],
-  ["managedDevices", /\/deviceManagement\/managedDevices$/i]
+  ["managedDevices", /\/deviceManagement\/managedDevices$/i],
+  ["auditEvents", /\/deviceManagement\/auditEvents$/i]
 ];
 
 /**
@@ -42,6 +43,8 @@ const CAPABILITY_BY_SOURCE = {
   appleEnrollment: "serviceConfig",
   apns: "serviceConfig",
   managedDevices: "devices"
+  // auditEvents saknas med flit: granskningsloggens blad ska inte bli vägen
+  // tokenraden pekar på för profiler.
 };
 
 export const capabilityForSource = (key) => CAPABILITY_BY_SOURCE[key] ?? null;
@@ -95,7 +98,7 @@ export function urlFromError(error) {
   // Adressen kommer ur ett svar vi inte skrivit själva och kommer att anropas
   // med token. Pekar den någon annanstans än Intunes backend rör vi den inte.
   if (!isIntuneBackend(url)) {
-    console.warn("AidTune: ignoring address outside the Intune backend:", url);
+    console.warn("Inu+: ignoring address outside the Intune backend:", url);
     return null;
   }
 

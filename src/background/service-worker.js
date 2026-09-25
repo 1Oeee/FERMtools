@@ -3,7 +3,7 @@
 // kan testas som rena funktioner.
 
 import { PortalTokenSource, INTUNE } from "./token.js";
-import { GROUP_SCOPES, INTUNE_SCOPES } from "../common/jwt.js";
+import { GROUP_SCOPES, INTUNE_SCOPES, AUDIT_SCOPES } from "../common/jwt.js";
 import {
   classify,
   remember as rememberEndpoint,
@@ -20,6 +20,7 @@ import {
 } from "../graph/groups.js";
 import { fetchAssignments } from "../graph/assignments.js";
 import { fetchConnections } from "../graph/connections.js";
+import { fetchIntuneAudit, fetchEntraAudit } from "../graph/audit.js";
 import { readCache, writeCache, clearCache, readSettings, writeSettings } from "./cache.js";
 import { createDemoClient, demoStatus } from "../demo/client.js";
 
@@ -121,6 +122,8 @@ chrome.runtime.onInstalled.addListener(({ reason }) => {
 const graphGroups = createGraphClient(() => tokens.getGraphToken(GROUP_SCOPES));
 const graphApps = createGraphClient(() => tokens.getGraphToken(INTUNE_SCOPES));
 const intuneBackend = createGraphClient(() => tokens.getToken(INTUNE));
+// Entras granskningslogg kräver en egen behörighet, som bara vissa blad ger.
+const graphAudit = createGraphClient(() => tokens.getGraphToken(AUDIT_SCOPES));
 
 const CACHE_KEY = "tree-data";
 const CONNECTIONS_KEY = "connections-data";
@@ -170,8 +173,8 @@ tokens.onChange(async (status) => {
 const demoClient = createDemoClient();
 
 function clientsFor(settings) {
-  if (settings.demo) return { groups: demoClient, apps: demoClient, backend: demoClient };
-  return { groups: graphGroups, apps: graphApps, backend: intuneBackend };
+  if (settings.demo) return { groups: demoClient, apps: demoClient, backend: demoClient, audit: demoClient };
+  return { groups: graphGroups, apps: graphApps, backend: intuneBackend, audit: graphAudit };
 }
 
 async function currentStatus() {
@@ -454,6 +457,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
     },
 
+    // Ändringshistoriken för ett fynd: Intune för posterna, Entra för grupperna.
+    // Delarna kan lyckas och misslyckas var för sig.
+    audit: async () => {
+      const settings = await readSettings();
+      if (!settings.demo) await ensureTokens();
+      const clients = clientsFor(settings);
+      const [intune, entra] = await Promise.all([
+        fetchIntuneAudit(clients.apps, clients.backend, message.itemIds ?? []),
+        fetchEntraAudit(clients.audit, message.groupIds ?? [])
+      ]);
+      return { ok: true, intune, entra };
+    },
+
     settings: async () => readSettings(),
 
     "save-settings": async () => {
@@ -476,7 +492,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true; // svaret kommer asynkront
 });
 
-// AidTune bor i portalen, inte i en panel. Knappen i verktygsfältet tar
+// Inu+ bor i portalen, inte i en panel. Knappen i verktygsfältet tar
 // därför användaren dit: den portalflik som redan står öppen får fram sidan,
 // och finns ingen sådan flik öppnas portalen först.
 //
@@ -484,7 +500,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // inte når fram tas om ett par gånger innan vi ger upp.
 async function openInPortal(tabId, attemptsLeft = 20) {
   try {
-    await chrome.tabs.sendMessage(tabId, { type: "aidtune-open" });
+    await chrome.tabs.sendMessage(tabId, { type: "inuplus-open" });
   } catch {
     if (attemptsLeft <= 0) return;
     setTimeout(() => openInPortal(tabId, attemptsLeft - 1), 500);

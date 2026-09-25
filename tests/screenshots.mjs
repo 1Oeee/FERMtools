@@ -11,7 +11,7 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 const EXT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = EXT + "/store";
-const ctx = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), "aidtune-shots-")), {
+const ctx = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), "inuplus-shots-")), {
   headless: false, // extensions need a real window; run under xvfb
   viewport: { width: 1280, height: 800 },
   deviceScaleFactor: 1,

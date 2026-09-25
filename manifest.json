@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "AidTune",
-  "version": "0.16.1",
+  "name": "Inu+",
+  "version": "0.17",
   "description": "Adds a page to the Intune portal showing your nested Entra groups as a tree, with markers for assigned apps and configurations.",
   "permissions": [
     "storage",
@@ -21,7 +21,7 @@
     "open_in_tab": true
   },
   "action": {
-    "default_title": "AidTune — open in the Intune portal",
+    "default_title": "Inu+ — open in the Intune portal",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",

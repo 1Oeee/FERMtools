@@ -636,7 +636,7 @@ ui.settings.addEventListener("click", () => chrome.runtime.openOptionsPage());
 ui.close.addEventListener("click", closePage);
 
 ui.detach.addEventListener("click", () => {
-  // Samma sida, utan portalen omkring. Vill man ha AidTune uppe medan man
+  // Samma sida, utan portalen omkring. Vill man ha Inu+ uppe medan man
   // arbetar i portalen är en egen flik bättre än att växla fram och tillbaka.
   chrome.tabs.create({ url: chrome.runtime.getURL("src/page/page.html") });
 });
@@ -674,7 +674,7 @@ function renderConsent() {
     el(
       "p",
       null,
-      "AidTune gives you a powerful overview of how your Intune tenant is put together, right inside the " +
+      "Inu+ gives you a powerful overview of how your Intune tenant is put together, right inside the " +
         "portal you already work in. There is nothing to set up and nothing to sign in to, because it works " +
         "through the session you already have. Here is exactly how:"
     )
@@ -712,7 +712,7 @@ function renderConsent() {
     return a;
   };
   audit.append(
-    "You don't have to take our word for it. AidTune is open source — please audit the code yourself: ",
+    "You don't have to take our word for it. Inu+ is open source — please audit the code yourself: ",
     anchor("view it on GitHub", REPO_URL),
     " (token handling is in src/background/token.js and src/content/token-scan.js), or ",
     anchor("read the full privacy policy", POLICY_URL),

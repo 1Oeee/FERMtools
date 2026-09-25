@@ -356,25 +356,6 @@ button.linklike:hover {
   margin: -4px 0 12px;
 }
 
-.health-fix {
-  margin: 2px 0 6px;
-  font-size: 12px;
-}
-
-.health-fix > summary {
-  cursor: pointer;
-  color: var(--accent);
-}
-
-.health-fix ul {
-  margin: 4px 0;
-  padding-left: 20px;
-}
-
-.health-fix li {
-  margin-bottom: 3px;
-}
-
 .health-docs {
   color: var(--muted);
   margin: 2px 0 4px 2px;
@@ -388,6 +369,138 @@ button.linklike:hover {
   border-radius: 3px;
   padding: 1px 4px;
   margin-left: -4px;
+}
+
+/* Fynden går att markera; det markerade förklaras i högerkolumnen. */
+.health-findings:not(.plain) li {
+  cursor: pointer;
+}
+
+.health-findings:not(.plain) li:hover {
+  background: var(--hover);
+}
+
+.health-findings li.selected {
+  background: var(--selected);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.health-findings li:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Poster i fyndens text öppnas i Intune — heldragen i stället för prickad. */
+button.linklike.item-link {
+  display: inline;
+  padding: 0;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* --- Hälsokontrollens högerkolumn --- */
+
+.health-list {
+  border-right: 1px solid var(--line);
+}
+
+.health-details .d-heading {
+  align-items: baseline;
+}
+
+.health-details .d-issue {
+  font-size: 13px;
+}
+
+.health-detail {
+  margin: 4px 0 2px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.health-steps {
+  margin: 4px 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.health-steps li {
+  margin-bottom: 4px;
+}
+
+.health-fix-note {
+  margin-top: 4px;
+  font-size: 11px;
+}
+
+.health-details .d-list li {
+  align-items: center;
+}
+
+.audit-part {
+  margin: 6px 0;
+}
+
+.audit-title {
+  margin: 8px 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.audit-list li {
+  align-items: flex-start;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+
+.audit-who {
+  color: var(--fg);
+}
+
+.audit-meta {
+  color: var(--muted);
+  font-size: 11px;
+  word-break: break-word;
+}
+
+.audit-again {
+  margin-top: 6px;
+}
+
+.audit-manual {
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.audit-manual > summary {
+  cursor: pointer;
+  color: var(--accent);
+}
+
+.audit-steps {
+  margin: 4px 0 6px;
+  padding-left: 18px;
+  line-height: 1.45;
+}
+
+.audit-steps li {
+  margin-bottom: 3px;
+}
+
+.audit-copy-name {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.audit-copy-name code {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  word-break: break-all;
 }
 
 /* Fyndet man kom från trädet för att titta på. Gult, tre gånger. Samma gula

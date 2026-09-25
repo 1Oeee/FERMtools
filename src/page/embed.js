@@ -1,11 +1,11 @@
 // Var står sidan, och hur pratar den med portalen omkring sig?
 //
-// AidTune bor på två ställen och ska bete sig likadant på båda:
+// Inu+ bor på två ställen och ska bete sig likadant på båda:
 //
 //   - **I portalen**, i en ram som content scriptet lagt över
 //     innehållsytan. Då finns en portal utanför som ibland ska fram — när
 //     sidan skickar fliken till ett blad för att fånga en behörighet vill
-//     man se bladet, inte AidTune — och som dessutom har ett tema att följa.
+//     man se bladet, inte Inu+ — och som dessutom har ett tema att följa.
 //   - **I en egen flik**, öppnad direkt på tilläggets adress. Då finns
 //     ingen portal utanför, och allt nedan är tyst.
 //
@@ -21,7 +21,7 @@ export const embedded = new URLSearchParams(location.search).get("embed") === "1
 function tell(type) {
   if (!embedded) return;
   try {
-    parent.postMessage({ source: "aidtune", type }, PORTAL_ORIGIN);
+    parent.postMessage({ source: "inuplus", type }, PORTAL_ORIGIN);
   } catch {
     // Ramen kan ha rivits under tiden — då finns ingen att säga det till.
   }
@@ -29,7 +29,7 @@ function tell(type) {
 
 /**
  * Fäll undan sidan så portalens blad syns. Används efter att fliken skickats
- * till ett blad: står AidTune kvar över ytan ser man inte att något hände.
+ * till ett blad: står Inu+ kvar över ytan ser man inte att något hände.
  */
 export const showPortal = () => tell("show-portal");
 
@@ -45,7 +45,7 @@ if (embedded) {
   addEventListener("message", (event) => {
     if (event.origin !== PORTAL_ORIGIN) return;
     if (event.source !== parent) return;
-    if (event.data?.source !== "aidtune") return;
+    if (event.data?.source !== "inuplus") return;
     for (const fn of listeners.get(event.data.type) ?? []) fn(event.data);
   });
 }

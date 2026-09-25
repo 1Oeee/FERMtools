@@ -1,9 +1,9 @@
-// AidTune som en egen sida i Intune-portalen.
+// Inu+ som en egen sida i Intune-portalen.
 //
 // Två saker görs här, och ingenting mer:
 //
 //   1. En punkt läggs i portalens vänsterlist, direkt under **Start**.
-//   2. Klick på den lägger AidTunes sida över portalens innehållsyta —
+//   2. Klick på den lägger Inu+:s sida över portalens innehållsyta —
 //      listen och den översta raden lämnas orörda, så det ser ut och känns
 //      som ännu ett blad i portalen.
 //
@@ -19,8 +19,8 @@
   const PAGE_URL = chrome.runtime.getURL("src/page/page.html?embed=1");
   const PAGE_ORIGIN = new URL(PAGE_URL).origin;
 
-  const LINK_ID = "aidtune-sidebar-link";
-  const HOST_ID = "aidtune-host";
+  const LINK_ID = "inuplus-sidebar-link";
+  const HOST_ID = "inuplus-host";
 
   const SIDEBAR = ".fxs-sidebar";
   const HEADER = "#fxs-header, .fxs-topbar, header[role='banner']";
@@ -77,9 +77,9 @@
     const link = document.createElement("a");
     link.id = LINK_ID;
     // Ärv portalens egen listformgivning, men inte startsidans särdrag.
-    link.className = `${home.className.replace(/\bfxs-sidebar-home\b/g, "").trim()} aidtune-sidebar-link`;
-    link.title = "AidTune";
-    link.setAttribute("aria-label", "AidTune");
+    link.className = `${home.className.replace(/\bfxs-sidebar-home\b/g, "").trim()} inuplus-sidebar-link`;
+    link.title = "Inu+";
+    link.setAttribute("aria-label", "Inu+");
     // Ingen href: portalens läge sitter i adressens hash, och en länk som
     // skriver över den skulle navigera bort användaren.
     link.setAttribute("role", "button");
@@ -92,7 +92,7 @@
 
     const label = document.createElement("div");
     label.className = "fxs-sidebar-label";
-    label.textContent = "AidTune";
+    label.textContent = "Inu+";
 
     link.append(iconBox, label);
 
@@ -146,7 +146,7 @@
   function markSelected() {
     const link = document.getElementById(LINK_ID);
     if (!link) return;
-    link.classList.toggle("aidtune-selected", open);
+    link.classList.toggle("inuplus-selected", open);
     link.setAttribute("aria-pressed", String(open));
   }
 
@@ -155,7 +155,7 @@
   /**
    * Var slutar portalens list och dess översta rad? Rutan läggs precis
    * innanför dem i stället för att täcka hela fönstret — då går det fortfarande
-   * att byta blad, söka och logga ut medan AidTune står framme.
+   * att byta blad, söka och logga ut medan Inu+ står framme.
    *
    * Måtten mäts, inte gissas: listen kan fällas ihop och radens höjd ändras.
    */
@@ -264,7 +264,7 @@
 
     // Går temat fel igen är det första frågan vad vi faktiskt läste. En rad i
     // konsolen per verklig ändring svarar på det utan att stå i vägen.
-    console.debug("AidTune: portal colours", theme.bg, "/", theme.fg);
+    console.debug("Inu+: portal colours", theme.bg, "/", theme.fg);
 
     tell({ type: "theme", ...theme });
   }
@@ -278,7 +278,7 @@
   themeWatch.observe(document.body, { attributes: true, attributeFilter: ["class"] });
 
   /** Bygger rutan vid första klicket — en portalflik som aldrig öppnar
-   *  AidTune ska inte betala för den. */
+   *  Inu+ ska inte betala för den. */
   function ensureHost() {
     if (host?.isConnected) return false;
 
@@ -299,7 +299,7 @@
 
     frame = document.createElement("iframe");
     frame.src = url.href;
-    frame.title = "AidTune";
+    frame.title = "Inu+";
 
     // Hann portalen inte måla färdigt innan vi mätte blev det inga färger i
     // adressen. Mät om när ramen står klar — `sendTheme` tiger om inget ändrats.
@@ -341,7 +341,7 @@
 
   function tell(message) {
     try {
-      frame?.contentWindow?.postMessage({ source: "aidtune", ...message }, PAGE_ORIGIN);
+      frame?.contentWindow?.postMessage({ source: "inuplus", ...message }, PAGE_ORIGIN);
     } catch {
       // Ramen kan vara på väg att laddas om — nästa gång går det.
     }
@@ -350,7 +350,7 @@
   // --- Vad som stänger rutan ---------------------------------------------
 
   // Portalen byter blad genom att ändra adressens hash. Sker det har
-  // användaren klickat sig vidare i portalen — eller AidTune har skickat dem
+  // användaren klickat sig vidare i portalen — eller Inu+ har skickat dem
   // dit för att fånga en behörighet — och då ska bladet synas, inte vår ruta.
   //
   // Portalen städar däremot gärna i sin egen adress strax efter att den
@@ -368,14 +368,14 @@
   addEventListener("message", (event) => {
     if (event.origin !== PAGE_ORIGIN) return;
     if (!frame || event.source !== frame.contentWindow) return;
-    if (event.data?.source !== "aidtune") return;
+    if (event.data?.source !== "inuplus") return;
     if (event.data.type === "close" || event.data.type === "show-portal") hide();
   });
 
   // Tilläggets knapp i verktygsfältet öppnar sidan i den portalflik som redan
   // står öppen, i stället för att starta ännu en.
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (message?.type !== "aidtune-open") return false;
+    if (message?.type !== "inuplus-open") return false;
     ensureLink();
     show();
     sendResponse({ ok: true });

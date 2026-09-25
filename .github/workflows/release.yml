@@ -66,12 +66,12 @@ jobs:
           mkdir -p dist
           paths=(manifest.json src tests)
           [[ -d icons ]] && paths+=(icons)
-          zip -r -X "dist/aidtune-${{ steps.check.outputs.version }}.zip" "${paths[@]}" -x "tests/*.mjs"
+          zip -r -X "dist/inuplus-${{ steps.check.outputs.version }}.zip" "${paths[@]}" -x "tests/*.mjs"
           unzip -l dist/*.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: aidtune-${{ steps.check.outputs.version }}
+          name: inuplus-${{ steps.check.outputs.version }}
           path: dist/*.zip
 
   publish:
@@ -85,7 +85,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: aidtune-${{ needs.package.outputs.version }}
+          name: inuplus-${{ needs.package.outputs.version }}
 
       - id: auth
         uses: google-github-actions/auth@v2
@@ -101,7 +101,7 @@ jobs:
           res=$(curl -sS --fail-with-body -X POST \
             -H "Authorization: Bearer $TOKEN" \
             -H "Content-Type: application/zip" \
-            --data-binary @"aidtune-${{ needs.package.outputs.version }}.zip" \
+            --data-binary @"inuplus-${{ needs.package.outputs.version }}.zip" \
             "$API/upload/v2/$ITEM:upload")
           echo "$res" | jq .
 
@@ -131,5 +131,5 @@ jobs:
       - name: GitHub-release
         uses: softprops/action-gh-release@v2
         with:
-          files: aidtune-${{ needs.package.outputs.version }}.zip
+          files: inuplus-${{ needs.package.outputs.version }}.zip
           generate_release_notes: true

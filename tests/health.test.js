@@ -10,6 +10,7 @@ import { MISTAKES } from "../src/demo/tenant.js";
 import { fetchGroups, fetchChildEdges, fetchComposition, lookupGroups } from "../src/graph/groups.js";
 import { fetchAssignments } from "../src/graph/assignments.js";
 import { fetchConnections } from "../src/graph/connections.js";
+import { fetchIntuneAudit, fetchEntraAudit } from "../src/graph/audit.js";
 
 // --- Demotenanten, genom hela kedjan --------------------------------------
 
@@ -202,4 +203,54 @@ test("hälsa: utan medlemsdata blir de kontrollerna okända, inte gröna", () =>
   const { checks } = analyse(input);
   assert.equal(checks.find((c) => c.id === "platform-mismatch").status, "unknown", "plattform");
   assert.equal(checks.find((c) => c.id === "intent-conflict").status, "ok", "konflikter behöver inga medlemmar");
+});
+
+// --- Korta rader, förklaringar och granskningsloggar ---------------------
+
+test("hälsa: varje fynd har en kort rad med länkbara delar och en förklaring", async () => {
+  const { checks } = await demoAnalysis();
+  for (const check of checks.filter((c) => c.status === "found")) {
+    for (const f of check.findings) {
+      assert.ok(Array.isArray(f.parts) && f.parts.length, `delar i ${check.id}`);
+      assert.equal(f.parts.map((p) => (typeof p === "string" ? p : p.name)).join(""), f.text, `text = delar i ${check.id}`);
+      assert.ok(typeof f.detail === "string" && f.detail.length > f.text.length, `förklaring i ${check.id}`);
+      for (const part of f.parts.filter((p) => typeof p === "object")) {
+        if (part.group) assert.ok(f.groups.includes(part.group), `länkad grupp hör till fyndet i ${check.id}`);
+        if (part.item) assert.ok(f.items.includes(part.item), `länkad post hör till fyndet i ${check.id}`);
+      }
+    }
+  }
+});
+
+test("hälsa: den korta raden börjar med appen och länkar gruppen", () => {
+  const input = tidyTenant();
+  input.assignments.push({ itemId: "Pages", target: "group", groupId: "elever", intent: "required", deviceLicensing: true });
+  const check = analyse(input).checks.find((c) => c.id === "device-licence-to-users");
+  const [f] = check.findings;
+  assert.equal(f.text, "Pages: device licensing to user group Elever", "kort rad");
+  assert.same(f.parts[0], { item: "Pages", name: "Pages" }, "appen är en länk");
+  assert.same(f.parts[f.parts.length - 1], { group: "elever", name: "Elever" }, "gruppen är en länk");
+});
+
+test("granskning: demots ändringar hittas per post och grupp", async () => {
+  const client = createDemoClient();
+  const mistake = MISTAKES.find((m) => m.check === "user-licence-to-devices");
+
+  const intune = await fetchIntuneAudit(client, client, [mistake.items[0].id]);
+  assert.ok(intune.ok, "Intune-loggen gick att läsa");
+  assert.ok(intune.events.length, "ändringen på appen hittas");
+  assert.ok(intune.events[0].actor.includes("@"), "vem som ändrade");
+
+  const entra = await fetchEntraAudit(client, [mistake.groups[0].id]);
+  assert.ok(entra.ok && entra.events.length, "ändringen på gruppen hittas");
+
+  const deleted = MISTAKES.find((m) => m.check === "deleted-target").deletedGroups[0];
+  const gone = await fetchEntraAudit(client, [deleted]);
+  assert.equal(gone.events[0]?.activity, "Delete group", "vem som tog bort gruppen");
+});
+
+test("granskning: id som inte är GUID:er skickas aldrig i ett filter", async () => {
+  const client = createDemoClient();
+  const entra = await fetchEntraAudit(client, ["x') or true or ('"]);
+  assert.same(entra, { ok: true, events: [], total: 0 }, "ingen fråga alls");
 });

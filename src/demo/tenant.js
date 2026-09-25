@@ -897,3 +897,64 @@ export const MISTAKES = [
     groups: []
   }
 ];
+
+// --- Granskningsloggar ---------------------------------------------------
+//
+// En ändring i Intune och en i Entra per inlagt fel, så att "Who changed it"
+// har något att visa i demot. Samma form som Graphs auditEvents och
+// directoryAudits.
+
+const ADMINS = ["anna.admin@contoso.com", "per.it@contoso.com", "lisa.drift@contoso.com"];
+
+export const auditEvents = MISTAKES.flatMap((mistake, i) =>
+  mistake.items.filter(Boolean).map((item, j) => {
+    const type = mobileApps.includes(item) ? "MobileApp" : "DeviceConfiguration";
+    return {
+      id: `demo-audit-${i}-${j}`,
+      displayName: `Patch ${type}`,
+      componentName: type === "MobileApp" ? "MobileApps" : "DeviceConfiguration",
+      activity: `Patch ${type}`,
+      activityDateTime: inDays(-(3 + i * 2 + j)),
+      activityType: `Patch ${type}`,
+      activityOperationType: "Patch",
+      activityResult: "Success",
+      category: type === "MobileApp" ? "Application" : "DeviceConfiguration",
+      actor: { type: "ItPro", userPrincipalName: ADMINS[i % ADMINS.length] },
+      resources: [
+        {
+          displayName: item.displayName ?? item.name,
+          resourceId: item.id,
+          type,
+          modifiedProperties: [{ displayName: "Assignments", oldValue: null, newValue: null }]
+        }
+      ]
+    };
+  })
+);
+
+const DELETED_GROUP_AUDIT = {
+  id: "demo-entra-deleted",
+  activityDateTime: inDays(-21),
+  activityDisplayName: "Delete group",
+  category: "GroupManagement",
+  result: "success",
+  initiatedBy: { user: { userPrincipalName: ADMINS[1], displayName: "Per IT" } },
+  targetResources: [{ id: DELETED_GROUP_ID, displayName: "Intune - Västerskolan - Smartboards", type: "Group", modifiedProperties: [] }]
+};
+
+export const directoryAudits = [
+  DELETED_GROUP_AUDIT,
+  ...MISTAKES.flatMap((mistake, i) =>
+    mistake.groups.filter(Boolean).slice(0, 1).map((g) => ({
+      id: `demo-entra-${i}`,
+      activityDateTime: inDays(-(2 + i)),
+      activityDisplayName: g.membershipRule ? "Update group" : "Add member to group",
+      category: "GroupManagement",
+      result: "success",
+      initiatedBy: { user: { userPrincipalName: ADMINS[(i + 1) % ADMINS.length] } },
+      targetResources: [
+        { id: g.id, displayName: g.displayName, type: "Group", modifiedProperties: [{ displayName: g.membershipRule ? "MembershipRule" : "Group.ObjectID" }] }
+      ]
+    }))
+  )
+];

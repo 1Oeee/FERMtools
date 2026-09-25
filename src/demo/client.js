@@ -47,7 +47,14 @@ const ROUTES = [
   [/^\/deviceManagement\/androidDeviceOwnerEnrollmentProfiles$/, () =>
     tenant.androidDeviceOwnerEnrollmentProfiles],
   [/^\/deviceManagement\/applePushNotificationCertificate$/, () =>
-    tenant.applePushNotificationCertificate]
+    tenant.applePushNotificationCertificate],
+  [/^\/deviceManagement\/auditEvents$/, () => tenant.auditEvents],
+  // Bara filtret audit.js själv skickar: targetResources/any(t: t/id eq '…').
+  [/^\/auditLogs\/directoryAudits$/, (_, query) => {
+    const filter = new URLSearchParams(query).get("$filter") ?? "";
+    const id = filter.match(/t\/id eq '([^']+)'/i)?.[1];
+    return tenant.directoryAudits.filter((e) => !id || e.targetResources.some((t) => t.id === id));
+  }]
 ];
 
 /** Svaret för en adress: en lista, ett objekt, eller fel. */
