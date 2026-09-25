@@ -616,7 +616,9 @@ export const deviceConfigurations = [
     ...elevPcAll.map((g) => to(g)),
     to(soder.ipads) // Windows-profil till iPads
   ]),
-  profile("windows10EndpointProtectionConfiguration", "Windows – BitLocker", [toAllDevices()]),
+  profile("windows10EndpointProtectionConfiguration", "Windows – BitLocker", [toAllDevices()], {
+    bitLockerEncryptDevice: true
+  }),
   profile("windowsUpdateForBusinessConfiguration", "Windows Update – Ring 0 (IT)", [to(RING0)]),
   profile("windowsUpdateForBusinessConfiguration", "Windows Update – Ring 1 (Pilot)", [to(RING1)]),
   profile("windowsUpdateForBusinessConfiguration", "Windows Update – Ring 2 (Bred)", [to(RING2)]),
@@ -629,19 +631,20 @@ export const deviceConfigurations = [
 ];
 
 // Settings catalog kallar namnet "name", inte "displayName".
-const policy = (name, platforms, assignments) => ({
+const policy = (name, platforms, assignments, templateFamily = "none") => ({
   id: guid(),
   name,
   platforms,
   technologies: "mdm",
+  templateReference: { templateFamily },
   assignments
 });
 
 export const configurationPolicies = [
   policy("Edge – Startsida och bokmärken", "windows10", [to(ALLA_WINDOWS)]),
   policy("OneDrive – Flytta kända mappar", "windows10", [to(ALL_PERSONAL)]),
-  policy("Defender – ASR-regler", "windows10", [to(ALLA_WINDOWS)]),
-  policy("LAPS – Lokal administratör", "windows10", [to(ALLA_WINDOWS)]),
+  policy("Defender – ASR-regler", "windows10", [to(ALLA_WINDOWS)], "endpointSecurityAttackSurfaceReduction"),
+  policy("LAPS – Lokal administratör", "windows10", [to(ALLA_WINDOWS)], "endpointSecurityAccountProtection"),
   policy("Windows – Energischema elevdatorer", "windows10", GYMNASIER.map((s) => to(s.elevPc))),
   policy("Test – Experimentinställningar", "windows10", [to(TEST_A)]),
   policy("iOS – Tangentbord och diktering", "iOS", [to(ALLA_IPADS)])
@@ -897,3 +900,77 @@ export const MISTAKES = [
     groups: []
   }
 ];
+
+// --- Poäng: hur tenanten är inställd -------------------------------------
+//
+// Poängens underlag (src/graph/posture.js). Läggs sist, så att id:n ovanför
+// inte flyttas. Tenanten är halvbra med flit: antivirus, BitLocker, ASR, LAPS
+// och uppdateringsringar finns, men brandvägg, säkerhetsbaslinje, Windows
+// Hello och rensningsregler saknas, och enheter utan policy räknas som
+// kompatibla.
+
+configurationPolicies.push(
+  policy("Defender – Antivirus", "windows10", [to(ALLA_WINDOWS)], "endpointSecurityAntivirus")
+);
+
+export const deviceManagement = {
+  id: guid(),
+  settings: {
+    secureByDefault: false,
+    deviceComplianceCheckinThresholdDays: 30,
+    isScheduledActionEnabled: true
+  }
+};
+
+export const deviceEnrollmentConfigurations = [
+  {
+    "@odata.type": "#microsoft.graph.deviceEnrollmentLimitConfiguration",
+    id: guid(),
+    displayName: "All users and all devices",
+    priority: 0,
+    limit: 5
+  },
+  {
+    "@odata.type": "#microsoft.graph.deviceEnrollmentPlatformRestrictionsConfiguration",
+    id: guid(),
+    displayName: "All users and all devices",
+    priority: 0,
+    windowsRestriction: { platformBlocked: false, personalDeviceEnrollmentBlocked: false }
+  },
+  {
+    "@odata.type": "#microsoft.graph.deviceEnrollmentWindowsHelloForBusinessConfiguration",
+    id: guid(),
+    displayName: "All users and all devices",
+    priority: 0,
+    state: "notConfigured"
+  }
+];
+
+/**
+ * Enhetsinventariet, som Graph returnerar det med poängens $select. Samma
+ * utfall varje gång: var nionde inte kompatibel, var tolfte dator
+ * okrypterad, var elfte tyst i över en månad.
+ */
+export const managedDevices = [
+  ["Windows", 210],
+  ["iOS", 250],
+  ["Android", 30],
+  ["macOS", 10]
+].flatMap(([os, count]) =>
+  Array.from({ length: count }, (_, n) => {
+    const index = serial++;
+    return {
+      id: `30000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+      operatingSystem: os,
+      complianceState: index % 9 === 0 ? "noncompliant" : "compliant",
+      isEncrypted: os === "Windows" || os === "macOS" ? index % 12 !== 0 : true,
+      lastSyncDateTime: inDays(index % 11 === 0 ? -45 : -(index % 5)),
+      managedDeviceOwnerType: "company"
+    };
+  })
+);
+
+export const managedDeviceCleanupRules = [];
+export const managedDeviceCleanupSettings = { deviceInactivityBeforeRetirementInDays: "0" };
+export const intents = [];
+export const templates = [];

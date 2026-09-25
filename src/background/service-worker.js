@@ -21,6 +21,7 @@ import {
 } from "../graph/groups.js";
 import { fetchAssignments } from "../graph/assignments.js";
 import { fetchConnections } from "../graph/connections.js";
+import { fetchPosture } from "../graph/posture.js";
 import { readCache, writeCache, clearCache, readSettings, writeSettings } from "./cache.js";
 import { createDemoClient, demoStatus } from "../demo/client.js";
 
@@ -188,6 +189,7 @@ function singleFlight() {
 const treeFlight = singleFlight();
 const connectionsFlight = singleFlight();
 const healthFlight = singleFlight();
+const scoreFlight = singleFlight();
 
 /** Vilket läge en hämtning gäller. Samma nyckel = samma svar. */
 const modeKey = (settings) => `${settings.demo ? "demo" : "tenant"}|${settings.prefix}`;
@@ -423,6 +425,34 @@ async function loadHealth({ force = false } = {}) {
   });
 }
 
+const SCORE_KEY = "score-data";
+
+/**
+ * Poängens underlag: tenantens inställningar och enhetsinventariet, plus
+ * policyerna som trädet redan hämtat. Själva granskningarna körs i sidan.
+ */
+async function loadScore({ force = false } = {}) {
+  const settings = await readSettings();
+
+  if (!force) {
+    const cached = await readCache(SCORE_KEY);
+    if (cached && cached.demo === settings.demo) return cached;
+  }
+
+  return scoreFlight(modeKey(settings), async () => {
+    const clients = clientsFor(settings);
+    if (!settings.demo) await ensureTokens();
+
+    const posture = await fetchPosture(clients.apps, clients.backend, (label) =>
+      broadcast({ type: "progress", stage: "score", detail: label })
+    );
+
+    const payload = { ...posture, demo: settings.demo, fetchedAt: Date.now() };
+    await writeCache(SCORE_KEY, payload);
+    return payload;
+  });
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const handlers = {
     status: currentStatus,
@@ -495,6 +525,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
     },
 
+    score: async () => {
+      try {
+        return { ok: true, data: await loadScore({ force: Boolean(message.force) }) };
+      } catch (e) {
+        return { ok: false, error: e.message ?? String(e) };
+      }
+    },
+
     members: async () => {
       try {
         const settings = await readSettings();
@@ -523,6 +561,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       await clearCache(CACHE_KEY);
       await clearCache(CONNECTIONS_KEY);
       await clearCache(HEALTH_KEY);
+      await clearCache(SCORE_KEY);
       return { ok: true, status: msalTokens.describe() };
     },
 
@@ -536,6 +575,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       await clearCache(CACHE_KEY);
       await clearCache(CONNECTIONS_KEY);
       await clearCache(HEALTH_KEY);
+      await clearCache(SCORE_KEY);
       broadcast({ type: "settings-changed", settings: next, status: await currentStatus() });
       return next;
     }

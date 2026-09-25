@@ -1443,3 +1443,7 @@ button.primary:hover:not(:disabled) {
     align-items: flex-start;
   }
 }
+
+.score-detail {
+  margin: 0 0 6px;
+}

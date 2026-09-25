@@ -249,7 +249,10 @@ applications**, and logged under its own name in the sign-in logs.
    - `Group.Read.All` — the tree (required)
    - `DeviceManagementApps.Read.All` — app assignments and VPP
    - `DeviceManagementConfiguration.Read.All` — profiles, compliance, Android enrollment
-   - `DeviceManagementServiceConfig.Read.All` — APNS and Apple enrollment
+   - `DeviceManagementServiceConfig.Read.All` — APNS, Apple enrollment, and
+     Score's enrollment and cleanup settings
+   - `DeviceManagementManagedDevices.Read.All` — Score's device inventory
+     (optional)
 
    Then **Grant admin consent**. Only read permissions; leave out what you don't
    want Inu+ to see and that part of the page simply stays grey.
@@ -290,7 +293,7 @@ The page is divided into tabs. The active tab is remembered between visits.
 | Tab | Needs | Status |
 | --- | --- | --- |
 | **Tree** | Groups, Apps, Configuration | Built. Group structure, markers, search, filter, details panel. |
-| **Score** | Groups, Apps, Configuration | Built. The tenant graded like a Lighthouse report against Microsoft's Intune guidance — see below. |
+| **Score** | Configuration, Connections, Devices | Built. How the tenant is set up, graded like a Lighthouse report against Microsoft's recommendations — see below. |
 | **Connections** | Apps, Configuration, Connections | Built. VPP tokens, Apple ADE/DEP, Android enrollment and APNS in three subtrees, sorted by what expires first. Licences per VPP token: total, used and free, filterable and searchable. |
 | **Health check** | Groups, Apps, Configuration | Built, turned on in the settings. 27 rules for what is right and wrong in the assignments — see below. |
 | _Reports (hidden)_ | Groups, Apps, Devices | Not built. Excel export per group with devices, serial numbers, users, inventory and apps. A custom xlsx writer with no dependencies. |
@@ -302,26 +305,38 @@ the details down under the rows — on a whole page that is not needed.
 ### Score
 
 A Lighthouse report for the tenant. Where Lighthouse grades a web page against
-what Chrome considers good practice, Score grades the tenant against what
-Microsoft's Intune documentation says it should look like.
+what Chrome considers good practice, Score grades how the tenant is **set up**
+against what Microsoft recommends for Intune. It is separate from the Health
+check: the health check finds mistakes in assignments and groups, Score grades
+configuration and the state of the fleet. They share no rules.
 
-- **One gauge per category and one for the tenant**, 0–100. Bands as in
-  Lighthouse: ▲ 0–49 poor, ■ 50–89 needs work, ● 90–100 good.
-- **Categories:** Security & compliance · Targeting · Conflicts & duplicates ·
-  Group structure · Licences & connections.
-- **The audits are the health check's rules** (below). Score only weighs them,
-  so the two tabs always agree. A category starts at 100 and each failed audit
-  costs its share: errors weigh 10, warnings 3. Tips are shown as *worth a look*
-  and not scored. An audit that could not run is left out, not counted as a
-  pass; a category with nothing to run shows "–". The tenant score is the mean
-  of the categories.
-- **Per category:** failed audits first, each with what it costs, how Microsoft
-  wants it, the first findings, links to Microsoft Learn and **Show in Health
-  check** for the full list; then passed audits and what could not be checked.
+| Category | Audits (weight) |
+| --- | --- |
+| **Compliance** | Devices without a compliance policy count as not compliant (10) · compliance status expires within 30 days (3) · share of compliant devices (10, curve 70–95 %) |
+| **Device security** | Disk encryption policy (10) · share of encrypted Windows/macOS devices (10, curve 60–95 %) · antivirus policy (10) · firewall policy (3) · attack surface reduction (3) · Windows LAPS (3) · security baseline (3) |
+| **Updates & sign-in** | Windows update rings (10) · tenant-wide Windows Hello for Business (3) · personally owned Windows enrollment (tip, not scored) |
+| **Device hygiene** | Device cleanup rules (3) · share of devices that checked in within 30 days (10, curve 70–95 %) |
 
-The mapping from rule to category and the weights are in `src/health/score.js`.
-It is our reading of Microsoft Learn, not a score Microsoft publishes. The demo
-tenant scores low on purpose — it has 23 planted mistakes.
+- **Scoring as in Lighthouse.** Each audit scores 0–1: pass/fail, or on a curve
+  for the fleet shares. A category is the weighted mean, 0–100; the tenant score
+  is the mean of the categories. Bands ▲ 0–49, ■ 50–89, ● 90–100. An audit
+  passes from 0.9.
+- **Missing data is not a pass.** An audit whose data could not be read is
+  listed as *Not checked* and left out. One that does not apply — antivirus
+  with no Windows or Mac devices, say — is *Not applicable*.
+- **Every audit cites Microsoft Learn**, and failed ones say what they cost, what
+  was found, and how Microsoft wants it.
+- **What it reads** (only when the tab is opened, read-only): the compliance
+  policy settings, enrollment configurations, device cleanup rules, older
+  endpoint security policies and their templates, and a device inventory
+  summary — OS, compliance state, encryption and last check-in only, no names,
+  users or serial numbers. Policy types come from the configuration the tree
+  already fetched. See `src/graph/posture.js`.
+
+The audits and weights are in `src/score/audits.js`. It is our reading of
+Microsoft Learn, not a score Microsoft publishes. The demo tenant is half-way
+there on purpose: antivirus, BitLocker, ASR, LAPS and update rings are in place;
+firewall, baseline, Windows Hello and cleanup rules are not.
 
 ### Health check
 
@@ -437,7 +452,8 @@ src/
                 for token capture)
   options/      settings
   demo/         made-up tenant and a Graph client without a network
-  health/       the health check's rules and the Score weighting (pure functions)
+  health/       the health check's rules (pure functions)
+  score/        the Score tab's audits and weighting (pure functions)
 tests/          unit tests, run in the browser or in Node
 spike/          Step 0 — standalone test of the token borrowing
 ```

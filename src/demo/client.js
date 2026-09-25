@@ -47,7 +47,15 @@ const ROUTES = [
   [/^\/deviceManagement\/androidDeviceOwnerEnrollmentProfiles$/, () =>
     tenant.androidDeviceOwnerEnrollmentProfiles],
   [/^\/deviceManagement\/applePushNotificationCertificate$/, () =>
-    tenant.applePushNotificationCertificate]
+    tenant.applePushNotificationCertificate],
+  // Poängens källor.
+  [/^\/deviceManagement$/, () => tenant.deviceManagement],
+  [/^\/deviceManagement\/deviceEnrollmentConfigurations$/, () => tenant.deviceEnrollmentConfigurations],
+  [/^\/deviceManagement\/managedDevices$/, () => tenant.managedDevices],
+  [/^\/deviceManagement\/managedDeviceCleanupRules$/, () => tenant.managedDeviceCleanupRules],
+  [/^\/deviceManagement\/managedDeviceCleanupSettings$/, () => tenant.managedDeviceCleanupSettings],
+  [/^\/deviceManagement\/intents$/, () => tenant.intents],
+  [/^\/deviceManagement\/templates$/, () => tenant.templates]
 ];
 
 /** Svaret för en adress: en lista, ett objekt, eller fel. */

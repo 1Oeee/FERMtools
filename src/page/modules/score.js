@@ -1,24 +1,23 @@
 // Score: the tenant graded like a Lighthouse report.
 //
-// A gauge per category and one for the whole tenant, then per category the
-// failed audits first (with what they cost), the diagnostics, and what passed.
-// The numbers come from src/health/score.js, over the same analysis the Health
-// check tab shows — this tab only draws them. "Show in Health check" takes a
-// failed audit over to its full list of findings.
+// Separate from the Health check. The health check finds mistakes in
+// assignments; the score grades how the tenant is set up against Microsoft's
+// recommendations — compliance settings, endpoint security policies, updates,
+// sign-in and the state of the fleet. The audits live in src/score/audits.js;
+// this tab fetches their data (on first view) and draws the result.
 
 import { el } from "../dom.js";
-import { groupLabels, findingText, renderDocs } from "../findings.js";
-import { scoreTenant, WEIGHTS } from "../../health/score.js";
-
-/** Så många fynd visas per granskning här — resten finns i Hälsokontroll. */
-const PREVIEW = 3;
+import { renderDocs } from "../findings.js";
+import { scoreTenant } from "../../score/audits.js";
 
 const SHAPE = { poor: "▲", average: "■", good: "●", none: "–" };
 const BAND = { poor: "0–49", average: "50–89", good: "90–100" };
-const AUDIT = {
-  bad: { rating: "poor", label: "Error" },
-  warn: { rating: "average", label: "Warning" },
-  info: { rating: "none", label: "Worth a look" }
+
+const NEEDS = {
+  settings: "the compliance policy settings",
+  enrollment: "the enrollment configurations",
+  devices: "the device inventory",
+  cleanup: "the device cleanup rules"
 };
 
 const state = {
@@ -71,59 +70,43 @@ function toggled(box, key, fallback) {
   return box;
 }
 
-function renderFailed(check, labels) {
-  const tone = AUDIT[check.severity];
-  const box = toggled(el("details", "score-audit"), check.id, false);
+/** Ett misslyckat fel kostar mycket (▲), ett mindre (■). */
+const failRating = (audit) => (audit.weight >= 10 ? "poor" : "average");
+
+function renderFailed(audit) {
+  const tone = failRating(audit);
+  const box = toggled(el("details", "score-audit"), audit.id, false);
 
   const summary = el("summary");
-  summary.append(el("span", `score-shape rating-${tone.rating}`, SHAPE[tone.rating]));
-  summary.append(el("span", "score-audit-title", check.title));
-  const n = check.findings.length;
-  summary.append(el("span", "score-audit-meta", `${n} ${n === 1 ? "finding" : "findings"}`));
-  if (check.cost) summary.append(el("span", `score-cost rating-${tone.rating}`, `−${check.cost}`));
+  summary.append(el("span", `score-shape rating-${tone}`, SHAPE[tone]));
+  summary.append(el("span", "score-audit-title", audit.title));
+  if (audit.cost) summary.append(el("span", `score-cost rating-${tone}`, `−${audit.cost}`));
   box.append(summary);
 
   const body = el("div", "score-audit-body");
-  body.append(el("div", "health-right", `How Microsoft wants it: ${check.right}`));
-
-  const list = el("ul", "health-findings");
-  for (const finding of check.findings.slice(0, PREVIEW)) {
-    const li = el("li");
-    li.append(findingText(finding, labels, ctx.openGroup));
-    list.append(li);
-  }
-  body.append(list);
-
-  const more = el(
-    "button",
-    "linklike",
-    n > PREVIEW ? `Show all ${n} in Health check →` : "Show in Health check →"
-  );
-  more.type = "button";
-  more.addEventListener("click", () => ctx.openFinding(`${check.id}#0`));
-  body.append(more);
-
-  if (check.docs?.length) body.append(renderDocs(check.docs));
+  body.append(el("div", "score-detail", audit.detail));
+  body.append(el("div", "health-right", `How Microsoft wants it: ${audit.right}`));
+  if (audit.docs?.length) body.append(renderDocs(audit.docs));
   box.append(body);
   return box;
 }
 
-function renderList(key, title, checks, shape, rating, text) {
+function renderList(key, title, audits, shape, rating, text) {
   const box = toggled(el("details", "score-group"), key, false);
-  box.append(el("summary", null, `${title} (${checks.length})`));
+  box.append(el("summary", null, `${title} (${audits.length})`));
   const list = el("ul", "score-plain");
-  for (const check of checks) {
+  for (const audit of audits) {
     const li = el("li");
-    li.append(el("span", `score-shape rating-${rating}`, shape), el("strong", null, check.title));
-    li.append(el("span", "hint", ` — ${text(check)}`));
-    if (check.docs?.length) li.append(renderDocs(check.docs));
+    li.append(el("span", `score-shape rating-${rating}`, shape), el("strong", null, audit.title));
+    li.append(el("span", "hint", ` — ${text(audit)}`));
+    if (audit.docs?.length) li.append(renderDocs(audit.docs));
     list.append(li);
   }
   box.append(list);
   return box;
 }
 
-function renderCategory(category, labels) {
+function renderCategory(category) {
   const section = el("section", "score-category");
   section.id = `score-${category.id}`;
 
@@ -136,25 +119,32 @@ function renderCategory(category, labels) {
 
   if (category.failed.length) {
     section.append(el("div", "score-subhead", "Failed audits"));
-    for (const check of category.failed) section.append(renderFailed(check, labels));
+    for (const audit of category.failed) section.append(renderFailed(audit));
   } else if (category.score !== null) {
     section.append(el("div", "score-clean", "Nothing to fix here."));
   }
 
   if (category.diagnostics.length) {
     section.append(
-      renderList(`diag:${category.id}`, "Worth a look — not scored", category.diagnostics, "i", "none", (c) =>
-        `${c.findings.length} ${c.findings.length === 1 ? "finding" : "findings"}. ${c.right}`
+      renderList(`diag:${category.id}`, "Worth considering — not scored", category.diagnostics, "i", "none", (a) =>
+        `${a.detail} ${a.right}`
       )
     );
   }
   if (category.passed.length) {
-    section.append(renderList(`pass:${category.id}`, "Passed audits", category.passed, "●", "good", (c) => c.right));
+    section.append(renderList(`pass:${category.id}`, "Passed audits", category.passed, "●", "good", (a) => a.detail));
+  }
+  if (category.notApplicable.length) {
+    section.append(
+      renderList(`na:${category.id}`, "Not applicable", category.notApplicable, "–", "none", () =>
+        "no devices of the kind it applies to"
+      )
+    );
   }
   if (category.unknown.length) {
     section.append(
-      renderList(`unknown:${category.id}`, "Not checked", category.unknown, "?", "none", () =>
-        "the data it needs could not be fetched, so it is left out of the score"
+      renderList(`unknown:${category.id}`, "Not checked", category.unknown, "?", "none", (a) =>
+        `${a.missing.map((m) => NEEDS[m] ?? m).join(" and ")} could not be read, so it is left out of the score`
       )
     );
   }
@@ -173,9 +163,9 @@ function renderHero(result) {
     el(
       "p",
       "hint",
-      "How closely your assignments and groups follow Microsoft's Intune guidance, graded like a " +
-        "Lighthouse report. Each category starts at 100; every failed audit costs points — errors " +
-        `weigh ${WEIGHTS.bad}, warnings ${WEIGHTS.warn}. Tips are shown but not scored.`
+      "How your tenant is set up compared with Microsoft's recommendations for Intune, graded like a " +
+        "Lighthouse report. Each category starts at 100 and every failed audit costs points; the bigger " +
+        "the risk, the more it costs."
     )
   );
 
@@ -205,7 +195,7 @@ function renderStrip(result) {
 function draw() {
   if (!host) return;
   const body = el("div", "module-pad score");
-  const health = ctx.health ?? {};
+  const score = ctx.score ?? {};
 
   if (!ctx.data) {
     body.append(el("div", "d-empty", "The tree must be fetched before the tenant can be scored."));
@@ -213,32 +203,41 @@ function draw() {
     return;
   }
 
-  if (health.error) body.append(el("div", "notice bad", `The underlying data could not be fully fetched: ${health.error}`));
+  if (score.error) body.append(el("div", "notice bad", `The tenant settings could not be fetched: ${score.error}`));
 
-  if (!health.analysis) {
-    body.append(el("div", "d-empty", health.loading ? "Scoring the tenant …" : "No score yet."));
+  const payload = score.payload;
+  if (!payload) {
+    body.append(el("div", "d-empty", score.loading ? "Reading how the tenant is set up …" : "No score yet."));
     host.replaceChildren(body);
     return;
   }
 
-  const result = scoreTenant(health.analysis);
-  const labels = groupLabels(ctx.data, ctx.settings?.prefix ?? "");
+  const result = scoreTenant({
+    items: ctx.data.items ?? [],
+    assignments: ctx.data.assignmentDetails ?? [],
+    settings: payload.settings,
+    enrollment: payload.enrollment,
+    devices: payload.devices,
+    cleanup: payload.cleanup,
+    intents: payload.intents,
+    templates: payload.templates
+  });
 
   body.append(renderHero(result), renderStrip(result));
-  for (const category of result.categories) body.append(renderCategory(category, labels));
+  for (const category of result.categories) body.append(renderCategory(category));
 
   body.append(
     el(
       "p",
       "hint score-note",
-      "The audits are this extension's own reading of Microsoft Learn, not a score Microsoft publishes. " +
-        "Group sizes come from the first page of members, so large groups count as \"at least\"."
+      "The audits are this extension's reading of Microsoft Learn, not a score Microsoft publishes. " +
+        "Each one links to the page it is based on."
     )
   );
 
-  const audits = health.analysis.checks.length;
-  const failed = result.categories.reduce((n, c) => n + c.failed.length, 0);
-  ctx.setFooter(`${audits} audits · ${failed} failed · ${ctx.data.groups?.length ?? 0} groups`);
+  const failed = result.audits.filter((a) => a.status === "fail").length;
+  const devices = payload.devices ? ` · ${payload.devices.length} devices` : "";
+  ctx.setFooter(`${result.audits.length} audits · ${failed} failed${devices}`);
 
   host.replaceChildren(body);
 }
@@ -246,23 +245,29 @@ function draw() {
 export const scoreModule = {
   id: "score",
   label: "Score",
-  needs: ["groups", "apps", "config"],
+  needs: ["config", "serviceConfig", "devices"],
 
   async mount(node, context) {
     ctx = context;
     host = node;
     draw();
-    // Poängen bygger på hälsokontrollens underlag. Finns det inte, be om det.
-    if (!ctx.health?.analysis && !ctx.health?.loading) await ctx.reloadHealth();
+    // Skalet räknar fliken som uppsatt först när mount är klar, så svaret
+    // ritas här i stället för via skalets omritning.
+    if (!ctx.score?.payload && !ctx.score?.loading) {
+      await ctx.reloadScore();
+      draw();
+    }
   },
 
   update(context) {
     ctx = context;
     draw();
+    // Trädet kan ha kommit efter att fliken öppnades.
+    if (ctx.data && !ctx.score?.payload && !ctx.score?.loading && !ctx.score?.error) ctx.reloadScore();
   },
 
   refresh(context) {
     ctx = context;
-    return ctx.reloadHealth({ force: true });
+    return ctx.reloadScore({ force: true });
   }
 };

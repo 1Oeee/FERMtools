@@ -6,26 +6,30 @@ The version lives in `manifest.json` and must always match the top entry here.
 
 ## 0.18 — 2026-09-25
 
-Score: the tenant graded like a Lighthouse report, against Microsoft's Intune
-guidance.
+Score: how the tenant is set up, graded like a Lighthouse report against
+Microsoft's recommendations. A tab of its own, separate from the Health check.
 
-- **New Score tab**, after Tree. A 0–100 gauge for the whole tenant and one per
-  category: Security & compliance, Targeting, Conflicts & duplicates, Group
-  structure, Licences & connections. Bands as in Lighthouse (0–49, 50–89,
-  90–100), marked by shape as well as colour.
-- **The audits are the health check's 27 rules**, so Score and Health check can
-  never disagree. Errors weigh 10, warnings 3; tips are listed as "worth a look"
-  and not scored; audits that could not run are left out rather than counted as
-  passed. Each failed audit shows what it costs the category, the first
-  findings, how Microsoft wants it, links to Microsoft Learn, and a jump to its
-  full list in Health check.
-- Passed and not-checked audits are listed per category, so the good is visible
-  as well as the bad.
+- **New Score tab**, after Tree. A 0–100 gauge for the tenant and one per
+  category: Compliance, Device security, Updates & sign-in, Device hygiene.
+  Bands as in Lighthouse (0–49, 50–89, 90–100), marked by shape as well as
+  colour.
+- **15 audits of its own**, each citing Microsoft Learn: compliance policy
+  settings, compliance/encryption/check-in shares of the fleet (scored on a
+  curve), disk encryption, antivirus, firewall, ASR, LAPS, security baseline,
+  update rings, Windows Hello for Business, device cleanup rules, and a tip on
+  personally owned Windows enrollment.
+- Weighted like Lighthouse: failed audits show what they cost. Data that could
+  not be read is *Not checked* and left out; audits that don't fit the fleet
+  are *Not applicable*.
+- **New reads** (read-only, only when the tab is opened): compliance policy
+  settings, enrollment configurations, device cleanup rules, classic endpoint
+  security policies and templates, and a device inventory summary (OS,
+  compliance, encryption, last check-in). `src/graph/posture.js`; demo data
+  included.
 - Fix: the "Health check: analyzing …" progress line no longer stays up after
   the analysis has finished.
-- Finding text and Microsoft Learn links are shared between Health check and
-  Score (`src/page/findings.js`). Scoring lives in `src/health/score.js`, tested
-  in `tests/score.test.js`.
+- Microsoft Learn links are drawn by shared code (`src/page/findings.js`).
+  Tests: `tests/score.test.js`.
 
 ## 0.17 — 2026-09-25
 

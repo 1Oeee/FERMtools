@@ -25,7 +25,14 @@ const PATTERNS = [
   ["androidEnrollment", /\/deviceManagement\/androidDeviceOwnerEnrollmentProfiles$/i],
   ["appleEnrollment", /\/deviceManagement\/depOnboardingSettings$/i],
   ["apns", /\/deviceManagement\/applePushNotificationCertificate$/i],
-  ["managedDevices", /\/deviceManagement\/managedDevices$/i]
+  ["managedDevices", /\/deviceManagement\/managedDevices$/i],
+  // Poängens källor (posture.js).
+  ["tenantSettings", /\/deviceManagement$/i],
+  ["enrollmentConfigs", /\/deviceManagement\/deviceEnrollmentConfigurations$/i],
+  ["cleanupRules", /\/deviceManagement\/managedDeviceCleanupRules$/i],
+  ["cleanupSettings", /\/deviceManagement\/managedDeviceCleanupSettings$/i],
+  ["intents", /\/deviceManagement\/intents$/i],
+  ["templates", /\/deviceManagement\/templates$/i]
 ];
 
 /**
@@ -41,7 +48,13 @@ const CAPABILITY_BY_SOURCE = {
   androidEnrollment: "config",
   appleEnrollment: "serviceConfig",
   apns: "serviceConfig",
-  managedDevices: "devices"
+  managedDevices: "devices",
+  tenantSettings: "config",
+  enrollmentConfigs: "serviceConfig",
+  cleanupRules: "serviceConfig",
+  cleanupSettings: "serviceConfig",
+  intents: "config",
+  templates: "config"
 };
 
 export const capabilityForSource = (key) => CAPABILITY_BY_SOURCE[key] ?? null;

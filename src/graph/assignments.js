@@ -105,7 +105,12 @@ function describeItem(item, source) {
     userLicensing: licensing ? Boolean(licensing.supportsUserLicensing) : null,
     deviceLicensing: licensing ? Boolean(licensing.supportsDeviceLicensing) : null,
     ssid: item.ssid ?? null,
-    wifiSecurity: item.wiFiSecurityType ?? null
+    wifiSecurity: item.wiFiSecurityType ?? null,
+    // Poängen: vilken sorts säkerhetspolicy är det här? Settings catalog säger
+    // det i templateReference; äldre profiler med egna fält.
+    templateFamily: item.templateReference?.templateFamily ?? null,
+    bitLocker: typeof item.bitLockerEncryptDevice === "boolean" ? item.bitLockerEncryptDevice : null,
+    fileVault: typeof item.fileVaultEnabled === "boolean" ? item.fileVaultEnabled : null
   };
 }
 

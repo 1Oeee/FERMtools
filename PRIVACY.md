@@ -47,7 +47,11 @@ Microsoft endpoints. Every request is a GET, except that Microsoft Graph
 requests are grouped through Graph's `$batch` endpoint, which is itself a POST
 but contains nothing except GET sub-requests. AidTune uses them to read: groups, group memberships, and the apps,
 configuration profiles, policies, connectors and tokens (VPP, enrolment) that
-are assigned to them. A token carries **your** admin permissions, so AidTune
+are assigned to them. When you open the Score tab it also reads the tenant's
+compliance policy settings, enrollment configurations and device cleanup
+rules, and a summary of the managed device inventory: each device's operating
+system, compliance state, encryption state and last check-in time. Device
+names, users and serial numbers are not requested. A token carries **your** admin permissions, so AidTune
 can read whatever your account can read there. It never sends a
 create, update or delete request.
 

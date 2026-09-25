@@ -27,9 +27,10 @@ So you can see where something is deployed even when a branch is collapsed.
 
 Also included:
 - Group details with assigned apps, configurations and connections
-- Tenant score: a Lighthouse-style 0–100 grade per category (security,
-  targeting, conflicts, group structure, licences), measured against
-  Microsoft's Intune guidance, with what passed and what failed
+- Tenant score: a Lighthouse-style 0–100 grade of how the tenant is set up
+  (compliance, device security, updates and sign-in, device hygiene), measured
+  against Microsoft's recommendations, with what passed and what failed and a
+  Microsoft Learn link for every audit
 - Optional Health check: 27 rules that flag common assignment mistakes
   (for example user licences on device groups), with fix guidance
 - Demo mode with a fictional tenant, so you can try it without signing in

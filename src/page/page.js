@@ -47,12 +47,18 @@ const state = {
   // Hälsokontrollen delas av flikarna: trädet markerar grupperna, fliken
   // visar hela listan. Räknas ut här, en gång, i stället för i varje flik.
   health: emptyHealth(),
+  // Poängens underlag: tenantens inställningar och enhetsinventariet.
+  score: emptyScore(),
   /**
    * Något en flik ska visa och blinka när den kommer fram: ett fynd i
    * Hälsokontroll, eller en grupp i trädet. { module, target }
    */
   pendingFocus: null
 };
+
+function emptyScore() {
+  return { payload: null, loading: false, error: null };
+}
 
 function emptyHealth() {
   return { payload: null, analysis: null, index: null, loading: false, error: null };
@@ -103,6 +109,8 @@ function moduleContext(module) {
     send,
     health: state.health,
     reloadHealth: (options) => loadHealth(options),
+    score: state.score,
+    reloadScore: (options) => loadScore(options),
     openFinding,
     openGroup,
     setStatus: (text) => {
@@ -229,7 +237,25 @@ async function loadHealth({ force = false } = {}) {
 
   computeHealth();
   // Framstegsraden ("analyzing …") ska inte bli stående när underlaget är klart.
-  if (!state.loading && ["health", "score"].includes(activeModule().id)) renderStatus(null);
+  if (!state.loading && activeModule().id === "health") renderStatus(null);
+  refreshActive();
+}
+
+/** Hämtas först när Poäng-fliken visas — ingen annan flik behöver det. */
+async function loadScore({ force = false } = {}) {
+  if (!state.data || state.score.loading) return;
+
+  state.score.loading = true;
+  state.score.error = null;
+  refreshActive();
+
+  const response = await send({ type: "score", force });
+
+  state.score.loading = false;
+  if (!response?.ok) state.score.error = response?.error ?? "The service worker did not respond.";
+  else state.score.payload = response.data;
+
+  if (!state.loading && activeModule().id === "score") renderStatus(null);
   refreshActive();
 }
 
@@ -611,6 +637,7 @@ chrome.runtime.onMessage.addListener((message) => {
     state.tokenStatus = message.status;
     state.data = null;
     state.health = emptyHealth();
+    state.score = emptyScore();
     if (needsConsent()) {
       renderConsent();
       return;
@@ -625,10 +652,9 @@ chrome.runtime.onMessage.addListener((message) => {
 
   // Modulhämtningar sker utanför skalets egen laddning, men framstegen
   // ska synas på samma ställe.
-  // Trädhämtningen gäller alla flikar. Connections och Hälsokontroll hämtar
+  // Trädhämtningen gäller alla flikar. Connections, Hälsokontroll och Poäng hämtar
   // för sig själva, och deras framsteg hör bara hemma när de är framme.
-  // Poängen bygger på hälsokontrollens underlag och visar samma framsteg.
-  const ownStage = { connections: ["connections"], health: ["health", "score"] }[message?.stage];
+  const ownStage = { connections: ["connections"], health: ["health"], score: ["score"] }[message?.stage];
   if (
     message?.type === "progress" &&
     (state.loading || (ownStage && ownStage.includes(activeModule().id)))
@@ -638,7 +664,8 @@ chrome.runtime.onMessage.addListener((message) => {
       edges: "Reading memberships",
       assignments: "Reading assignments",
       connections: "Reading connections",
-      health: "Health check: analyzing"
+      health: "Health check: analyzing",
+      score: "Score: reading"
     };
     const detail = message.detail;
     const n = typeof detail === "number" || typeof detail === "string" ? ` (${detail})` : "";
