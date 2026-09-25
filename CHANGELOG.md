@@ -4,6 +4,13 @@ Version scheme: `0.1`, `0.2`, `0.3` … One step per delivered batch of work.
 The version lives in `manifest.json` and must always match the top entry here.
 `1.0` when the extension is stable enough to use daily without reservations.
 
+## 0.16.1 — 2026-09-25
+
+Fixes for 0.16. The Health check tab and the tree markers were hidden, because
+two places still waited for the removed setting; they now show by default.
+The settings page crashed on open because the consent checkbox had been
+deleted along with the health check toggle; it is back.
+
 ## 0.16 — 2026-09-24
 
 Health check is now always on and can't be toggled off. Removed the fix
