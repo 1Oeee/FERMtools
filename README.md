@@ -1,4 +1,4 @@
-# AidTune
+# Inu+
 
 A browser extension (Edge/Chrome, Manifest V3) that adds **a page of its own to
 the Intune portal** — an entry in the left-hand rail, directly under **Home** —
@@ -35,7 +35,7 @@ No build step — the folder is loaded as it is.
 3. **Load unpacked** → point to this folder.
 4. Open `https://intune.microsoft.com`, sign in and go to **Groups → All
    groups**.
-5. Click **AidTune** in the left rail, directly under Home — the page opens with
+5. Click **Inu+** in the left rail, directly under Home — the page opens with
    the tree filled in.
 
 The extension's toolbar icon does the same thing: it takes you to the portal tab
@@ -46,16 +46,16 @@ Entra: no, see below.
 
 ### First run
 
-On first install a tab opens explaining exactly how AidTune gets its data, and
+On first install a tab opens explaining exactly how Inu+ gets its data, and
 asks whether to use your own tenant or try the demo first. **Until you allow
-it, AidTune reads nothing from the portal** — no request headers, no storage.
+it, Inu+ reads nothing from the portal** — no request headers, no storage.
 The choice can be changed in Settings, where revoking consent also discards any
 tokens held. See [PRIVACY.md](PRIVACY.md).
 
 ### Demo mode
 
 No tenant to try it against? Turn on **Demo mode** in the settings
-(`chrome://extensions` → AidTune → Extension options). The page then shows a
+(`chrome://extensions` → Inu+ → Extension options). The page then shows a
 made-up municipality, Contoso, with six schools and around 270 groups —
 assignments, VPP licences and connections — without signing in and without any
 request leaving the browser. The toolbar icon opens the page in a tab of its
@@ -81,7 +81,7 @@ rail's dimensions, colours and theme. The portal redraws the rail when you
 switch blades and throws the entry away — it is put back by a check that runs at
 regular intervals.
 
-A click on the entry places AidTune **over the portal's content area**, not over
+A click on the entry places Inu+ **over the portal's content area**, not over
 the whole window: the rail and the top bar are left alone, so you can still
 switch blades, search and sign out while the page is showing. The edges are
 measured rather than guessed — the rail can be collapsed, and the height of the
@@ -95,7 +95,7 @@ the frame. The content script that places them reads nothing from the portal.
 
 The page folds itself away when it sends the tab somewhere else — after a click
 on a permission button or on **Open group** it is the blade you want to see, not
-AidTune. It also closes when you switch blades in the portal.
+Inu+. It also closes when you switch blades in the portal.
 
 ### The theme
 
@@ -132,13 +132,13 @@ that otherwise gives away at once that a page does not belong where it stands.
 
 The colours travel along in the frame's address and not just as a message
 afterwards, so that the palette is in place before the page has painted its
-first image. If you change theme while AidTune is showing, it is re-measured
+first image. If you change theme while Inu+ is showing, it is re-measured
 immediately.
 
 In a tab of its own there is no portal to measure, and `prefers-color-scheme`
 applies as usual.
 
-**⧉** opens the same page in a tab of its own. If you want AidTune up while you
+**⧉** opens the same page in a tab of its own. If you want Inu+ up while you
 work in the portal, a tab is better than switching back and forth.
 
 ## How tokens work
@@ -190,7 +190,7 @@ Consequences:
 - Raw tokens live only in the service worker's memory. They are never written to
   `chrome.storage` and never reach disk.
 - **The portal must be open and signed in.** Since the page lives in the portal,
-  that condition is met as soon as you see AidTune at all — but tokens are still
+  that condition is met as soon as you see Inu+ at all — but tokens are still
   picked up from the blades you have visited. Standing on **All groups** is
   enough; you do not need to open an individual group. If a token is missing the
   page shows a button that takes the tab there in one click, folds itself away so
@@ -303,7 +303,7 @@ row.
 - **The details panel** collapses with the chevron to the right of the group
   name. The whole height then becomes tree. The state is kept until you change
   it. In the panel, **Open group** switches the blade in the portal tab you are
-  already in, and folds AidTune away so the blade is visible.
+  already in, and folds Inu+ away so the blade is visible.
 - **Without hierarchy** at the bottom of the tree is also collapsible, and keeps
   its state both when you select groups in it and between visits.
 - **✕** closes the page and gives the portal back. It only exists when the page
