@@ -87,7 +87,7 @@ export const CAPABILITIES = {
   },
   devices: {
     label: "Devices",
-    needFor: "Device inventory in reports",
+    needFor: "Shared accounts",
     where: "Devices → All devices",
     scopes: [
       "DeviceManagementManagedDevices.Read.All",
@@ -105,6 +105,13 @@ export const INTUNE_SCOPES = [
   ...CAPABILITIES.serviceConfig.scopes,
   ...CAPABILITIES.devices.scopes
 ];
+
+/**
+ * Entras granskningslogg. Ingen förmåga med egen chip i tokenraden — den
+ * behövs bara när man ber om ändringshistoriken för ett fynd, och sidan säger
+ * då själv vad som saknas.
+ */
+export const AUDIT_SCOPES = ["AuditLog.Read.All"];
 
 /** Vilka av de efterfrågade behörigheterna har denna token? */
 export function covered(claims, wanted) {

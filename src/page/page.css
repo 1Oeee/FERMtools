@@ -356,25 +356,6 @@ button.linklike:hover {
   margin: -4px 0 12px;
 }
 
-.health-fix {
-  margin: 2px 0 6px;
-  font-size: 12px;
-}
-
-.health-fix > summary {
-  cursor: pointer;
-  color: var(--accent);
-}
-
-.health-fix ul {
-  margin: 4px 0;
-  padding-left: 20px;
-}
-
-.health-fix li {
-  margin-bottom: 3px;
-}
-
 .health-docs {
   color: var(--muted);
   margin: 2px 0 4px 2px;
@@ -388,6 +369,138 @@ button.linklike:hover {
   border-radius: 3px;
   padding: 1px 4px;
   margin-left: -4px;
+}
+
+/* Fynden går att markera; det markerade förklaras i högerkolumnen. */
+.health-findings:not(.plain) li {
+  cursor: pointer;
+}
+
+.health-findings:not(.plain) li:hover {
+  background: var(--hover);
+}
+
+.health-findings li.selected {
+  background: var(--selected);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.health-findings li:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Poster i fyndens text öppnas i Intune — heldragen i stället för prickad. */
+button.linklike.item-link {
+  display: inline;
+  padding: 0;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* --- Hälsokontrollens högerkolumn --- */
+
+.health-list {
+  border-right: 1px solid var(--line);
+}
+
+.health-details .d-heading {
+  align-items: baseline;
+}
+
+.health-details .d-issue {
+  font-size: 13px;
+}
+
+.health-detail {
+  margin: 4px 0 2px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.health-steps {
+  margin: 4px 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.health-steps li {
+  margin-bottom: 4px;
+}
+
+.health-fix-note {
+  margin-top: 4px;
+  font-size: 11px;
+}
+
+.health-details .d-list li {
+  align-items: center;
+}
+
+.audit-part {
+  margin: 6px 0;
+}
+
+.audit-title {
+  margin: 8px 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.audit-list li {
+  align-items: flex-start;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+
+.audit-who {
+  color: var(--fg);
+}
+
+.audit-meta {
+  color: var(--muted);
+  font-size: 11px;
+  word-break: break-word;
+}
+
+.audit-again {
+  margin-top: 6px;
+}
+
+.audit-manual {
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.audit-manual > summary {
+  cursor: pointer;
+  color: var(--accent);
+}
+
+.audit-steps {
+  margin: 4px 0 6px;
+  padding-left: 18px;
+  line-height: 1.45;
+}
+
+.audit-steps li {
+  margin-bottom: 3px;
+}
+
+.audit-copy-name {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.audit-copy-name code {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  word-break: break-all;
 }
 
 /* Fyndet man kom från trädet för att titta på. Gult, tre gånger. Samma gula
@@ -1130,6 +1243,35 @@ table.grid tr.selected-row td {
   background: var(--selected);
 }
 
+/* Licenses: the list is the page, so the controls sit on top of it. */
+.licence-controls .licence-filter:first-child {
+  margin-top: 0;
+}
+
+.licence-controls {
+  margin-bottom: 8px;
+}
+
+.licence-dist-meta {
+  margin-bottom: 6px;
+}
+
+.licence-dist table.grid {
+  width: 100%;
+}
+
+/* ↗ next to a group name: opens the group in Intune. Quiet until hovered. */
+button.linklike.portal-jump {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+button.linklike.portal-jump:hover {
+  color: var(--accent);
+  text-decoration: none;
+}
+
 /* --- Welcome / consent --- */
 
 .consent {
@@ -1183,6 +1325,78 @@ button.primary:hover:not(:disabled) {
     color: #06121f;
   }
 }
+
+/* Shared accounts: the iPad checkbox sits under the search box. */
+.accounts-check {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+/* Plattformsfiltret gäller alla flikar, så det sitter i sidhuvudet. */
+.platform-filter {
+  flex: 0 0 auto;
+  align-self: center;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: 12px;
+}
+
+.platform-filter.active {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+/* Licenses och Shared accounts: listan till vänster, detaljerna till höger,
+   som i trädet. Listan scrollar för sig. */
+.split-list {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 14px;
+  overflow: auto;
+  border-right: 1px solid var(--line);
+}
+
+/* Sorterbara kolumnrubriker: ser ut som rubriken, beter sig som en knapp. */
+button.sort-head {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  text-align: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+button.sort-head:hover {
+  background: none;
+  color: var(--accent);
+}
+
+button.sort-head.active {
+  color: var(--accent);
+}
+
+th.num button.sort-head {
+  width: 100%;
+  text-align: right;
+}
+
+.sort-arrow {
+  font-size: 10px;
+}
+
+/* Ingen vald grupp: detaljpanelen stängs och trädet tar hela bredden. */
+.tree-details[hidden] {
+  display: none;
 
 /* --- Score: Lighthouse-style gauges ------------------------------------------
  * The rating colours reuse the signal colours, so they follow the portal theme

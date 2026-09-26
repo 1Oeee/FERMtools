@@ -12,7 +12,7 @@ import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const EXT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const ctx = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), "aidtune-consent-")), {
+const ctx = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), "inuplus-consent-")), {
   headless: false,
   viewport: { width: 1280, height: 800 },
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`, "--headless=new"],

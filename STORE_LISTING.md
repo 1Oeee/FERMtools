@@ -3,7 +3,7 @@
 Not shipped in the extension package.
 
 ## Name
-AidTune
+Inu+
 
 ## Summary (max 132 chars)
 Adds a page to the Intune portal showing your nested Entra groups as a tree, with markers for assigned apps and configurations.
@@ -12,7 +12,7 @@ Adds a page to the Intune portal showing your nested Entra groups as a tree, wit
 Developer Tools (or Productivity)
 
 ## Detailed description
-AidTune adds its own page to the Microsoft Intune admin portal, directly under
+Inu+ adds its own page to the Microsoft Intune admin portal, directly under
 Start in the left-hand menu. It shows your Entra groups as a nested tree, like
 the tree view in Intune for Education, but inside the console you actually
 work in.
@@ -37,7 +37,7 @@ Also included:
 - Follows the portal's theme (light, dark, high contrast)
 
 HOW IT READS YOUR DATA: nothing is read until you agree on first run (or you can
-try the demo, which reads nothing). You choose how AidTune reads your tenant:
+try the demo, which reads nothing). You choose how Inu+ reads your tenant:
 sign in with your organisation's own Entra app registration (read-only
 permissions your admin grants; the portal is not read at all), or, with no
 setup, let it borrow the access tokens the Intune portal already holds for you.
@@ -47,10 +47,10 @@ Intune, and as a fallback scans the portal's browser storage for those tokens.
 It then makes read-only requests to Microsoft with them (GETs, batched through Graph's $batch endpoint), so it can read
 whatever your account can read there. Tokens stay in memory. Nothing is sent
 anywhere except to Microsoft: no analytics, no tracking, no server of ours.
-It never changes anything in your tenant. AidTune is open source, so you can audit
+It never changes anything in your tenant. Inu+ is open source, so you can audit
 the code yourself: https://github.com/1Oeee/FERMtools. Full details in the privacy policy.
 
-AidTune is an independent project and is not affiliated with or endorsed by
+Inu+ is an independent project and is not affiliated with or endorsed by
 Microsoft. Microsoft, Intune and Entra are trademarks of Microsoft Corporation.
 
 ## Single purpose

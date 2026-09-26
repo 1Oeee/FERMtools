@@ -16,12 +16,15 @@
 
 import { buildForest } from "../tree/build.js";
 import { GUIDANCE } from "./guidance.js";
+import { matchesPlatform } from "../common/platforms.js";
 
 export const SEVERITIES = ["bad", "warn", "info"];
 
 const DEEP = 4;
 const KIOSK_MAX_DEVICES = 25;
 const EXPIRY_WARN_DAYS = 30;
+/** Under så här många dagar kvar — eller redan ute — är det ett fel, inte en varning. */
+export const EXPIRY_CRITICAL_DAYS = 10;
 const DAY = 86_400_000;
 
 const EMPTY_DEVICES = () => ({ iOS: 0, Windows: 0, Android: 0, macOS: 0, other: 0 });
@@ -128,12 +131,48 @@ function context(input) {
     byItem: [...byItem.values()],
     deleted,
     nameOf,
+    /** En grupp som del av en fyndtext — blir en länk i sidan. */
+    group: (id) => ({ group: id, name: nameOf(id) }),
     descendants,
     subtree,
     kindOf,
     overlap
   };
 }
+
+/** En post (app eller profil) som del av en fyndtext — blir en länk i sidan. */
+const app = (item) => ({ item: item.id, name: item.name });
+/** En token eller ett certifikat i fyndets rad — sidan länkar den till Intune. */
+const conn = (c) => ({ connection: c.id, name: c.name });
+
+/**
+ * Taggad mall för fyndens korta rad. Grupper och poster behålls som objekt,
+ * så att sidan kan göra länkar av dem; allt annat blir text.
+ *   say`${app(item)}: user licence to device group ${ctx.group(id)}`
+ */
+function say(strings, ...values) {
+  const parts = [];
+  const push = (part) => {
+    if (part === "" || part === null || part === undefined) return;
+    if (typeof part === "object") parts.push(part);
+    else if (typeof parts[parts.length - 1] === "string") parts[parts.length - 1] += String(part);
+    else parts.push(String(part));
+  };
+  strings.forEach((text, i) => {
+    push(text);
+    if (i < values.length) {
+      const value = values[i];
+      if (Array.isArray(value)) value.forEach(push);
+      else push(value);
+    }
+  });
+  return parts;
+}
+
+/** Delar med skiljetecken emellan, t.ex. flera grupper i en rad. */
+const joined = (list, separator = ", ") => list.flatMap((part, i) => (i ? [separator, part] : [part]));
+
+const plain = (parts) => parts.map((p) => (typeof p === "object" ? p.name : p)).join("");
 
 const isVpp = (item) => item.totalLicenses !== null && item.totalLicenses !== undefined;
 const osList = (devices) =>
@@ -156,12 +195,23 @@ function depthOf(ctx, id, visiting = new Set()) {
 }
 
 /**
- * @typedef {{ text: string, groups: string[], items: string[] }} Finding
+ * `parts` är den korta raden, med grupper och poster som objekt så att sidan
+ * kan länka dem. `text` är samma rad som ren text — för trädets detaljpanel
+ * och för testerna. `detail` är den utförliga förklaringen: vad felet innebär
+ * för just de här grupperna och posterna.
+ *
+ * @typedef {{ group: string, name: string } | { item: string, name: string }} Ref
+ * @typedef {{ text: string, parts: Array<string|Ref>, detail: string, groups: string[], items: string[] }} Finding
  * @typedef {{ id: string, title: string, severity: "bad"|"warn"|"info", right: string,
  *             needs?: Array<"composition"|"lookup"|"connections">, run: (ctx: any) => Finding[] }} Check
  */
 
-const finding = (text, { groups = [], items = [] } = {}) => ({ text, groups, items });
+const finding = (parts, { groups = [], items = [], detail = "" } = {}) => {
+  const list = typeof parts === "string" ? [parts] : parts;
+  return { text: plain(list), parts: list, detail, groups, items };
+};
+
+const KIND_WORD = { users: "users", devices: "devices" };
 
 /** @type {Check[]} */
 export const CHECKS = [
@@ -177,11 +227,16 @@ export const CHECKS = [
           ? includes
               .filter((a) => a.deviceLicensing === false && ctx.kindOf(a.groupId) === "devices")
               .map((a) =>
-                finding(
-                  `${item.name} has a user licence but goes to ${ctx.nameOf(a.groupId)}, which contains only devices. ` +
-                    "Without a signed-in user the licence can never be redeemed.",
-                  { groups: [a.groupId], items: [item.id] }
-                )
+                finding(say`${app(item)}: user licensing to device group ${ctx.group(a.groupId)}`, {
+                  groups: [a.groupId],
+                  items: [item.id],
+                  detail:
+                    `The assignment uses user licensing, so each licence is tied to a person's Apple Account and is ` +
+                    `redeemed when that account is signed in on the device. ${ctx.nameOf(a.groupId)} contains only ` +
+                    "devices — typically carts, shared iPads or devices without a signed-in Apple Account — so there is " +
+                    `nobody to redeem the licence. ${item.name} fails or stays pending on every device in the group, ` +
+                    "and Intune keeps retrying at each sync."
+                })
               )
           : []
       )
@@ -199,25 +254,40 @@ export const CHECKS = [
       ctx.byItem
         .filter(({ item }) => item.type !== "win32LobApp" && item.platform !== "Android")
         .flatMap(({ item, includes, allDevices }) => [
-        ...includes
-          .filter((a) => a.intent === "available" && ctx.kindOf(a.groupId) === "devices")
-          .map((a) =>
-            finding(
-              `${item.name} is available to ${ctx.nameOf(a.groupId)}, which contains only devices. ` +
-                "Available only works against users — the app is not visible anywhere.",
-              { groups: [a.groupId], items: [item.id] }
+          ...includes
+            .filter((a) => a.intent === "available" && ctx.kindOf(a.groupId) === "devices")
+            .map((a) =>
+              finding(say`${app(item)}: Available to device group ${ctx.group(a.groupId)}`, {
+                groups: [a.groupId],
+                items: [item.id],
+                detail:
+                  "\"Available\" means the app is offered in the Company Portal for a signed-in user to install " +
+                  `themselves. Intune evaluates Available assignments against users, and ${ctx.nameOf(a.groupId)} ` +
+                  `contains only devices — so the offer reaches nobody. ${item.name} does not appear in the Company ` +
+                  "Portal on those devices, and nothing is installed. (Win32 apps and Android Enterprise fully " +
+                  "managed/COPE are exceptions and are not flagged.)"
+              })
+            ),
+          ...allDevices
+            .filter((a) => a.intent === "available")
+            .map(() =>
+              finding(say`${app(item)}: Available to All devices`, {
+                items: [item.id],
+                detail:
+                  "\"Available\" is an offer to users in the Company Portal, and All devices is a device target. " +
+                  `The combination is not evaluated for anyone, so ${item.name} is not offered anywhere.`
+              })
             )
-          ),
-        ...allDevices
-          .filter((a) => a.intent === "available")
-          .map((a) => finding(`${item.name} is available to all devices — it is not visible anywhere.`, { items: [item.id] }))
-      ])
+        ])
   },
   {
     id: "device-licence-to-users",
     title: "Device licence to a user group",
-    severity: "warn",
-    right: "Device-licensed VPP apps go to device groups.",
+    // Ett tips, inte ett fel: det stöds fullt ut, och för delade konton
+    // (del1 med sin vagn) är det precis rätt. Risken är bara licenser på
+    // enheter man inte räknat med.
+    severity: "info",
+    right: "A device-licensed app to a user group lands on every device those users have — fine when that is the intent.",
     needs: ["composition"],
     run: (ctx) =>
       ctx.byItem.flatMap(({ item, includes }) =>
@@ -225,11 +295,17 @@ export const CHECKS = [
           ? includes
               .filter((a) => a.deviceLicensing === true && a.intent === "required" && ctx.kindOf(a.groupId) === "users")
               .map((a) =>
-                finding(
-                  `${item.name} has a device licence but goes to ${ctx.nameOf(a.groupId)}, which contains only users. ` +
-                    "The app follows the users and takes one licence per device they sign in on.",
-                  { groups: [a.groupId], items: [item.id] }
-                )
+                finding(say`${app(item)}: device licensing to user group ${ctx.group(a.groupId)}`, {
+                  groups: [a.groupId],
+                  items: [item.id],
+                  detail:
+                    "This is supported, and often right. Device licensing ties each licence to a device, and the " +
+                    `assignment is Required to ${ctx.nameOf(a.groupId)}, a user group — so Intune installs ${item.name} ` +
+                    "on every device those users are enrolled with, one licence per device. For a shared account " +
+                    "with its cart, or 1:1 iPads with user affinity, that is exactly the point. Worth a look only if " +
+                    "the group also holds people with devices that shouldn't get the app: a user with an iPad and an " +
+                    "iPhone takes two licences, and personal or never-retired devices take one each."
+                })
               )
           : []
       )
@@ -272,14 +348,20 @@ export const CHECKS = [
         }
 
         if (need <= item.totalLicenses) return [];
-        const targets = [...new Set(required.map((a) => ctx.nameOf(a.groupId)))];
-        const via = targets.length > 3 ? `${targets.slice(0, 3).join(", ")} and ${targets.length - 3} more` : targets.join(", ");
+        const targets = [...new Set(required.map((a) => a.groupId))];
+        const used = typeof item.usedLicenses === "number" ? ` (${item.usedLicenses} in use)` : "";
         return [
-          finding(
-            `${item.name}: ${item.totalLicenses} licences, ${atLeast(need, capped)} required recipients via ${via}. ` +
-              "Those who do not get a licence get an install error.",
-            { groups: required.map((a) => a.groupId), items: [item.id] }
-          )
+          finding(say`${app(item)}: ${atLeast(need, capped)} required recipients, ${item.totalLicenses} licences`, {
+            groups: required.map((a) => a.groupId),
+            items: [item.id],
+            detail:
+              `Required assignments via ${targets.map(ctx.nameOf).join(", ")} reach ${atLeast(need, capped)} ` +
+              "recipients — users for user licensing, iOS and macOS devices for device licensing, each group counted " +
+              `once even when it is reached through nesting. Only ${item.totalLicenses} licences exist${used}. ` +
+              "Licences are handed out first come, first served: the recipients left over get an install error " +
+              "(no licences available) and retry at every sync until licences are freed or bought." +
+              (capped ? " Member counts are floors — the real shortfall may be larger." : "")
+          })
         ];
       })
   },
@@ -292,7 +374,13 @@ export const CHECKS = [
       ctx.byItem
         .filter(({ item }) => isVpp(item) && item.totalLicenses > 0 && item.usedLicenses >= item.totalLicenses)
         .map(({ item }) =>
-          finding(`${item.name}: all ${item.totalLicenses} licences are used up.`, { items: [item.id] })
+          finding(say`${app(item)}: all ${item.totalLicenses} licences used`, {
+            items: [item.id],
+            detail:
+              `Every purchased licence for ${item.name} is assigned. Nothing is broken yet, but the margin is gone: ` +
+              "the next user or device that should get the app — a new student, a replaced iPad — fails with a " +
+              "licence error until a licence is freed or bought."
+          })
         )
   },
   {
@@ -312,13 +400,18 @@ export const CHECKS = [
             const fits = s.devices[item.platform] + (item.platform === "iOS" ? s.devices.macOS : 0);
             return fits === 0;
           })
-          .map((a) =>
-            finding(
-              `${item.name} is for ${item.platform} but goes to ${ctx.nameOf(a.groupId)}, ` +
-                `where the devices are ${osList(ctx.subtree(a.groupId).devices)}. Nothing happens.`,
-              { groups: [a.groupId], items: [item.id] }
-            )
-          );
+          .map((a) => {
+            const os = osList(ctx.subtree(a.groupId).devices);
+            return finding(say`${app(item)} (${item.platform}) to ${ctx.group(a.groupId)} (${os})`, {
+              groups: [a.groupId],
+              items: [item.id],
+              detail:
+                `${item.name} only applies to ${item.platform}, but every device in ${ctx.nameOf(a.groupId)} ` +
+                `and its subgroups is ${os}. Intune reports the assignment as "Not applicable" and nothing happens. ` +
+                "It is often a sign that the wrong group was picked — and that the group which should have had it " +
+                "is missing it."
+            });
+          });
       })
   },
   {
@@ -343,11 +436,18 @@ export const CHECKS = [
           })
           .map((a) => {
             const kind = ctx.kindOf(a.groupId);
+            const other = kind === "users" ? "devices" : "users";
             return finding(
-              `${item.name} excludes ${ctx.nameOf(a.groupId)} (${kind === "users" ? "users" : "devices"}) ` +
-                `from an assignment to ${kind === "users" ? "devices" : "users"}. ` +
-                "Intune cannot mix the kinds — the exclusion does not apply.",
-              { groups: [a.groupId], items: [item.id] }
+              say`${app(item)}: ${kind === "users" ? "user" : "device"} group ${ctx.group(a.groupId)} excluded from a ${other === "users" ? "user" : "device"} assignment`,
+              {
+                groups: [a.groupId],
+                items: [item.id],
+                detail:
+                  "Intune only honours exclusions of the same kind as the assignment: user groups exclude from user " +
+                  `assignments, device groups from device assignments. ${item.name} is assigned to ${KIND_WORD[other]}, ` +
+                  `but the excluded group ${ctx.nameOf(a.groupId)} contains ${KIND_WORD[kind]}. The exclusion is ` +
+                  "ignored, so whoever it was meant to keep out still gets it."
+              }
             );
           });
       })
@@ -363,11 +463,15 @@ export const CHECKS = [
           const parent = includes.find((a) => a.groupId !== ex.groupId && ctx.descendants(a.groupId).has(ex.groupId));
           return parent
             ? [
-                finding(
-                  `${item.name} goes to ${ctx.nameOf(parent.groupId)} but excludes ${ctx.nameOf(ex.groupId)}, ` +
-                    "which sits inside it. Is that still right?",
-                  { groups: [parent.groupId, ex.groupId], items: [item.id] }
-                )
+                finding(say`${app(item)}: ${ctx.group(ex.groupId)} excluded inside ${ctx.group(parent.groupId)}`, {
+                  groups: [parent.groupId, ex.groupId],
+                  items: [item.id],
+                  detail:
+                    `${ctx.nameOf(parent.groupId)} gets ${item.name}, but ${ctx.nameOf(ex.groupId)} — nested inside ` +
+                    "it — is excluded. Exclusions win, so its members do not get it. That may well be intended, as " +
+                    "an exception, but it cannot be seen from the groups themselves and is easy to forget when the " +
+                    "structure changes."
+                })
               ]
             : [];
         })
@@ -388,11 +492,15 @@ export const CHECKS = [
             const shared = ctx.overlap(a.groupId, b.groupId);
             if (!shared) continue;
             found.push(
-              finding(
-                `${item.name} is installed to ${ctx.nameOf(a.groupId)} and uninstalled from ${ctx.nameOf(b.groupId)}. ` +
-                  `They meet in ${ctx.nameOf(shared)}, where the outcome is decided by Intune's conflict rules.`,
-                { groups: [a.groupId, b.groupId], items: [item.id] }
-              )
+              finding(say`${app(item)}: install via ${ctx.group(a.groupId)}, uninstall via ${ctx.group(b.groupId)}`, {
+                groups: [a.groupId, b.groupId],
+                items: [item.id],
+                detail:
+                  `Members of ${ctx.nameOf(shared)} are reached both by ${a.intent === "required" ? "Required" : "Available"} ` +
+                  `(via ${ctx.nameOf(a.groupId)}) and by Uninstall (via ${ctx.nameOf(b.groupId)}). Intune settles the ` +
+                  "conflict with its own table — Required beats Uninstall, Uninstall beats Available — so the result " +
+                  "follows the intents, not what was meant, and can differ between user and device targeting."
+              })
             );
           }
         }
@@ -411,17 +519,24 @@ export const CHECKS = [
         for (const a of includes) {
           if (ctx.kindOf(a.groupId) !== "empty") continue;
           const list = byGroup.get(a.groupId) ?? [];
-          if (!list.includes(item.name)) list.push(item.name);
+          if (!list.includes(item)) list.push(item);
           byGroup.set(a.groupId, list);
         }
       }
-      return [...byGroup].map(([id, names]) => {
+      return [...byGroup].map(([id, items]) => {
         const rule = ctx.forest.nodeById.get(id)?.membershipRule;
-        return finding(
-          `${ctx.nameOf(id)} is empty but has ${names.join(", ")}.` +
-            (rule ? ` The group is dynamic — is the rule right? ${rule}` : ""),
-          { groups: [id] }
-        );
+        return finding(say`${ctx.group(id)}: empty, ${items.length} assignment(s)`, {
+          groups: [id],
+          items: items.map((i) => i.id),
+          detail:
+            `No users or devices were found in ${ctx.nameOf(id)} or its subgroups, yet ${items.map((i) => i.name).join(", ")} ` +
+            "is assigned to it. Nothing is delivered. " +
+            (rule
+              ? `The group is dynamic with the rule ${rule} — no object matches it. Compare the rule with the ` +
+                "attribute values it looks for; a typo or a renamed enrolment profile is enough to empty the group."
+              : "If the group is meant to be filled later this is harmless; otherwise the intended recipients are " +
+                "in another group.")
+        });
       });
     }
   },
@@ -436,11 +551,18 @@ export const CHECKS = [
         [...includes, ...excludes]
           .filter((a) => ctx.deleted.has(a.groupId))
           .map((a) =>
-            finding(
-              `${item.name} is assigned to a group that no longer exists (${a.groupId}). ` +
-                "It does not show in the portal's group lists, and nobody gets what was intended.",
-              { groups: [a.groupId], items: [item.id] }
-            )
+            finding(say`${app(item)}: ${a.target === "exclude" ? "excludes" : "assigned to"} a deleted group`, {
+              groups: [a.groupId],
+              items: [item.id],
+              detail:
+                `The assignment points to group ID ${a.groupId}, which no longer exists in Entra. The portal does not ` +
+                "list it among the item's groups, so it is hard to see or remove there, and " +
+                (a.target === "exclude"
+                  ? "the exclusion keeps nobody out any more."
+                  : "nobody receives what the assignment was meant to give.") +
+                " A group deleted within the last 30 days can be restored under Groups → Deleted groups — the audit " +
+                "log below shows who deleted it."
+            })
           )
       )
   },
@@ -460,11 +582,14 @@ export const CHECKS = [
               })
               .map((a) => {
                 const s = ctx.subtree(a.groupId);
-                return finding(
-                  `${item.name} goes to ${ctx.nameOf(a.groupId)}, where ${s.disabled} of ${s.users} accounts are disabled. ` +
-                    "The licences are locked up with them.",
-                  { groups: [a.groupId], items: [item.id] }
-                );
+                return finding(say`${app(item)}: ${s.disabled} of ${s.users} accounts disabled in ${ctx.group(a.groupId)}`, {
+                  groups: [a.groupId],
+                  items: [item.id],
+                  detail:
+                    `${s.disabled} of ${s.users} user accounts in ${ctx.nameOf(a.groupId)} are disabled. User ` +
+                    "licences stay assigned to those accounts until the app is set to Uninstall for them or the " +
+                    "licences are revoked — they are locked up and cannot be used by anyone else."
+                });
               })
           : []
       )
@@ -493,11 +618,15 @@ export const CHECKS = [
             }
             if (!shared) continue;
             found.push(
-              finding(
-                `${a.item.name} and ${b.item.name} both apply to ${a.item.ssid} and meet in ${ctx.nameOf(shared)}. ` +
-                  "Which one wins varies from device to device.",
-                { groups: [shared], items: [a.item.id, b.item.id] }
-              )
+              finding(say`${app(a.item)} and ${app(b.item)}: same network "${a.item.ssid}" in ${ctx.group(shared)}`, {
+                groups: [shared],
+                items: [a.item.id, b.item.id],
+                detail:
+                  `Both profiles configure the network ${a.item.ssid}${a.item.platform ? ` on ${a.item.platform}` : ""} ` +
+                  `and both reach the devices in ${ctx.nameOf(shared)}. A device keeps whichever profile it applied ` +
+                  "last, so settings such as security type, certificate and proxy can differ from device to device " +
+                  "and change after a sync."
+              })
             );
           }
         }
@@ -520,11 +649,14 @@ export const CHECKS = [
                 return c && c.users > 0 && sum(c.devices) > 0;
               })
               .map((a) =>
-                finding(
-                  `${item.name} goes to ${ctx.nameOf(a.groupId)}, which has both users and devices directly in it. ` +
-                    "The profile then also reaches the users' own devices.",
-                  { groups: [a.groupId], items: [item.id] }
-                )
+                finding(say`${app(item)}: to mixed group ${ctx.group(a.groupId)}`, {
+                  groups: [a.groupId],
+                  items: [item.id],
+                  detail:
+                    `${ctx.nameOf(a.groupId)} has both users and devices as direct members. A profile assigned to a ` +
+                    "user applies to every device that user is enrolled with, so it also lands on the users' other " +
+                    "devices — not only on the devices listed in the group."
+                })
               )
           : []
       )
@@ -542,9 +674,13 @@ export const CHECKS = [
             if (outer === inner || outer.groupId === inner.groupId || outer.intent !== inner.intent) continue;
             if (!ctx.descendants(outer.groupId).has(inner.groupId)) continue;
             found.push(
-              finding(`${item.name}: ${ctx.nameOf(inner.groupId)} is already part of ${ctx.nameOf(outer.groupId)}.`, {
+              finding(say`${app(item)}: ${ctx.group(inner.groupId)} already inside ${ctx.group(outer.groupId)}`, {
                 groups: [outer.groupId, inner.groupId],
-                items: [item.id]
+                items: [item.id],
+                detail:
+                  `${ctx.nameOf(inner.groupId)} is nested in ${ctx.nameOf(outer.groupId)}, and both have the same ` +
+                  "assignment. The inner one adds nothing today; it only matters if the group is moved out of the " +
+                  "outer one. That is why it is worth a look rather than an error."
               })
             );
           }
@@ -567,16 +703,20 @@ export const CHECKS = [
         const ring = [...ctx.descendants(id)].filter((n) => ctx.descendants(n).has(id));
         ring.forEach((n) => seen.add(n));
 
-        const affected = ctx.byItem
-          .filter(({ includes }) => includes.some((a) => ring.includes(a.groupId)))
-          .map(({ item }) => item.name);
+        const affected = ctx.byItem.filter(({ includes }) => includes.some((a) => ring.includes(a.groupId)));
 
         found.push(
-          finding(
-            `${ring.map(ctx.nameOf).join(" ↔ ")} contain each other.` +
-              (affected.length ? ` Assigned there: ${affected.join(", ")} — unclear who actually gets it.` : ""),
-            { groups: ring }
-          )
+          finding(say`${joined(ring.map(ctx.group), " ↔ ")}: circular membership`, {
+            groups: ring,
+            items: affected.map(({ item }) => item.id),
+            detail:
+              `${ring.map(ctx.nameOf).join(", ")} contain each other through nesting. Entra allows it, but anything ` +
+              "that walks the membership — Intune's evaluation, reports, this tree — has to cut the loop somewhere, " +
+              "so who is actually a member is ambiguous." +
+              (affected.length
+                ? ` Assigned there: ${affected.map(({ item }) => item.name).join(", ")} — it is unclear who gets it.`
+                : "")
+          })
         );
       }
       return found;
@@ -592,16 +732,23 @@ export const CHECKS = [
       for (const { item, includes } of ctx.byItem) {
         for (const a of includes) {
           if (depthOf(ctx, a.groupId) < DEEP) continue;
-          byGroup.set(a.groupId, [...(byGroup.get(a.groupId) ?? []), item.name]);
+          const list = byGroup.get(a.groupId) ?? [];
+          if (!list.includes(item)) list.push(item);
+          byGroup.set(a.groupId, list);
         }
       }
-      return [...byGroup].map(([id, names]) =>
-        finding(
-          `${ctx.nameOf(id)} reaches ${depthOf(ctx, id)} levels down and ${ctx.descendants(id).size - 1} groups. ` +
-            `Assigned: ${[...new Set(names)].join(", ")}.`,
-          { groups: [id] }
-        )
-      );
+      return [...byGroup].map(([id, items]) => {
+        const depth = depthOf(ctx, id);
+        const below = ctx.descendants(id).size - 1;
+        return finding(say`${ctx.group(id)}: ${depth} levels, ${below} groups below`, {
+          groups: [id],
+          items: items.map((i) => i.id),
+          detail:
+            `Everything assigned to ${ctx.nameOf(id)} reaches ${below} groups up to ${depth} levels down: ` +
+            `${items.map((i) => i.name).join(", ")}. The deeper the nesting, the harder it is to tell from a single ` +
+            "group what it receives, and a membership change far down silently widens or narrows the reach."
+        });
+      });
     }
   },
   {
@@ -619,11 +766,14 @@ export const CHECKS = [
         .filter((list) => list.length > 1)
         .map((list) => {
           const orgs = [...new Set(list.map((i) => i.vppOrganization).filter(Boolean))];
-          return finding(
-            `${list[0].name} exists ${list.length} times` +
-              (orgs.length > 1 ? `, from different VPP tokens: ${orgs.join(" and ")}.` : "."),
-            { items: list.map((i) => i.id) }
-          );
+          return finding(say`${app(list[0])}: exists ${list.length} times`, {
+            items: list.map((i) => i.id),
+            detail:
+              `There are ${list.length} items named ${list[0].name}` +
+              (orgs.length > 1 ? `, from different VPP tokens (${orgs.join(" and ")})` : "") +
+              ". Assignments can be split between them, reports count them separately, and for VPP apps each copy " +
+              "has its own licence count — one copy can look out of licences while another has plenty."
+          });
         });
     }
   },
@@ -636,7 +786,13 @@ export const CHECKS = [
       ctx.byItem
         .filter(({ item, allUsers }) => allUsers.length && /GeneralDeviceConfiguration$|GeneralConfiguration$|Restriction/i.test(item.type ?? ""))
         .map(({ item }) =>
-          finding(`${item.name} goes to all users — staff get the restrictions too.`, { items: [item.id] })
+          finding(say`${app(item)}: restrictions to All users`, {
+            items: [item.id],
+            detail:
+              `${item.name} is assigned to All users, so it applies to the devices of every licensed user — staff ` +
+              "and administrators too, not only students. Restrictions such as blocked app installs, camera or " +
+              "account changes then hit devices they were never meant for."
+          })
         )
   },
   {
@@ -652,11 +808,15 @@ export const CHECKS = [
               .filter((a) => ctx.subtree(a.groupId).deviceCount > KIOSK_MAX_DEVICES)
               .map((a) => {
                 const s = ctx.subtree(a.groupId);
-                return finding(
-                  `${item.name} goes to ${ctx.nameOf(a.groupId)} with ${atLeast(s.deviceCount, s.capped)} devices. ` +
-                    "All of them are locked to the kiosk apps at the next sync.",
-                  { groups: [a.groupId], items: [item.id] }
-                );
+                return finding(say`${app(item)}: kiosk to ${ctx.group(a.groupId)} (${atLeast(s.deviceCount, s.capped)} devices)`, {
+                  groups: [a.groupId],
+                  items: [item.id],
+                  detail:
+                    "A kiosk profile locks a device to one or a few apps. Through " +
+                    `${ctx.nameOf(a.groupId)} it reaches ${atLeast(s.deviceCount, s.capped)} devices, and all of ` +
+                    "them are put in kiosk mode at their next sync. Removing the assignment afterwards does not " +
+                    "always reset the device."
+                });
               })
           : []
       )
@@ -676,11 +836,13 @@ export const CHECKS = [
         if (deviceChildren < 2 || !userChildren.length || userChildren.length >= deviceChildren) continue;
         for (const child of userChildren) {
           found.push(
-            finding(
-              `${ctx.nameOf(child)} (users) sits in ${ctx.nameOf(id)}, where the other subgroups are devices. ` +
-                "Device profiles for the group now reach all of the users' devices.",
-              { groups: [id, child] }
-            )
+            finding(say`User group ${ctx.group(child)} inside device branch ${ctx.group(id)}`, {
+              groups: [id, child],
+              detail:
+                `The other subgroups of ${ctx.nameOf(id)} contain devices, but ${ctx.nameOf(child)} contains users. ` +
+                `Device profiles assigned to ${ctx.nameOf(id)} now also target these users, and through them every ` +
+                "device they are enrolled with."
+            })
           );
         }
       }
@@ -703,11 +865,14 @@ export const CHECKS = [
           }
           if (!shared) continue;
           found.push(
-            finding(
-              `${rings[i].item.name} and ${rings[j].item.name} both hit ${ctx.nameOf(shared)}. ` +
-                "The devices there get two sets of update rules.",
-              { groups: [shared], items: [rings[i].item.id, rings[j].item.id] }
-            )
+            finding(say`${app(rings[i].item)} and ${app(rings[j].item)} overlap in ${ctx.group(shared)}`, {
+              groups: [shared],
+              items: [rings[i].item.id, rings[j].item.id],
+              detail:
+                `Both update rings reach the devices in ${ctx.nameOf(shared)}. A device should be in exactly one ` +
+                "ring; with two, the settings conflict, Intune reports a conflict for the device, and deferrals and " +
+                "deadlines become unpredictable."
+            })
           );
         }
       }
@@ -734,10 +899,12 @@ export const CHECKS = [
       return Object.entries(devices)
         .filter(([os, n]) => os !== "other" && n > 0 && !covered.has(os))
         .map(([os, n]) =>
-          finding(
-            `At least ${n} ${os} devices, but no compliance policy for ${os} is assigned. ` +
-              "The devices are then counted as compliant without anything being checked."
-          )
+          finding(say`${os}: at least ${n} devices, no compliance policy`, {
+            detail:
+              `No compliance policy for ${os} is assigned, so at least ${n} ${os} devices are never checked. With ` +
+              "the tenant default \"Mark devices with no compliance policy assigned as: Compliant\" they count as " +
+              "compliant anyway — and pass any Conditional Access rule that requires a compliant device."
+          })
         );
     }
   },
@@ -751,8 +918,12 @@ export const CHECKS = [
       return [...ctx.items.values()]
         .filter((item) => isVpp(item) && item.usedLicenses > 0 && !assigned.has(item.id))
         .map((item) =>
-          finding(`${item.name} has ${item.usedLicenses} used licences but no assignment. They are not freed by themselves.`, {
-            items: [item.id]
+          finding(say`${app(item)}: ${item.usedLicenses} licences used, no assignment`, {
+            items: [item.id],
+            detail:
+              `${item.name} has no assignments, but ${item.usedLicenses} licences are still in use. Removing an ` +
+              "assignment does not revoke licences, so they stay with the users or devices that got them and " +
+              "cannot be reused."
           })
         );
     }
@@ -766,7 +937,13 @@ export const CHECKS = [
       ctx.byItem
         .filter(({ allDevices, allUsers }) => [...allDevices, ...allUsers].some((a) => a.intent === "uninstall"))
         .map(({ item }) =>
-          finding(`${item.name} is uninstalled from everyone — even where it is needed.`, { items: [item.id] })
+          finding(say`${app(item)}: uninstall to everyone`, {
+            items: [item.id],
+            detail:
+              `${item.name} is assigned as Uninstall to All users or All devices. It is removed everywhere, and any ` +
+              "group that should have it as Required now conflicts with the uninstall — the outcome follows " +
+              "Intune's conflict rules, not the intention."
+          })
         )
   },
   {
@@ -779,12 +956,23 @@ export const CHECKS = [
         excludes
           .filter((ex) => includes.some((a) => a.groupId === ex.groupId))
           .map((ex) =>
-            finding(
-              `${item.name} is both assigned and excluded for ${ctx.nameOf(ex.groupId)}. The exclusion wins — nobody there gets it.`,
-              { groups: [ex.groupId], items: [item.id] }
-            )
+            finding(say`${app(item)}: ${ctx.group(ex.groupId)} both included and excluded`, {
+              groups: [ex.groupId],
+              items: [item.id],
+              detail:
+                `${ctx.nameOf(ex.groupId)} is both assigned and excluded. Exclusions always win in Intune, so ` +
+                `nobody in the group gets ${item.name} — the assignment has no effect.`
+            })
           )
       )
+  },
+  {
+    id: "expired-connections",
+    title: `Connections that have expired or expire within ${EXPIRY_CRITICAL_DAYS} days`,
+    severity: "bad",
+    right: `No token or certificate has expired or expires within ${EXPIRY_CRITICAL_DAYS} days.`,
+    needs: ["connections"],
+    run: (ctx) => expiring(ctx, (days) => days < EXPIRY_CRITICAL_DAYS)
   },
   {
     id: "expiring-connections",
@@ -792,20 +980,34 @@ export const CHECKS = [
     severity: "warn",
     right: `No tokens or certificates expire within ${EXPIRY_WARN_DAYS} days.`,
     needs: ["connections"],
-    run: (ctx) =>
-      (ctx.connections?.items ?? [])
-        .filter((c) => c.expires)
-        .map((c) => ({ c, days: Math.floor((new Date(c.expires).getTime() - ctx.now) / DAY) }))
-        .filter(({ days }) => days <= EXPIRY_WARN_DAYS)
-        .map(({ c, days }) =>
-          finding(
-            days < 0
-              ? `${c.sourceLabel}: ${c.name} expired ${-days} days ago.`
-              : `${c.sourceLabel}: ${c.name} expires in ${days} days.`
-          )
-        )
+    run: (ctx) => expiring(ctx, (days) => days >= EXPIRY_CRITICAL_DAYS && days <= EXPIRY_WARN_DAYS)
   }
 ];
+
+/**
+ * Anslutningar vars återstående dagar `within` släpper igenom, som fynd.
+ * Delas av felet (under tio dagar) och varningen (inom en månad).
+ */
+function expiring(ctx, within) {
+  return (ctx.connections?.items ?? [])
+    .filter((c) => c.expires)
+    .map((c) => ({ c, days: Math.floor((new Date(c.expires).getTime() - ctx.now) / DAY) }))
+    .filter(({ days }) => within(days))
+    .map(({ c, days }) =>
+      finding(
+        days < 0
+          ? say`${c.sourceLabel}: ${conn(c)} expired ${-days} days ago`
+          : say`${c.sourceLabel}: ${conn(c)} expires in ${days} days`,
+        {
+          detail:
+            `${c.name} ${days < 0 ? "expired" : "expires"} on ${new Date(c.expires).toISOString().slice(0, 10)}. ` +
+            "When a connection expires, whatever depends on it stops: without APNS, Apple devices stop receiving " +
+            "anything from Intune; without a valid VPP token, app licences stop syncing; without an Android " +
+            "enrolment token, new devices cannot enrol."
+        }
+      )
+    );
+}
 
 const RANK = { bad: 0, warn: 1, info: 2 };
 
@@ -838,7 +1040,8 @@ export function findingsByGroup(analysis, parentsOf) {
           index,
           severity: check.severity,
           title: check.title,
-          text: finding.text
+          text: finding.text,
+          parts: finding.parts
         });
         direct.set(groupId, list);
       }
@@ -905,5 +1108,34 @@ export function analyse(input) {
     else counts[check.status] += 1;
   }
 
+  return { checks, counts };
+}
+
+/**
+ * Samma analys, avgränsad till en plattform. Ett fynd står kvar om någon av
+ * dess poster gäller plattformen, eller om det inte handlar om någon post
+ * alls (t.ex. gruppstruktur). Poster utan känd plattform gäller alla.
+ *
+ * @param {ReturnType<typeof analyse>} analysis
+ * @param {Array<{id: string, platform: string|null}>} items
+ * @param {string} platform tomt = ingen avgränsning
+ */
+export function forPlatform(analysis, items, platform) {
+  if (!platform || !analysis) return analysis;
+  const platformOf = new Map(items.map((item) => [item.id, item.platform ?? null]));
+  const keep = (finding) =>
+    !finding.items?.length || finding.items.some((id) => matchesPlatform(platformOf.get(id) ?? null, platform));
+
+  const checks = analysis.checks.map((check) => {
+    if (check.status !== "found") return check;
+    const findings = check.findings.filter(keep);
+    return { ...check, status: findings.length ? "found" : "ok", findings };
+  });
+
+  const counts = { bad: 0, warn: 0, info: 0, ok: 0, unknown: 0 };
+  for (const check of checks) {
+    if (check.status === "found") counts[check.severity] += 1;
+    else counts[check.status] += 1;
+  }
   return { checks, counts };
 }

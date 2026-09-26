@@ -62,17 +62,23 @@ jobs:
       - name: Bygg paket
         # Bara det tillägget laddar. spike/ och Projekt tree/ hör inte hemma i butiken.
         # tests/ följer med eftersom inställningarna länkar dit — men inte Node-skripten.
+        #
+        # Filerna läggs upp som de är, inte som en zip. GitHub zippar alltid en
+        # artefakt vid nedladdning; laddades vår zip upp blev det en zip i en
+        # zip. Nu är det GitHub-zippen som är paketet: packa upp och ladda in,
+        # eller skicka till butiken. publish-jobbet zippar en gång, själv.
         run: |
-          mkdir -p dist
-          paths=(manifest.json managed_schema.json src tests)
-          [[ -d icons ]] && paths+=(icons)
-          zip -r -X "dist/aidtune-${{ steps.check.outputs.version }}.zip" "${paths[@]}" -x "tests/*.mjs"
-          unzip -l dist/*.zip
+          mkdir -p dist/package
+          cp -r manifest.json managed_schema.json src tests dist/package/
+          [[ -d icons ]] && cp -r icons dist/package/
+          find dist/package/tests -name '*.mjs' -delete
+          (cd dist/package && find . -type f | sort)
 
       - uses: actions/upload-artifact@v4
         with:
-          name: aidtune-${{ steps.check.outputs.version }}
-          path: dist/*.zip
+          name: inuplus-${{ steps.check.outputs.version }}
+          path: dist/package/
+          if-no-files-found: error
 
   publish:
     needs: package
@@ -85,7 +91,15 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: aidtune-${{ needs.package.outputs.version }}
+          name: inuplus-${{ needs.package.outputs.version }}
+          path: package
+
+      - name: Zippa paketet
+        # Den enda zippningen: manifest.json ska ligga överst i zippen.
+        run: |
+          cd package
+          zip -r -X "../inuplus-${{ needs.package.outputs.version }}.zip" .
+          unzip -l "../inuplus-${{ needs.package.outputs.version }}.zip" | head -5
 
       - id: auth
         uses: google-github-actions/auth@v2
@@ -101,7 +115,7 @@ jobs:
           res=$(curl -sS --fail-with-body -X POST \
             -H "Authorization: Bearer $TOKEN" \
             -H "Content-Type: application/zip" \
-            --data-binary @"aidtune-${{ needs.package.outputs.version }}.zip" \
+            --data-binary @"inuplus-${{ needs.package.outputs.version }}.zip" \
             "$API/upload/v2/$ITEM:upload")
           echo "$res" | jq .
 
@@ -131,5 +145,5 @@ jobs:
       - name: GitHub-release
         uses: softprops/action-gh-release@v2
         with:
-          files: aidtune-${{ needs.package.outputs.version }}.zip
+          files: inuplus-${{ needs.package.outputs.version }}.zip
           generate_release_notes: true

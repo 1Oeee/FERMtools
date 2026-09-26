@@ -734,7 +734,7 @@ export const MISTAKES = [
     title: "Device licence to student groups",
     check: "device-licence-to-users",
     where: "Seesaw → Norrskolan - Åk 1 and Åk 2",
-    why: "The app follows the students instead of the carts and takes one licence per device each student signs in on. The licences run out long before all carts have the app.",
+    why: "Supported, but here it follows the students instead of the carts and takes one licence per device each student is enrolled with — worth checking that this is the intent.",
     items: [appNamed("Seesaw")],
     groups: grade(norr, "1", "2")
   },
@@ -901,10 +901,141 @@ export const MISTAKES = [
   }
 ];
 
+// --- Granskningsloggar ---------------------------------------------------
+//
+// En ändring i Intune och en i Entra per inlagt fel, så att "Who changed it"
+// har något att visa i demot. Samma form som Graphs auditEvents och
+// directoryAudits.
+
+const ADMINS = ["anna.admin@contoso.com", "per.it@contoso.com", "lisa.drift@contoso.com"];
+
+export const auditEvents = MISTAKES.flatMap((mistake, i) =>
+  mistake.items.filter(Boolean).map((item, j) => {
+    const type = mobileApps.includes(item) ? "MobileApp" : "DeviceConfiguration";
+    return {
+      id: `demo-audit-${i}-${j}`,
+      displayName: `Patch ${type}`,
+      componentName: type === "MobileApp" ? "MobileApps" : "DeviceConfiguration",
+      activity: `Patch ${type}`,
+      activityDateTime: inDays(-(3 + i * 2 + j)),
+      activityType: `Patch ${type}`,
+      activityOperationType: "Patch",
+      activityResult: "Success",
+      category: type === "MobileApp" ? "Application" : "DeviceConfiguration",
+      actor: { type: "ItPro", userPrincipalName: ADMINS[i % ADMINS.length] },
+      resources: [
+        {
+          displayName: item.displayName ?? item.name,
+          resourceId: item.id,
+          type,
+          modifiedProperties: [{ displayName: "Assignments", oldValue: null, newValue: null }]
+        }
+      ]
+    };
+  })
+);
+
+const DELETED_GROUP_AUDIT = {
+  id: "demo-entra-deleted",
+  activityDateTime: inDays(-21),
+  activityDisplayName: "Delete group",
+  category: "GroupManagement",
+  result: "success",
+  initiatedBy: { user: { userPrincipalName: ADMINS[1], displayName: "Per IT" } },
+  targetResources: [{ id: DELETED_GROUP_ID, displayName: "Intune - Västerskolan - Smartboards", type: "Group", modifiedProperties: [] }]
+};
+
+export const directoryAudits = [
+  DELETED_GROUP_AUDIT,
+  ...MISTAKES.flatMap((mistake, i) =>
+    mistake.groups.filter(Boolean).slice(0, 1).map((g) => ({
+      id: `demo-entra-${i}`,
+      activityDateTime: inDays(-(2 + i)),
+      activityDisplayName: g.membershipRule ? "Update group" : "Add member to group",
+      category: "GroupManagement",
+      result: "success",
+      initiatedBy: { user: { userPrincipalName: ADMINS[(i + 1) % ADMINS.length] } },
+      targetResources: [
+        { id: g.id, displayName: g.displayName, type: "Group", modifiedProperties: [{ displayName: g.membershipRule ? "MembershipRule" : "Group.ObjectID" }] }
+      ]
+    }))
+  )
+];
+// --- Hanterade enheter ---------------------------------------------------
+//
+// Delade konton (del1, delad2 …) med en vagn iPads var, personal med en
+// dator och en telefon, och några iPads utan användare. Ett konto utan
+// mönstret har ändå flera iPads — det är det "flera enheter"-läget ska hitta.
+
+let deviceSerial = 0;
+
+function managedDevice(upn, displayName, kind, { lastSyncDays = -0.5 } = {}) {
+  const n = ++deviceSerial;
+  const ipad = kind === "ipad";
+  const iphone = kind === "iphone";
+  const android = kind === "android";
+  const look = {
+    ipad: { name: `IPAD-${String(n).padStart(4, "0")}`, os: "iOS", version: "17.6.1", model: "iPad (9th generation)" },
+    iphone: { name: `iPhone ${n}`, os: "iOS", version: "17.6.1", model: "iPhone 13" },
+    android: { name: `AND-${String(n).padStart(4, "0")}`, os: "Android", version: "14", model: "Galaxy A35" },
+    pc: { name: `PC-${String(n).padStart(4, "0")}`, os: "Windows", version: "10.0.22631.4169", model: "Latitude 5440" }
+  }[ipad || iphone || android ? kind : "pc"];
+  return {
+    id: `30000000-0000-4000-8000-${String(n).padStart(12, "0")}`,
+    deviceName: look.name,
+    userId: upn ? `40000000-0000-4000-8000-${String(upn.length * 97 + upn.charCodeAt(0)).padStart(12, "0")}` : "",
+    userPrincipalName: upn ?? "",
+    userDisplayName: displayName ?? "",
+    operatingSystem: look.os,
+    osVersion: look.version,
+    model: look.model,
+    serialNumber: `DMPX${String(n * 7919).padStart(8, "0")}`,
+    lastSyncDateTime: inDays(lastSyncDays),
+    enrolledDateTime: inDays(-200 - (n % 90)),
+    // Poängen läser de här: var nionde inte kompatibel, var tolfte dator okrypterad.
+    complianceState: n % 9 === 0 ? "noncompliant" : "compliant",
+    isEncrypted: look.os === "Windows" ? n % 12 !== 0 : true,
+    managedDeviceOwnerType: "company"
+  };
+}
+
+const cart = (upn, name, count, stale = 0, kind = "ipad") =>
+  Array.from({ length: count }, (_, i) => managedDevice(upn, name, kind, { lastSyncDays: i < stale ? -45 : -0.5 }));
+
+export const managedDevices = [
+  ...cart("del1@contoso.com", "Delat konto 1", 15),
+  ...cart("del2@contoso.com", "Delat konto 2", 12, 1),
+  ...cart("del10@contoso.com", "Delat konto 10", 9),
+  ...cart("delad2@contoso.com", "Delad 2", 14),
+  ...cart("delad4@contoso.com", "Delad 4", 6),
+  // Namnstandarden med bara en iPad kvar — ska ändå synas, med 14 lediga platser.
+  ...cart("del3@contoso.com", "Delat konto 3", 1),
+  // Delade telefoner: jourtelefoner på iPhone, fritids på Android.
+  ...cart("del7@contoso.com", "Jourtelefoner", 5, 0, "iphone"),
+  ...cart("delad6@contoso.com", "Fritids telefoner", 4, 0, "android"),
+  ...cart("delad6@contoso.com", "Fritids telefoner", 2),
+  // Över taket: registrerade innan gränsen sänktes. Två har inte synkat på länge.
+  ...cart("norr.del5@contoso.com", "Norrskolan del 5", 17, 2),
+  // Liknar mönstret men är personer med en egen enhet — inte delade konton.
+  managedDevice("fidel1@contoso.com", "Fidel Ek", "pc"),
+  managedDevice("andel2@contoso.com", "Andel Holm", "pc"),
+  managedDevice("adele.berg@contoso.com", "Adele Berg", "pc"),
+  managedDevice("adele.berg@contoso.com", "Adele Berg", "iphone"),
+  // Inget mönster i namnet, men en hel vagn — hittas bara med "flera enheter".
+  ...cart("oster.lanvagn@contoso.com", "Österskolan lånevagn", 12),
+  ...["anna.lind", "per.berg", "sara.holm", "jonas.ek"].flatMap((user) => [
+    managedDevice(`${user}@contoso.com`, user.replace(".", " "), "pc"),
+    managedDevice(`${user}@contoso.com`, user.replace(".", " "), "iphone")
+  ]),
+  managedDevice("maria.sjo@contoso.com", "maria sjo", "ipad"),
+  // Enheter utan användare räknas inte på något konto.
+  ...cart(null, null, 5)
+];
+
 // --- Poäng: hur tenanten är inställd -------------------------------------
 //
-// Poängens underlag (src/graph/posture.js). Läggs sist, så att id:n ovanför
-// inte flyttas. Tenanten är halvbra med flit: antivirus, BitLocker, ASR, LAPS
+// Poängens underlag (src/graph/posture.js). Enhetsinventariet delas med
+// Shared accounts och ligger längre ner (managedDevices). Tenanten är halvbra med flit: antivirus, BitLocker, ASR, LAPS
 // och uppdateringsringar finns, men brandvägg, säkerhetsbaslinje, Windows
 // Hello och rensningsregler saknas, och enheter utan policy räknas som
 // kompatibla.
@@ -945,30 +1076,6 @@ export const deviceEnrollmentConfigurations = [
     state: "notConfigured"
   }
 ];
-
-/**
- * Enhetsinventariet, som Graph returnerar det med poängens $select. Samma
- * utfall varje gång: var nionde inte kompatibel, var tolfte dator
- * okrypterad, var elfte tyst i över en månad.
- */
-export const managedDevices = [
-  ["Windows", 210],
-  ["iOS", 250],
-  ["Android", 30],
-  ["macOS", 10]
-].flatMap(([os, count]) =>
-  Array.from({ length: count }, (_, n) => {
-    const index = serial++;
-    return {
-      id: `30000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
-      operatingSystem: os,
-      complianceState: index % 9 === 0 ? "noncompliant" : "compliant",
-      isEncrypted: os === "Windows" || os === "macOS" ? index % 12 !== 0 : true,
-      lastSyncDateTime: inDays(index % 11 === 0 ? -45 : -(index % 5)),
-      managedDeviceOwnerType: "company"
-    };
-  })
-);
 
 export const managedDeviceCleanupRules = [];
 export const managedDeviceCleanupSettings = { deviceInactivityBeforeRetirementInDays: "0" };

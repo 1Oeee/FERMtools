@@ -143,7 +143,7 @@ export class PortalTokenSource {
     if (!resolved) {
       // Loggas för att gå att felsöka: känner vi inte igen målgruppen är det
       // den listan som behöver utökas, och då vill vi veta vad som stod där.
-      console.debug("AidTune: unknown token audience, skipping:", claims.aud);
+      console.debug("Inu+: unknown token audience, skipping:", claims.aud);
       return false;
     }
 
@@ -160,7 +160,7 @@ export class PortalTokenSource {
     this.#prune(resolved);
 
     console.debug(
-      `AidTune: ny ${resolved}-token, aud=${claims.aud}, ` +
+      `Inu+: ny ${resolved}-token, aud=${claims.aud}, ` +
         `grupp-scopes=${covers(claims, GROUP_SCOPES).length}, ` +
         `intune-scopes=${covers(claims, INTUNE_SCOPES).length}, via ${source}`
     );

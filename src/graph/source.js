@@ -37,7 +37,7 @@ const MISSING_TOKEN =
   "Intune token missing. Open the page the button above points to and we will capture it.";
 
 /**
- * @param {{key: string, url: string, single?: boolean, params?: object}} source
+ * @param {{key: string, url: string, single?: boolean, params?: object, limit?: number}} source
  * @returns {Promise<{ items: any[], via: "graph"|"intune" }>}
  */
 export async function fetchSource(source, graphClient, intuneClient, onPage = null) {
@@ -47,7 +47,7 @@ export async function fetchSource(source, graphClient, intuneClient, onPage = nu
       const body = await client.request(url);
       return body ? [body] : [];
     }
-    return client.getAll(url, { onPage });
+    return client.getAll(url, { onPage, limit: source.limit ?? Infinity });
   };
 
   try {

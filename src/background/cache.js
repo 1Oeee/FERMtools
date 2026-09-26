@@ -36,6 +36,10 @@ export const DEFAULT_SETTINGS = {
   prefix: "Intune - ",
   showLoose: true,
   onlyWithAssignments: false,
+  // Shared accounts: delar av användarnamnet som betyder "delat konto".
+  sharedPatterns: "del, delad",
+  // Intunes tak för enheter per användare. Lediga platser räknas mot det.
+  deviceLimit: 15,
   // Påhittad tenant i stället för portalens. Se src/demo/.
   demo: false,
   // Fliken Hälsokontroll: regler för rätt och fel i tilldelningarna.

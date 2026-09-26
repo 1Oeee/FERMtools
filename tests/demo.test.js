@@ -8,7 +8,7 @@ import { createDemoClient } from "../src/demo/client.js";
 import * as tenant from "../src/demo/tenant.js";
 import { fetchGroups, fetchChildEdges, fetchMembers } from "../src/graph/groups.js";
 import { fetchAssignments } from "../src/graph/assignments.js";
-import { fetchConnections } from "../src/graph/connections.js";
+import { fetchConnections, vppLicences, withTokens, licencesForToken } from "../src/graph/connections.js";
 import { buildForest } from "../src/tree/build.js";
 
 const client = createDemoClient();
@@ -126,4 +126,73 @@ test("demo: okänd grupp ger 404", async () => {
     status = e.status;
   }
   assert.equal(status, 404, "status för okänd grupp");
+});
+
+test("demo: VPP-appar hittar sin token även utan vppTokenId, som i Graph v1.0", async () => {
+  const { items } = await fetchConnections(client, client);
+  const tokens = items.filter((item) => item.kind === "vpp");
+
+  // v1.0 skickar Apple-ID och organisation, men inte token-id.
+  const v1 = tenant.mobileApps
+    .filter((app) => typeof app.totalLicenseCount === "number")
+    .map(({ vppTokenId, ...rest }) => rest);
+  const licences = withTokens(vppLicences(v1), tokens);
+
+  assert.ok(licences.every((licence) => licence.tokenId), "varje app har fått en token");
+  for (const token of tokens) {
+    const expected = tenant.mobileApps.filter((app) => app.vppTokenId === token.id).length;
+    assert.equal(licencesForToken(licences, token.id).length, expected, `appar i ${token.name}`);
+  }
+});
+
+test("VPP: tvetydigt Apple-ID ger ingen token hellre än fel token", () => {
+  const tokens = [
+    { id: "a", appleId: "vpp@x.se", organization: "Skola A" },
+    { id: "b", appleId: "vpp@x.se", organization: "Skola B" }
+  ];
+  const licence = (org) => ({ id: org, tokenId: null, tokenAppleId: "vpp@x.se", organization: org });
+  const [a, unknown] = withTokens([licence("Skola A"), licence("Skola C")], tokens);
+  assert.equal(a.tokenId, "a", "organisationen avgör när Apple-ID delas");
+  assert.equal(unknown.tokenId, null, "ingen träff alls");
+});
+
+test("VPP: tokenens namn före Apple-ID, Apple-ID före den gemensamma organisationen", async () => {
+  const { SOURCES } = await import("../src/graph/connections.js");
+  assert.ok(SOURCES.find((s) => s.key === "vppTokens").url.startsWith("/beta/"), "namnet finns bara i beta");
+
+  // Utan displayName — som i v1.0 — ska två tokens i samma organisation ändå gå isär.
+  const org = "Contoso Municipality";
+  const stub = {
+    request: async () => null,
+    getAll: async () => [
+      { id: "1", appleId: "vpp.a@contoso.com", organizationName: org, expirationDateTime: null },
+      { id: "2", appleId: "vpp.b@contoso.com", organizationName: org, expirationDateTime: null }
+    ]
+  };
+  const { fetchConnections } = await import("../src/graph/connections.js");
+  const { items } = await fetchConnections(stub, stub);
+  assert.same(items.filter((i) => i.kind === "vpp").map((i) => i.name), ["vpp.a@contoso.com", "vpp.b@contoso.com"], "namn");
+
+  const { items: demo } = await fetchConnections(client, client);
+  assert.ok(demo.some((i) => i.kind === "vpp" && i.name === "VPP Grundskola"), "demots tokennamn");
+});
+
+test("VPP: fungerar inte betan hämtas tokens från v1.0 — och de andra källorna påverkas inte", async () => {
+  const { fetchConnections } = await import("../src/graph/connections.js");
+  const { GraphError } = await import("../src/graph/client.js");
+  const asked = [];
+  const stub = {
+    request: async () => null,
+    getAll: async (url) => {
+      asked.push(url);
+      if (url.startsWith("/beta/")) throw new GraphError("Forbidden", { status: 403, code: "Forbidden", url });
+      if (url.includes("vppTokens")) return [{ id: "1", appleId: "vpp@x.se", organizationName: "Org" }];
+      if (url.includes("depOnboardingSettings")) return [{ id: "2", tokenName: "ADE", tokenExpirationDateTime: null }];
+      return [];
+    }
+  };
+  const { items, sources } = await fetchConnections(stub, stub);
+  assert.ok(asked.includes("/v1.0/deviceAppManagement/vppTokens"), "v1.0 efter betan");
+  assert.same(items.map((i) => i.name).sort(), ["ADE", "vpp@x.se"], "både VPP och ADE kom med");
+  assert.ok(sources.find((s) => s.key === "vppTokens").ok, "VPP räknas som hämtad");
 });

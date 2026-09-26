@@ -1,10 +1,7 @@
 // Details panel for the selected group.
 
 import { describeGroup, isDynamic } from "../graph/groups.js";
-import { showPortal } from "./embed.js";
-
-const INTUNE_GROUP =
-  "https://intune.microsoft.com/#view/Microsoft_AAD_IAM/GroupDetailsMenuBlade/~/Overview/groupId/";
+import { URLS, openInIntuneTab, itemLinkButton, groupPortalButton } from "./portal.js";
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -26,7 +23,10 @@ function itemList(items, emptyText) {
   const list = el("ul", "d-list");
   for (const item of items) {
     const li = el("li");
-    li.append(el("span", "d-name", item.name));
+    // The name opens the app or profile itself in Intune.
+    const name = el("span", "d-name");
+    name.append(itemLinkButton(item));
+    li.append(name);
     li.append(el("span", "d-src", item.sourceLabel));
     list.append(li);
   }
@@ -38,11 +38,13 @@ function groupLinks(ids, nodeById, onPick, emptyText) {
 
   const list = el("ul", "d-list");
   for (const id of ids) {
+    // The name jumps to the group in the tree; ↗ opens it in Intune.
     const li = el("li");
-    const link = el("button", "linklike", nodeById.get(id)?.displayName ?? id);
+    const link = el("button", "linklike group-link", nodeById.get(id)?.displayName ?? id);
     link.type = "button";
+    link.title = "Show the group in the tree";
     link.addEventListener("click", () => onPick(id));
-    li.append(link);
+    li.append(link, " ", groupPortalButton(id));
     list.append(li);
   }
   return list;
@@ -61,37 +63,11 @@ async function copy(text, button) {
   }, 1200);
 }
 
-/**
- * Intune opens in the tab we are already in — a new tab would be redundant.
- * If AidTune sits over the portal surface the page is folded away too,
- * otherwise the blade would end up behind it.
- */
-function openInIntuneTab(url) {
-  chrome.tabs.query({ url: "https://intune.microsoft.com/*" }, (tabs) => {
-    if (chrome.runtime.lastError || !tabs?.length) {
-      chrome.tabs.create({ url });
-      return;
-    }
-    chrome.tabs.update(tabs[0].id, { url, active: true });
-    chrome.windows.update(tabs[0].windowId, { focused: true });
-    showPortal();
-  });
-}
-
 const MARK = { bad: "✗", warn: "!", info: "i" };
-const SHORT = 170;
-
-/** First sentence, or a truncation at a word boundary. The full text is in the tab. */
-function shorten(text) {
-  const sentence = text.match(/^.+?[.!?](?=\s|$)/)?.[0] ?? text;
-  if (sentence.length <= SHORT) return sentence;
-  const cut = sentence.slice(0, SHORT);
-  return `${cut.slice(0, cut.lastIndexOf(" ")) || cut} …`;
-}
 
 /**
- * The group's health check findings, in brief. Each finding links to its entry in
- * the Health check tab, where the full explanation is.
+ * The group's health check findings, as their short lines. Each finding links
+ * to its entry in the Health check tab, where the full explanation is.
  */
 function healthSection(health) {
   const box = el("div", "d-health");
@@ -113,7 +89,7 @@ function healthSection(health) {
     const head = el("div", "d-issue-head");
     head.append(el("span", `d-issue-mark ${finding.severity}`, MARK[finding.severity]), el("strong", null, finding.title));
     item.append(head);
-    item.append(el("div", "d-issue-text", shorten(finding.text)));
+    item.append(el("div", "d-issue-text", finding.text));
 
     const link = el("button", "linklike d-issue-link", "Show in Health check →");
     link.type = "button";
@@ -211,13 +187,13 @@ export function renderDetails(container, ctx) {
   body.append(id);
 
   const links = el("div", "d-links");
-  for (const [label, base, launch, hint] of [
-    ["Open group", INTUNE_GROUP, openInIntuneTab, "Switches the blade in the portal tab"]
+  for (const [label, url, launch, hint] of [
+    ["Open group", URLS.group(selectedId), openInIntuneTab, "Switches the blade in the portal tab"]
   ]) {
     const button = el("button", "secondary small", label);
     button.type = "button";
     button.title = hint;
-    button.addEventListener("click", () => launch(base + selectedId));
+    button.addEventListener("click", () => launch(url));
     links.append(button);
   }
   body.append(links);

@@ -2,7 +2,7 @@
   "type": "object",
   "properties": {
     "authMode": {
-      "title": "How AidTune gets its access",
+      "title": "How Inu+ gets its access",
       "description": "\"portal\" borrows the Intune portal's tokens; \"msal\" signs in to your organisation's own app registration.",
       "type": "string",
       "enum": ["portal", "msal"]

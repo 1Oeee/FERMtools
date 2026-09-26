@@ -4,7 +4,10 @@
 // and inside each subtree. Nobody should have to hunt for what is urgent.
 
 import { el, daysUntil, relativeDays, expiryTone } from "../dom.js";
-import { vppLicences, licenceTotals, licencesForToken } from "../../graph/connections.js";
+import { vppLicences, licenceTotals, licencesForToken, withTokens } from "../../graph/connections.js";
+import { connectionButton } from "../portal.js";
+import { headerRow, sortRows } from "../sort.js";
+import { matchesPlatform, platformLabel } from "../../common/platforms.js";
 
 const GROUPS = [
   { kind: "vpp", label: "VPP" },
@@ -12,12 +15,18 @@ const GROUPS = [
   { kind: "apns", label: "APNS" }
 ];
 
+/** Vilka plattformar varje källa gäller, för plattformsfiltret. */
+const PLATFORMS_OF = {
+  vppTokens: ["iOS", "macOS"],
+  appleEnrollment: ["iOS", "macOS"],
+  apns: ["iOS", "macOS"],
+  androidEnrollment: ["Android"]
+};
+
 const state = {
   open: { vpp: true, enrollment: true, apns: true },
-  licencesOpen: false,
-  licenceQuery: "",
-  /** Tomt = alla VPP-tokens. Annars id:t på den token vi tittar i. */
-  vppToken: "",
+  /** Sortering per tabell, t.ex. { vpp: { key: "free", dir: "asc" } }. */
+  sort: {},
   data: null,
   loading: false,
   error: null
@@ -83,19 +92,39 @@ function renderGroup(group, items) {
   }
 
   const isVpp = group.kind === "vpp";
-  const licences = isVpp ? vppLicences(state.data?.vppApps ?? []) : [];
+  const licences = isVpp ? withTokens(vppLicences(state.data?.vppApps ?? []), mine) : [];
+
+  // Varje VPP-token är en egen licenspool — dess siffror räknas en gång här.
+  const poolOf = new Map(mine.map((item) => [item.id, licenceTotals(licencesForToken(licences, item.id))]));
+
+  // Utan vald sortering: det som går ut först, först (så kommer datat).
+  const columns = [
+    { key: "name", label: "Name", type: "text", value: (item) => item.name },
+    { key: "details", label: "Details" },
+    { key: "expires", label: "Expires", type: "date", value: (item) => (item.expires ? Date.parse(item.expires) : null) },
+    ...(isVpp
+      ? [
+          { key: "total", label: "Total", cls: "num", type: "number", value: (item) => poolOf.get(item.id).total },
+          { key: "used", label: "Used", cls: "num", type: "number", value: (item) => poolOf.get(item.id).used },
+          { key: "free", label: "Free", cls: "num", type: "number", value: (item) => poolOf.get(item.id).free }
+        ]
+      : [])
+  ];
 
   const table = el("table", "grid");
-  const head = el("tr");
-  const columns = isVpp
-    ? ["Name", "Details", "Expires", "Total", "Used", "Free"]
-    : ["Name", "Details", "Expires"];
-  for (const label of columns) head.append(el("th", null, label));
-  table.append(head);
+  table.append(
+    headerRow(columns, state.sort[group.kind], (sort) => {
+      state.sort[group.kind] = sort;
+      draw();
+    })
+  );
 
-  for (const item of mine) {
+  for (const item of sortRows(mine, columns, state.sort[group.kind])) {
     const tr = el("tr");
-    tr.append(el("td", null, item.name));
+    // Namnet öppnar just den här token i Intune.
+    const name = el("td");
+    name.append(connectionButton(item));
+    tr.append(name);
 
     // Upprepa inte namnet i detaljerna — det är redan kolumnen bredvid.
     const detail = [item.appleId, item.organization, item.topic, item.enrollmentMode]
@@ -107,163 +136,21 @@ function renderGroup(group, items) {
 
     // Varje VPP-token är en egen licenspool — visa dess status direkt i raden.
     if (isVpp) {
-      const totals = licenceTotals(licencesForToken(licences, item.id));
+      const totals = poolOf.get(item.id);
       tr.append(el("td", "num", String(totals.total)));
       tr.append(el("td", "num", String(totals.used)));
       tr.append(el("td", `num ${totals.total > 0 && totals.free === 0 ? "exp-critical" : ""}`, String(totals.free)));
 
-      // Klick på raden filtrerar licenslistan till just den här poolen.
+      // Klick på raden visar poolens appar i Licenses.
       tr.classList.add("clickable");
-      tr.title = "Show only apps in this VPP token";
-      tr.addEventListener("click", () => {
-        state.vppToken = state.vppToken === item.id ? "" : item.id;
-        state.licencesOpen = true;
-        draw();
-      });
-      if (state.vppToken === item.id) tr.classList.add("selected-row");
+      tr.title = "Show the apps in this VPP token under Licenses";
+      tr.addEventListener("click", () => ctx.openLicences(item.id));
     }
 
     table.append(tr);
   }
 
   box.append(table);
-
-  if (isVpp) box.append(renderLicences(licences, mine));
-  return box;
-}
-
-// --- VPP-licenser --------------------------------------------------------
-
-function renderLicences(apps, tokens) {
-  const box = el("details", "subtree nested");
-  box.open = state.licencesOpen;
-  box.addEventListener("toggle", () => {
-    if (state.licencesOpen === box.open) return;
-    state.licencesOpen = box.open;
-  });
-
-  const summary = el("summary");
-  summary.append(el("span", "subtree-name", `Licences (${apps.length} apps)`));
-
-  const active = tokens.find((token) => token.id === state.vppToken);
-  if (active) summary.append(el("span", "subtree-when", `filtered: ${active.name}`));
-  else if (state.vppToken === "__orphans") {
-    summary.append(el("span", "subtree-when", "filtered: no known token"));
-  }
-
-  box.append(summary);
-
-  if (!apps.length) {
-    box.append(
-      el(
-        "div",
-        "d-empty",
-        state.data?.haveTreeData
-          ? "No VPP apps found among the apps."
-          : "Fetch the tree first — the licences are taken from that fetch."
-      )
-    );
-    return box;
-  }
-
-  // Filtrera på VPP-token: varje token är en egen licenspool, och frågan är
-  // nästan alltid "vilka appar ligger i den här?".
-  const picker = el("select", "licence-filter");
-  picker.title = "Show only apps in a given VPP token";
-
-  const all = el("option", null, `All VPP tokens (${apps.length} apps)`);
-  all.value = "";
-  picker.append(all);
-
-  // Apple-ID bara när namnet inte räcker för att skilja två tokens åt.
-  const nameCounts = new Map();
-  for (const token of tokens) {
-    nameCounts.set(token.name, (nameCounts.get(token.name) ?? 0) + 1);
-  }
-
-  for (const token of tokens) {
-    const count = licencesForToken(apps, token.id).length;
-    const ambiguous = nameCounts.get(token.name) > 1 && token.appleId;
-    const label = ambiguous ? `${token.name} · ${token.appleId}` : token.name;
-    const option = el("option", null, `${label} (${count} apps)`);
-    option.value = token.id;
-    picker.append(option);
-  }
-
-  // Appar utan känd token hamnar annars i ingenmansland.
-  const orphans = apps.filter((app) => !tokens.some((token) => token.id === app.tokenId));
-  if (orphans.length) {
-    const option = el("option", null, `No known token (${orphans.length} apps)`);
-    option.value = "__orphans";
-    picker.append(option);
-  }
-
-  // En ny hämtning kan ha tagit bort den token vi filtrerade på. Utan det här
-  // visar rullisten "Alla" medan listan är tom, vilket ser ut som en bugg.
-  picker.value = state.vppToken;
-  if (picker.value !== state.vppToken) state.vppToken = "";
-
-  picker.addEventListener("change", () => {
-    state.vppToken = picker.value;
-    drawList();
-  });
-
-  const search = el("input", "licence-search");
-  search.type = "search";
-  search.placeholder = "Filter the apps …";
-  search.value = state.licenceQuery;
-
-  const listHost = el("div");
-  const drawList = () => {
-    const inPool =
-      state.vppToken === "__orphans"
-        ? orphans
-        : licencesForToken(apps, state.vppToken);
-
-    const needle = state.licenceQuery.trim().toLocaleLowerCase("sv");
-    const shown = needle
-      ? inPool.filter((app) => app.name.toLocaleLowerCase("sv").includes(needle))
-      : inPool;
-
-    const table = el("table", "grid");
-    const head = el("tr");
-    for (const label of ["App", "Total", "Used", "Free"]) head.append(el("th", null, label));
-    table.append(head);
-
-    for (const app of shown) {
-      const tr = el("tr");
-      tr.append(el("td", null, app.name));
-      tr.append(el("td", "num", String(app.total)));
-      tr.append(el("td", "num", String(app.used)));
-      // Slut på licenser är det man vill se direkt.
-      tr.append(el("td", `num ${app.free === 0 ? "exp-critical" : ""}`, String(app.free)));
-      table.append(tr);
-    }
-
-    const totals = licenceTotals(shown);
-
-    listHost.replaceChildren(
-      table,
-      el(
-        "div",
-        "hint",
-        `${shown.length} of ${inPool.length} apps · ${totals.used} of ${totals.total} ` +
-          `licences used · ${totals.free} free`
-      )
-    );
-  };
-
-  let timer = null;
-  search.addEventListener("input", () => {
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      state.licenceQuery = search.value;
-      drawList();
-    }, 150);
-  });
-
-  drawList();
-  box.append(picker, search, listHost);
   return box;
 }
 
@@ -284,10 +171,35 @@ function draw() {
     return;
   }
 
-  const items = state.data?.items ?? [];
-  body.append(renderHeadline(items));
+  const items = (state.data?.items ?? []).filter((item) =>
+    matchesPlatform(PLATFORMS_OF[item.sourceKey] ?? null, ctx.platform)
+  );
+  // Filtret sparas mellan besöken — det som döljs måste synas, annars ser det
+  // ut som att hämtningen slutat fungera.
+  const hidden = (state.data?.items ?? []).length - items.length;
+  if (ctx.platform && hidden > 0) {
+    const notice = el("div", "notice warn");
+    notice.append(
+      `${hidden} token(s) and certificate(s) are hidden by the platform filter (${platformLabel(ctx.platform)} only). `
+    );
+    const showAll = el("button", "linklike", "Show all platforms");
+    showAll.type = "button";
+    showAll.addEventListener("click", () => ctx.setPlatform(""));
+    notice.append(showAll);
+    body.append(notice);
+  }
 
-  for (const group of GROUPS) body.append(renderGroup(group, items));
+  if (ctx.platform && !items.length) {
+    body.append(el("div", "d-empty", `No tokens or certificates for ${platformLabel(ctx.platform)}.`));
+  } else {
+    body.append(renderHeadline(items));
+  }
+
+  // Med ett plattformsfilter döljs de sorter som inte gäller plattformen alls.
+  for (const group of GROUPS) {
+    if (ctx.platform && !items.some((item) => item.kind === group.kind)) continue;
+    body.append(renderGroup(group, items));
+  }
 
   // Vad gick inte att hämta, och vilken knapp löser det?
   const failed = (state.data?.sources ?? []).filter((s) => !s.ok);
@@ -313,7 +225,10 @@ function draw() {
     )}${viaIntune ? ` · ${viaIntune} source(s) via the Intune backend` : ""}`
   );
 
+  // Sortering ritar om hela ytan — den ska inte hoppa upp till toppen.
+  const scrolled = host.querySelector(".module-pad")?.scrollTop ?? 0;
   host.replaceChildren(body);
+  body.scrollTop = scrolled;
 }
 
 async function load({ force = false } = {}) {

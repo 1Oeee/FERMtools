@@ -1,33 +1,33 @@
-# AidTune Privacy Policy
+# Inu+ Privacy Policy
 
 _Last updated: 2026-09-25_
 
-AidTune is a browser extension that shows the group structure of your
+Inu+ is a browser extension that shows the group structure of your
 Microsoft Entra / Intune tenant as a tree inside the Intune admin portal
 (intune.microsoft.com).
 
-## How AidTune reads data — in full
+## How Inu+ reads data — in full
 
-**Nothing is read until you agree.** On first run AidTune shows this explanation
+**Nothing is read until you agree.** On first run Inu+ shows this explanation
 and asks whether to use your tenant or try the built-in demo (which reads
-nothing). Until you allow it, AidTune does not listen to any request and does
+nothing). Until you allow it, Inu+ does not listen to any request and does
 not look at the portal's storage. You can withdraw consent at any time in
 Settings, which stops all reading and discards the tokens it holds.
 
-AidTune can read your tenant in one of two ways, and you (or your
+Inu+ can read your tenant in one of two ways, and you (or your
 organisation's policy) choose which:
 
 - **Sign-in mode.** You sign in through Microsoft's own sign-in page to an app
   registration that your organisation created and controls. The access token is
   issued to that app and carries only the read permissions your administrator
-  granted it. In this mode AidTune does not read the portal's tokens, request
+  granted it. In this mode Inu+ does not read the portal's tokens, request
   headers or storage at all. The only extra network destination is Microsoft's
   sign-in service, `login.microsoftonline.com`.
 - **Portal mode**, described below.
 
 ### Portal mode
 
-In portal mode AidTune has no sign-in of its own. It works by
+In portal mode Inu+ has no sign-in of its own. It works by
 **borrowing the access tokens the Intune portal already holds for you**, and it
 gets them in two ways. Both apply only to tabs on `intune.microsoft.com`.
 
@@ -45,13 +45,15 @@ gets them in two ways. Both apply only to tabs on `intune.microsoft.com`.
 It then uses those tokens to make **read-only requests** to the same
 Microsoft endpoints. Every request is a GET, except that Microsoft Graph
 requests are grouped through Graph's `$batch` endpoint, which is itself a POST
-but contains nothing except GET sub-requests. AidTune uses them to read: groups, group memberships, and the apps,
+but contains nothing except GET sub-requests. Inu+ uses them to read: groups, group memberships, and the apps,
 configuration profiles, policies, connectors and tokens (VPP, enrolment) that
-are assigned to them. When you open the Score tab it also reads the tenant's
-compliance policy settings, enrollment configurations and device cleanup
-rules, and a summary of the managed device inventory: each device's operating
-system, compliance state, encryption state and last check-in time. Device
-names, users and serial numbers are not requested. A token carries **your** admin permissions, so AidTune
+are assigned to them, and — only when you open the Shared accounts tab — the
+managed devices (name, model, serial number, OS, last sync and primary user).
+When you open the Score tab it also reads the tenant's compliance policy
+settings, enrollment configurations and device cleanup rules, and a summary of
+the managed device inventory: each device's operating system, compliance state,
+encryption state and last check-in time.
+A token carries **your** admin permissions, so Inu+
 can read whatever your account can read there. It never sends a
 create, update or delete request.
 
@@ -61,7 +63,14 @@ Besides tokens and tenant data, the extension also reads on the portal page:
 - the position of the portal's left menu and top bar, to place its own page.
 It does not read anything else on the page and does not read other websites.
 
-## What AidTune does not do
+The only things it does in the portal itself: when you click a shared
+account or a VPP token in Inu+, it opens the list it belongs in (Devices → All
+devices, or Apple VPP tokens) and types that name into the list's search box,
+as you would by hand. For a VPP token it then clicks the row with exactly that
+name, so the token opens. The name is also placed on your clipboard, in case
+the search box can't be reached.
+
+## What Inu+ does not do
 
 - It does **not** send tokens, tenant data or anything about you to the
   developer or any third party. There is no analytics, telemetry, advertising
@@ -97,7 +106,7 @@ network requests.
 
 ## Audit it yourself
 
-AidTune is open source. Don't take this policy on trust — read the code:
+Inu+ is open source. Don't take this policy on trust — read the code:
 https://github.com/1Oeee/FERMtools. Token handling is in
 `src/background/token.js` (request headers), `src/content/token-scan.js`
 (portal storage scan) and `src/background/msal.js` (sign-in mode); the requests it makes are in `src/graph/`. The package

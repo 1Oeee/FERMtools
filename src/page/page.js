@@ -8,11 +8,14 @@ import { treeModule } from "./modules/tree.js";
 import { connectionsModule } from "./modules/connections.js";
 import { healthModule } from "./modules/health.js";
 import { scoreModule } from "./modules/score.js";
-import { analyse, findingsByGroup } from "../health/checks.js";
+import { licensesModule } from "./modules/licenses.js";
+import { accountsModule } from "./modules/accounts.js";
+import { analyse, findingsByGroup, forPlatform } from "../health/checks.js";
+import { PLATFORMS } from "../common/platforms.js";
 import { buildForest } from "../tree/build.js";
 
 // reportsModule is not listed until the Excel export is built.
-const MODULES = [treeModule, scoreModule, connectionsModule, healthModule];
+const MODULES = [treeModule, scoreModule, connectionsModule, licensesModule, accountsModule, healthModule];
 
 /** Moduler med en `setting` visas bara när den inställningen är på. */
 const availableModules = () => MODULES.filter((m) => !m.setting || state.settings?.[m.setting]);
@@ -27,7 +30,8 @@ const ui = {
   settings: document.getElementById("settings"),
   close: document.getElementById("close"),
   module: document.getElementById("module"),
-  footer: document.getElementById("footer")
+  footer: document.getElementById("footer"),
+  platform: document.getElementById("platform")
 };
 
 const state = {
@@ -38,6 +42,8 @@ const state = {
   needsPortal: false,
   tokenStatus: null,
   activeId: MODULES[0].id,
+  /** Plattformsfiltret. Gäller alla flikar, sparas mellan besöken. */
+  platform: "",
   mounted: new Set(),
   // Lästa notiser. Nyckeln innehåller texten, så ett meddelande som ändrar
   // sig dyker upp igen i stället för att tystas.
@@ -108,11 +114,15 @@ function moduleContext(module) {
     tokenStatus: state.tokenStatus,
     send,
     health: state.health,
+    /** Plattformsfiltret i sidhuvudet. Tomt = alla plattformar. */
+    platform: state.platform,
+    setPlatform,
     reloadHealth: (options) => loadHealth(options),
     score: state.score,
     reloadScore: (options) => loadScore(options),
     openFinding,
     openGroup,
+    openLicences,
     setStatus: (text) => {
       if (isActive()) renderStatus(text);
     },
@@ -195,6 +205,12 @@ function openGroup(groupId) {
   showModule("tree");
 }
 
+/** Från en VPP-token i Connections till dess appar i Licenses. */
+function openLicences(tokenId) {
+  state.pendingFocus = { module: "licenses", target: tokenId };
+  showModule("licenses");
+}
+
 function computeHealth() {
   const payload = state.health.payload;
   if (!payload || !state.data) {
@@ -203,7 +219,7 @@ function computeHealth() {
     return;
   }
 
-  state.health.analysis = analyse({
+  const full = analyse({
     groups: state.data.groups,
     edges: state.data.edges,
     items: state.data.items ?? [],
@@ -214,6 +230,8 @@ function computeHealth() {
     connections: payload.connections,
     prefix: state.settings?.prefix ?? ""
   });
+  // Plattformsfiltret gäller både fliken och trädets markeringar.
+  state.health.analysis = forPlatform(full, state.data.items ?? [], state.platform);
   const { parentsOf } = buildForest(state.data.groups, state.data.edges);
   state.health.index = findingsByGroup(state.health.analysis, parentsOf);
 }
@@ -263,6 +281,37 @@ async function loadScore({ force = false } = {}) {
 function invalidateModules() {
   state.mounted.clear();
 }
+
+// --- Plattformsfilter ----------------------------------------------------
+
+function renderPlatform() {
+  const all = el("option", null, "All platforms");
+  all.value = "";
+  ui.platform.replaceChildren(
+    all,
+    ...PLATFORMS.map(({ id, label }) => {
+      const option = el("option", null, label);
+      option.value = id;
+      return option;
+    })
+  );
+  ui.platform.value = state.platform;
+  // Ett aktivt filter ska synas — annars undrar man vart hälften tog vägen.
+  ui.platform.classList.toggle("active", Boolean(state.platform));
+}
+
+/** Byt plattformsfilter — från rullistan, eller från en flik som vill visa allt. */
+function setPlatform(platform) {
+  state.platform = platform;
+  ui.platform.value = platform;
+  ui.platform.classList.toggle("active", Boolean(platform));
+  chrome.storage.local.set({ platform }).catch(() => {});
+  computeHealth();
+  // Flikarna som inte är framme ritas om med det nya filtret när de visas.
+  refreshActive();
+}
+
+ui.platform.addEventListener("change", () => setPlatform(ui.platform.value));
 
 function renderTabs() {
   ui.tabs.replaceChildren(
@@ -654,7 +703,7 @@ chrome.runtime.onMessage.addListener((message) => {
   // ska synas på samma ställe.
   // Trädhämtningen gäller alla flikar. Connections, Hälsokontroll och Poäng hämtar
   // för sig själva, och deras framsteg hör bara hemma när de är framme.
-  const ownStage = { connections: ["connections"], health: ["health"], score: ["score"] }[message?.stage];
+  const ownStage = { connections: ["connections"], health: ["health"], score: ["score"], devices: ["accounts"] }[message?.stage];
   if (
     message?.type === "progress" &&
     (state.loading || (ownStage && ownStage.includes(activeModule().id)))
@@ -665,7 +714,8 @@ chrome.runtime.onMessage.addListener((message) => {
       assignments: "Reading assignments",
       connections: "Reading connections",
       health: "Health check: analyzing",
-      score: "Score: reading"
+      score: "Score: reading",
+      devices: "Reading devices"
     };
     const detail = message.detail;
     const n = typeof detail === "number" || typeof detail === "string" ? ` (${detail})` : "";
@@ -692,7 +742,7 @@ ui.settings.addEventListener("click", () => chrome.runtime.openOptionsPage());
 ui.close.addEventListener("click", closePage);
 
 ui.detach.addEventListener("click", () => {
-  // Samma sida, utan portalen omkring. Vill man ha AidTune uppe medan man
+  // Samma sida, utan portalen omkring. Vill man ha Inu+ uppe medan man
   // arbetar i portalen är en egen flik bättre än att växla fram och tillbaka.
   chrome.tabs.create({ url: chrome.runtime.getURL("src/page/page.html") });
 });
@@ -758,7 +808,7 @@ function renderConsent() {
     el(
       "p",
       null,
-      "AidTune gives you a powerful overview of how your Intune tenant is put together, right inside the " +
+      "Inu+ gives you a powerful overview of how your Intune tenant is put together, right inside the " +
         "portal you already work in. It can read your tenant in one of two ways — you choose. The quickest " +
         "needs nothing set up, because it works through the session you already have. Here is exactly how:"
     )
@@ -796,7 +846,7 @@ function renderConsent() {
     return a;
   };
   audit.append(
-    "You don't have to take our word for it. AidTune is open source — please audit the code yourself: ",
+    "You don't have to take our word for it. Inu+ is open source — please audit the code yourself: ",
     anchor("view it on GitHub", REPO_URL),
     " (token handling is in src/background/token.js and src/content/token-scan.js), or ",
     anchor("read the full privacy policy", POLICY_URL),
@@ -808,7 +858,7 @@ function renderConsent() {
   alternative.append(
     el("strong", null, "Prefer not to borrow the portal's tokens? "),
     "Sign in with your organisation's own app registration instead. An Entra admin registers the app " +
-      "once and grants it read-only Graph permissions; AidTune then signs you in through Microsoft and " +
+      "once and grants it read-only Graph permissions; Inu+ then signs you in through Microsoft and " +
       "never looks at the portal's tokens or storage. It's the route a security review will find easiest " +
       "to approve, and it keeps working if Microsoft changes the portal. Still read-only, still no server of ours."
   );
@@ -852,11 +902,13 @@ function renderConsent() {
   }
 
   try {
-    const stored = await chrome.storage.local.get("activeModule");
+    const stored = await chrome.storage.local.get(["activeModule", "platform"]);
     if (MODULES.some((m) => m.id === stored?.activeModule)) state.activeId = stored.activeModule;
+    if (PLATFORMS.some((p) => p.id === stored?.platform)) state.platform = stored.platform;
   } catch {
     /* strunt samma */
   }
+  renderPlatform();
 
   state.settings = await send({ type: "settings" });
   if (needsConsent()) {

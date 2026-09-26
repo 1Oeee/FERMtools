@@ -4,7 +4,14 @@ Version scheme: `0.1`, `0.2`, `0.3` … One step per delivered batch of work.
 The version lives in `manifest.json` and must always match the top entry here.
 `1.0` when the extension is stable enough to use daily without reservations.
 
-## 0.18 — 2026-09-25
+## 0.20 — 2026-09-26
+
+Two features built next to the 0.17–0.19 work, merged into it here: a sign-in
+mode with your own app registration, and the Score tab. They were first on
+`main` as 0.17 and 0.18 before the Inu+ branch came in; those numbers now
+belong to the entries below.
+
+### Score
 
 Score: how the tenant is set up, graded like a Lighthouse report against
 Microsoft's recommendations. A tab of its own, separate from the Health check.
@@ -31,7 +38,7 @@ Microsoft's recommendations. A tab of its own, separate from the Health check.
 - Microsoft Learn links are drawn by shared code (`src/page/findings.js`).
   Tests: `tests/score.test.js`.
 
-## 0.17 — 2026-09-25
+### Sign-in mode
 
 Sign-in mode: read the tenant through your organisation's own app registration
 instead of borrowing the portal's tokens. Both ways stay available; the user,
@@ -46,7 +53,7 @@ or an admin by policy, chooses.
   headers and storage are never read.
 - **Welcome panel** offers three choices: borrow the portal session, use my own
   app registration, or try the demo.
-- **Settings:** a "How AidTune reads your tenant" section — portal mode with its
+- **Settings:** a "How Inu+ reads your tenant" section — portal mode with its
   consent toggle, or sign-in mode with client ID, tenant, the redirect URI to
   register, and Sign in / Sign out.
 - **Policy:** `authMode`, `msalClientId` and `msalTenant` can be set through
@@ -58,6 +65,113 @@ or an admin by policy, chooses.
 - New permission: `identity`. Tests: `tests/msal.test.js` (protocol and token
   refresh, faked endpoints) and `tests/signin.mjs` (browser).
 
+### Packaging
+
+- The release workflow no longer puts the zip inside another zip. The build
+  artifact now holds the extension's files directly, so the artifact GitHub
+  hands out *is* the package; the publish job zips it once for the Chrome Web
+  Store and the GitHub release.
+
+## 0.19 — 2026-09-26
+
+Sortable lists, panels on the right, and VPP tokens by their real names.
+
+- **Sortable columns.** Click a column heading in Licenses (App, Assignments,
+  Total, Used, Free), Shared accounts (Account, iPads, iPhones, Android,
+  Devices, Free slots, and the devices' Last sync) or Connections (Name,
+  Expires, and Total/Used/Free for VPP) to sort — numbers highest first,
+  click again for lowest first. Names sort naturally: `skola_del2` before
+  `skola_del10`.
+- **Details on the right.** In Licenses and Shared accounts, clicking a row
+  shows its details in a panel on the right, like the tree — the list stays
+  where you scrolled instead of jumping to the top.
+- **Phones in Shared accounts.** iPhones and Android get columns of their own
+  next to iPads, with totals.
+- **Name matching for shared accounts.** Stems match `del1`, `skola_del1`,
+  `skoladel1` and `skola_del1a`, but never `adele`. Names that follow the
+  standard always show, even with a single device; looser matches like
+  `fidel1` need more than one device. A selector shows only accounts with one
+  device, or every match, for troubleshooting.
+- **VPP tokens by name.** Tokens show the name they have in the portal,
+  fetched from Graph beta — v1.0 only has the organisation name, which is
+  often the same for every token in the tenant. If beta can't be reached, v1.0
+  is used, with the Apple ID as the name.
+- **Apps find their VPP token.** Graph v1.0 doesn't say which token an app
+  belongs to, so every token showed 0 apps. Apps are now matched by the
+  token's Apple ID, or its organisation name when the Apple ID is shared — and
+  left without a token rather than put in the wrong one.
+- **VPP token links.** A VPP token's name opens that token in Intune: there is
+  no address per token, so the extension opens Apple VPP tokens, searches for
+  the name and clicks the matching row. Tokens and certificates in Health
+  check's expiry findings link the same way.
+- **Expiry is red under ten days.** A token or certificate that has expired
+  or has less than ten days left is an error in Health check and red in
+  Connections; ten to thirty days is a warning.
+- **Device licence to a user group is a tip.** It is supported, and right for
+  a shared account with its cart; Health check now says so and only asks you
+  to check that the group holds no one whose every device shouldn't get the app.
+- **Deselect in the tree.** Clicking the selected group again, or pressing
+  Esc, deselects it and closes the details panel, so the tree gets the full
+  width. A double-click still just unfolds the branch.
+- **Hidden by the platform filter.** Connections says how many tokens the
+  platform filter hides, with a button to show all platforms.
+
+## 0.18 — 2026-09-25
+
+Everything you see by name can be opened, and shared accounts are counted.
+
+- **Licenses tab.** VPP licences moved out of Connections into a tab of their
+  own, filtered per VPP token, showing how each app is distributed: which
+  groups get it, required or available, device or user licensing, and which
+  groups are excluded. The app name opens the app in Intune.
+- **Shared accounts tab.** Every account named like `del1` or `delad2`, with
+  its number of iPads and devices — the same count Intune shows when you
+  search for the account under Devices. Each account's devices (model, serial
+  number, last sync; stale ones marked) open in Intune. The name stems are set
+  in Settings. A second mode lists any account with more than one device,
+  whatever its name. Devices are fetched only when the tab is opened.
+- **Free slots.** Each account shows how many more devices it can enroll under
+  the device limit (15 by default, set in Settings), marks full accounts and
+  those over the limit, and can be narrowed to accounts with room left. The
+  limit counts every device on the account, whatever the platform filter shows.
+- **Account → Devices.** Clicking a shared account opens Devices → All devices
+  in Intune with the account typed into the search box. The name is also put
+  on the clipboard, in case the box can't be reached.
+- **Platform filter.** A selector in the header — Windows, iOS/iPadOS, macOS,
+  Android, Linux — narrows every tab at once: the tree's markers and details,
+  licences, connections, shared accounts' devices and health check findings.
+  Items without a known platform (web apps, some policies) always show. The
+  choice is remembered.
+- **Connections links.** Each enrollment token and Android enrollment profile
+  opens its own blade in Intune by name. Clicking a VPP token's row shows its
+  apps under Licenses.
+- **Tree links.** In the details panel, apps and configurations open the item
+  itself in Intune. Subgroups and parent groups jump to the group in the tree,
+  and ↗ next to them opens the group in Intune.
+- The portal addresses for enrollment tokens, configuration profiles, settings
+  catalog, compliance policies, users and All devices are unverified guesses,
+  all kept in `portal.js`.
+
+## 0.17 — 2026-09-25
+
+Health check findings are short, linked and explained.
+
+- **Short lines.** Each finding is one line, e.g. "Seesaw: device licensing to
+  user group Norrskolan - Åk 1". The app or profile opens in Intune; the group
+  opens in the tree.
+- **Details column.** Click a finding and the right-hand column explains what
+  it means for those groups and items, how it should be, how to fix it (with
+  Microsoft Learn links), and links to every app, profile and group involved.
+- **Who changed it.** On request, the column reads Intune's audit log (last 30
+  days) for the item and Entra's audit log for the groups — who, when, what
+  changed. Entra needs a token with AuditLog.Read.All; without it, and always
+  below the results, there is a step-by-step guide for searching both logs
+  yourself, with names and IDs ready to copy.
+- The tree's details panel shows the short lines in full instead of a
+  truncated first sentence.
+- **Renamed to Inu+.** Every AidTune name in the extension, portal entry,
+  settings, privacy policy, store listing and release build is now Inu+
+  (`inuplus` where a technical identifier can't carry a `+`).
 ## 0.16.1 — 2026-09-25
 
 Fixes for 0.16. The Health check tab and the tree markers were hidden, because
@@ -76,13 +190,13 @@ Fixed zip build to exclude extra manifests and top-level wrappers.
 Consent first: nothing reads the portal until the user has said yes.
 
 - **Welcome and consent panel.** On first install a tab opens explaining exactly
-  how AidTune gets its data (borrowed portal tokens, read-only), with two
+  how Inu+ gets its data (borrowed portal tokens, read-only), with two
   choices: allow and use your own tenant, or try the demo first.
 - **No consent, no reading.** Until the user allows it, the request-header
   listeners are not even registered and the portal storage scan does not run.
   Demo mode needs no consent. Revoking consent in Settings stops capture and
   forgets every token held.
-- **Settings:** a consent toggle and a "How AidTune reads data" section with the
+- **Settings:** a consent toggle and a "How Inu+ reads data" section with the
   full disclosure, plus a link to the privacy policy.
 - **Demo notice:** the button is now "Use my own tenant".
 - Reports tab hidden until it is built; reading width fixed so the scrollbar
@@ -165,7 +279,7 @@ Fixed:
 
 ## 0.13 — 2026-09-24
 
-Demo mode: AidTune can be used without a tenant.
+Demo mode: Inu+ can be used without a tenant.
 
 - **A made-up municipality, Contoso,** with four primary schools and two
   upper-secondary schools: around 270 groups on several levels, 44 apps for iPad,
@@ -189,7 +303,7 @@ Demo mode: AidTune can be used without a tenant.
   "expires in three days" is always right.
 - **Without a portal the page opens in a tab of its own** when demo mode is on —
   so a Chrome Web Store reviewer, who has no Intune, sees the whole extension.
-- **Saved settings refetch immediately** on the AidTune page, instead of waiting
+- **Saved settings refetch immediately** on the Inu+ page, instead of waiting
   for ⟳.
 - **The tests can be run in Node** (`node tests/run.mjs`), and GitHub Actions
   runs them before every package build. New tests tie the demo to the fetch
@@ -197,7 +311,7 @@ Demo mode: AidTune can be used without a tenant.
 
 ## 0.12 — 2026-09-18
 
-AidTune moves into the portal: the side panel is gone, and instead there is a
+Inu+ moves into the portal: the side panel is gone, and instead there is a
 page of its own in Intune with an entry in the left rail directly under
 **Home**.
 
@@ -207,7 +321,7 @@ page of its own in Intune with an entry in the left rail directly under
   throws the entry away — it is put back by a cheap check at regular intervals.
 - **The page lays itself over the content area, not over the whole window.** The
   rail and the top bar are left alone, so you can still switch blades, search and
-  sign out while AidTune is showing. The edges are measured instead of guessed:
+  sign out while Inu+ is showing. The edges are measured instead of guessed:
   the rail can be collapsed and the bar's height changes.
 - **Tree and details are now always side by side.** It was the side panel's width
   that once forced the details down under the rows. With a whole page that is no
@@ -219,7 +333,7 @@ page of its own in Intune with an entry in the left rail directly under
   nothing from the portal.
 - **The page folds itself away when it sends the tab somewhere else** — after a
   click on a permission button or on *Open in Intune* you want to see the blade,
-  not AidTune. It also closes on a blade switch in the portal.
+  not Inu+. It also closes on a blade switch in the portal.
 - **The page follows the portal's theme, not the browser's.** The portal's theme
   — Azure, Light, Dark, High contrast — lives in the portal's own settings and
   has nothing to do with `prefers-color-scheme`. Without this the page stood
@@ -254,7 +368,7 @@ page of its own in Intune with an entry in the left rail directly under
   four pin down the safety net above — white on white was not something you saw in
   the code, but it is trivial to test.
 - **⧉ opens the page in a tab of its own** instead of in a popup window. If you
-  want AidTune up while you work in the portal, a tab is better than switching.
+  want Inu+ up while you work in the portal, a tab is better than switching.
 - **The toolbar button takes you to the portal** and opens the page there. If no
   portal tab is open, one is started.
 - The `sidePanel` permission is removed from the manifest.

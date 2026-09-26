@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "AidTune – Steg 0 (spike)",
+  "name": "Inu+ – Steg 0 (spike)",
   "version": "0.2",
   "description": "Verifierar att Intune-portalens Graph-token går att låna.",
   "permissions": ["sidePanel", "storage", "webRequest", "tabs"],
@@ -17,7 +17,7 @@
     "default_path": "panel.html"
   },
   "action": {
-    "default_title": "AidTune (spike)"
+    "default_title": "Inu+ (spike)"
   },
   "content_scripts": [
     {

@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>AidTune – settings</title>
+    <title>Inu+ – settings</title>
     <link rel="stylesheet" href="../page/page.css" />
     <style>
       body {
@@ -104,7 +104,7 @@
     </style>
   </head>
   <body>
-    <h1>AidTune – settings</h1>
+    <h1>Inu+ – settings</h1>
 
     <div class="field">
       <label for="prefix">Show groups whose name starts with</label>
@@ -112,6 +112,30 @@
       <div class="hint">
         An empty field fetches every group in the tenant. That works, but gets slow
         and cluttered in a large tenant.
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="sharedPatterns">Shared accounts are named</label>
+      <input id="sharedPatterns" type="text" spellcheck="false" />
+      <div class="hint">
+        Name stems, separated by commas. <code>del, delad</code> finds del1, del10,
+        delad2, school_del3, schooldel1 and school_del1a — but not adele, delia or
+        delete. A stem followed by a digit matches anywhere in the username; without
+        a digit it has to stand alone between dots, underscores or hyphens.
+        Accounts that follow the naming standard (del3, school_del3) always show, even
+        with a single device. Looser matches (schooldel1, fidel1) count only with more
+        than one device, since a person with a laptop is not a shared account. Case doesn't
+        matter, and the domain after @ is ignored.
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="deviceLimit">Device limit per account</label>
+      <input id="deviceLimit" type="number" min="1" max="15" step="1" />
+      <div class="hint">
+        The device limit in your Intune enrollment restriction (Intune allows at most
+        15). Shared accounts shows how many free slots each account has left.
       </div>
     </div>
 
@@ -137,7 +161,7 @@
     </div>
 
     <fieldset id="access">
-      <legend>How AidTune reads your tenant</legend>
+      <legend>How Inu+ reads your tenant</legend>
       <div id="managedNote" class="hint" hidden>
         Some of these settings are set by your organisation's policy and can't be changed here.
       </div>
@@ -153,10 +177,10 @@
       <div class="field check indent" id="portalFields">
         <input id="consent" type="checkbox" />
         <div>
-          <label for="consent">Allow AidTune to use the portal's access tokens</label>
+          <label for="consent">Allow Inu+ to use the portal's access tokens</label>
           <div class="hint">
-            Required in this mode. Untick to stop AidTune from reading the portal's
-            tokens — see "How AidTune reads data" below.
+            Required in this mode. Untick to stop Inu+ from reading the portal's
+            tokens — see "How Inu+ reads data" below.
           </div>
         </div>
       </div>
@@ -167,7 +191,7 @@
           <label for="modeMsal">Sign in with my organisation's app registration</label>
           <div class="hint">
             An Entra admin registers an app once and grants it read-only Graph
-            permissions. AidTune then never touches the portal's tokens.
+            permissions. Inu+ then never touches the portal's tokens.
           </div>
         </div>
       </div>
@@ -218,9 +242,9 @@
     </div>
 
     <details class="disclosure">
-      <summary>How AidTune reads data</summary>
+      <summary>How Inu+ reads data</summary>
       <p>
-        <strong>Sign-in mode.</strong> AidTune signs you in to your organisation's
+        <strong>Sign-in mode.</strong> Inu+ signs you in to your organisation's
         own app registration through Microsoft's sign-in page (OAuth code flow with
         PKCE, no client secret). The token is issued to that app, carries only the
         permissions your admin granted it, and appears under that app in Entra's
@@ -229,7 +253,7 @@
         storage are not read at all.
       </p>
       <p>
-        <strong>Portal mode.</strong> AidTune has no sign-in of its own. It borrows the
+        <strong>Portal mode.</strong> Inu+ has no sign-in of its own. It borrows the
         access tokens the Intune portal already holds for you, and only from tabs on
         <code>intune.microsoft.com</code>:
       </p>
@@ -256,7 +280,7 @@
       <p>
         Also read on the portal page: the URL fragment (to know which page you are
         on), the portal's colours (to match the theme) and the position of its left
-        menu (to place AidTune's entry). Nothing else, and no other website.
+        menu (to place Inu+'s entry). Nothing else, and no other website.
       </p>
       <p>
         Nothing leaves your browser except requests to Microsoft. Tokens are kept in
@@ -265,7 +289,7 @@
         <a id="policy" href="https://github.com/1Oeee/FERMtools/blob/main/PRIVACY.md" target="_blank" rel="noopener">Full privacy policy</a>.
       </p>
       <p>
-        Don't take our word for it — AidTune is open source, so audit the code
+        Don't take our word for it — Inu+ is open source, so audit the code
         yourself: <a id="repo" href="https://github.com/1Oeee/FERMtools" target="_blank" rel="noopener">github.com/1Oeee/FERMtools</a>.
         Token handling is in <code>src/background/token.js</code>,
         <code>src/content/token-scan.js</code> and (sign-in mode)
@@ -274,7 +298,7 @@
     </details>
 
     <button id="save" type="button" class="secondary">Save</button>
-    <span id="saved" hidden>Saved — refreshing the AidTune page.</span>
+    <span id="saved" hidden>Saved — refreshing the Inu+ page.</span>
 
     <p class="hint" style="margin-top: 28px">
       <a id="tests" href="#">Run the unit tests</a> for the tree builder.

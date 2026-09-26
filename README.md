@@ -503,8 +503,15 @@ portal and a tab of its own — and then that test fails.
 ## Publishing
 
 `.github/workflows/release.yml` builds the store package — `manifest.json`,
-`src/`, `tests/` and `icons/` — on every push to `main`, and checks that the
-version in `manifest.json` matches the top entry in `CHANGELOG.md`.
+`managed_schema.json`, `src/`, `tests/` and `icons/` — on every push to `main`,
+and checks that the version in `manifest.json` matches the top entry in
+`CHANGELOG.md`.
+
+The build artifact holds those files directly, not a zip: GitHub zips every
+artifact when you download it, so the download *is* the package — unzip it and
+**Load unpacked**, or hand it to the store as it is. Only the publish job zips
+(once) for the Chrome Web Store and the GitHub release. Build zips are not
+committed; `*.zip` is in `.gitignore`.
 
 A new version goes out like this:
 

@@ -6,17 +6,17 @@
    för att den är framme, och den ritas i currentColor så att den följer med
    vare sig portalen står i ljust eller mörkt läge. */
 
-a.aidtune-sidebar-link {
+a.inuplus-sidebar-link {
   position: relative;
   cursor: pointer;
 }
 
-a.aidtune-sidebar-link.aidtune-selected {
+a.inuplus-sidebar-link.inuplus-selected {
   background: rgba(127, 127, 127, 0.18);
 }
 
 /* Samma markering som portalen ger den valda punkten: en stapel i kanten. */
-a.aidtune-sidebar-link.aidtune-selected::before {
+a.inuplus-sidebar-link.inuplus-selected::before {
   content: "";
   position: absolute;
   inset: 2px auto 2px 0;
@@ -31,7 +31,7 @@ a.aidtune-sidebar-link.aidtune-selected::before {
    Bakgrunden sätts också av skriptet, till den färg portalen själv målar med,
    så att ingenting blinkar vitt medan sidan laddar. `Canvas` är bara vad som
    gäller tills mätningen gjorts. */
-#aidtune-host {
+#inuplus-host {
   position: fixed;
   right: 0;
   bottom: 0;
@@ -41,15 +41,30 @@ a.aidtune-sidebar-link.aidtune-selected::before {
   box-shadow: inset 1px 0 0 rgba(127, 127, 127, 0.35);
 }
 
-#aidtune-host[hidden] {
+#inuplus-host[hidden] {
   display: none;
 }
 
-#aidtune-host > iframe {
+#inuplus-host > iframe {
   display: block;
   width: 100%;
   height: 100%;
   border: 0;
   margin: 0;
   color-scheme: light dark;
+}
+
+/* Besked från Inu+ när sökrutan i enhetslistan inte gick att nå. */
+.inuplus-toast {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 100000;
+  max-width: 360px;
+  padding: 10px 14px;
+  border-radius: 4px;
+  background: #323130;
+  color: #fff;
+  font: 13px/1.4 "Segoe UI", system-ui, sans-serif;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }

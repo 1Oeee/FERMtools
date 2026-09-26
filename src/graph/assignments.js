@@ -13,6 +13,7 @@
 // datakällan, och sidan berättar vad som saknas.
 
 import { fetchSource, runSequentially, readable } from "./source.js";
+import { platformFromType } from "../common/platforms.js";
 
 /** @type {Array<{key: string, kind: "config"|"app", label: string, url: string, optional?: boolean}>} */
 export const SOURCES = [
@@ -69,12 +70,9 @@ const itemName = (item) => item?.displayName ?? item?.name ?? "(unnamed)";
  */
 export function platformOf(item) {
   const type = String(item?.["@odata.type"] ?? "").replace(/^#microsoft\.graph\./, "");
-  const hint = type || String(item?.platforms ?? "");
-  if (/^ios|^iPad|^iOS/i.test(hint)) return "iOS";
-  if (/^macOS/i.test(hint)) return "macOS";
-  if (/^android|^aosp/i.test(hint)) return "Android";
-  if (/^windows|^win32|^winGet|^officeSuite|^microsoftStore/i.test(hint)) return "Windows";
-  return null;
+  // Settings catalog är en och samma typ för alla plattformar.
+  const generic = !type || /^deviceManagementConfigurationPolicy$/i.test(type);
+  return platformFromType(generic ? item?.platforms : type);
 }
 
 const TARGET_KIND = {
@@ -179,7 +177,9 @@ export async function fetchAssignments(graphClient, intuneClient, onProgress = n
         name: itemName(item),
         sourceKey: source.key,
         sourceLabel: source.label,
-        kind: source.kind
+        kind: source.kind,
+        // För plattformsfiltret. null = alla plattformar, eller okänd.
+        platform: platformOf(item)
       };
 
       described.push(describeItem(item, source));

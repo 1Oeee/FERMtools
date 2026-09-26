@@ -1,4 +1,4 @@
-// Klicktest i en riktig webbläsare: laddar AidTune i en huvudlös Edge med
+// Klicktest i en riktig webbläsare: laddar Inu+ i en huvudlös Edge med
 // demoläge och hälsokontroll påslagna, och byter mellan flikarna i alla
 // riktningar. Fångar sådant enhetstesterna inte ser — att en flik faktiskt
 // syns när man klickar på den.
@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 const EDGE = process.env.EDGE ?? "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
 const EXT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = 9300 + Math.floor(Math.random() * 600);
-const profile = mkdtempSync(join(tmpdir(), "aidtune-e2e-"));
+const profile = mkdtempSync(join(tmpdir(), "inuplus-e2e-"));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const edge = spawn(
@@ -74,7 +74,7 @@ try {
     worker = (await cdpJson("/json/list")).find((t) => t.url.includes("/src/background/service-worker.js"));
     if (!worker) await sleep(250);
   }
-  if (!worker) throw new Error("AidTune laddades inte i Edge");
+  if (!worker) throw new Error("Inu+ laddades inte i Edge");
   const id = new URL(worker.url).host;
 
   const target = await cdpJson(`/json/new?chrome-extension://${id}/src/page/page.html`, "PUT");
@@ -103,11 +103,13 @@ try {
   const expect = {
     Tree: (s) => s.rows > 0,
     Connections: (s) => /Expires first|Fetch/.test(s.content),
+    Licenses: (s) => /VPP|licences|Fetch/.test(s.content),
+    "Shared accounts": (s) => /Named |Reading devices|could not be fetched/.test(s.content),
     "Health check": (s) => /errors and/.test(s.content),
     Score: (s) => /Tenant score/.test(s.content)
   };
 
-  const route = ["Connections", "Tree", "Score", "Connections", "Health check", "Score", "Tree", "Health check", "Tree"];
+  const route = ["Connections", "Tree", "Score", "Licenses", "Shared accounts", "Connections", "Health check", "Score", "Tree", "Licenses", "Shared accounts", "Health check", "Tree"];
   for (const label of route) {
     await page.evaluate(`[...document.querySelectorAll(".tab")].find((t) => t.textContent === ${JSON.stringify(label)})?.click()`);
     await sleep(label === "Health check" || label === "Score" ? 2500 : 900);
@@ -128,10 +130,10 @@ try {
   })()`);
   await sleep(400);
   const panel = await page.evaluate(`(() => {
-    const issue = document.querySelector(".tree-details .d-issue");
-    return issue ? { title: issue.querySelector("strong").textContent, count: document.querySelectorAll(".tree-details .d-issue").length } : null;
+    const issue = document.querySelector(".module-pane:not([hidden]) .tree-details .d-issue");
+    return issue ? { title: issue.querySelector("strong").textContent, count: document.querySelectorAll(".module-pane:not([hidden]) .tree-details .d-issue").length } : null;
   })()`);
-  await page.evaluate(`document.querySelector(".tree-details .d-issue-link")?.click()`);
+  await page.evaluate(`document.querySelector(".module-pane:not([hidden]) .tree-details .d-issue-link")?.click()`);
   await sleep(300);
   const landed = await page.evaluate(`(() => {
     const flash = document.querySelector(".module-pane:not([hidden]) li.flash");
@@ -150,21 +152,22 @@ try {
       `${jumpOk ? ` (${picked}: ${panel.title})` : `\n    ${JSON.stringify({ picked, panel, landed })}`}`
   );
 
-  // Åtgärden: fälls ut, har steg och länkar till Microsoft Learn i en ny flik.
+  // Fyndet man landade på är markerat, och högerkolumnen förklarar det: vad
+  // det innebär, åtgärden med länkar till Microsoft Learn, och vem som ändrade.
   const fix = await page.evaluate(`(() => {
-    const box = document.querySelector(".module-pane:not([hidden]) .health-fix");
-    if (!box) return null;
-    box.open = true;
+    const box = document.querySelector(".module-pane:not([hidden]) .health-details");
+    if (!box || !document.querySelector(".module-pane:not([hidden]) li.selected")) return null;
+    if (!box.querySelector(".health-detail") || !box.querySelector(".audit")) return null;
     const links = [...box.querySelectorAll(".health-docs a")];
     return {
-      steps: box.querySelectorAll("li").length,
+      steps: box.querySelectorAll(".health-steps li").length,
       links: links.length,
       learn: links.every((a) => a.href.startsWith("https://learn.microsoft.com/") && a.target === "_blank")
     };
   })()`);
   const fixOk = Boolean(fix && fix.steps > 0 && fix.links > 0 && fix.learn);
   if (!fixOk) failures += 1;
-  console.log(`${fixOk ? "✓" : "✗"} åtgärd med steg och Microsoft Learn-länkar${fixOk ? "" : `\n    ${JSON.stringify(fix)}`}`);
+  console.log(`${fixOk ? "✓" : "✗"} markerat fynd förklaras i högerkolumnen, med åtgärd och Learn-länkar${fixOk ? "" : `\n    ${JSON.stringify(fix)}`}`);
 
   // Och tillbaka: ett gruppnamn i ett fynd ska öppna trädet, fälla ut vägen
   // dit, välja gruppen och blinka raden. Vagn 1 ligger fyra nivåer ner.
@@ -182,7 +185,7 @@ try {
       selected: row?.querySelector(".name")?.textContent ?? null,
       flashing: Boolean(row?.classList.contains("flash")),
       depth: row ? Number(row.style.getPropertyValue("--depth")) : null,
-      detail: document.querySelector(".tree-details .d-groupname")?.textContent ?? null
+      detail: document.querySelector(".module-pane:not([hidden]) .tree-details .d-groupname")?.textContent ?? null
     };
   })()`);
 
