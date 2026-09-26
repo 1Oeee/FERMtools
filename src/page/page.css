@@ -1397,6 +1397,7 @@ th.num button.sort-head {
 /* Ingen vald grupp: detaljpanelen stängs och trädet tar hela bredden. */
 .tree-details[hidden] {
   display: none;
+}
 
 /* --- Score: Lighthouse-style gauges ------------------------------------------
  * The rating colours reuse the signal colours, so they follow the portal theme
