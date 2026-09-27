@@ -248,6 +248,8 @@ async function loadHealth({ force = false } = {}) {
   refreshActive();
 
   const response = await send({ type: "health", force });
+  // Trädet byttes ut medan vi väntade — svaret hör till det förra.
+  if (response?.ok && response.data?.tenant !== state.data?.tenant) return;
 
   state.health.loading = false;
   if (!response?.ok) state.health.error = response?.error ?? "The service worker did not respond.";
@@ -268,6 +270,7 @@ async function loadScore({ force = false } = {}) {
   refreshActive();
 
   const response = await send({ type: "score", force });
+  if (response?.ok && response.data?.tenant !== state.data?.tenant) return;
 
   state.score.loading = false;
   if (!response?.ok) state.score.error = response?.error ?? "The service worker did not respond.";
@@ -612,14 +615,22 @@ function saveDismissed() {
 
 // --- Datahämtning --------------------------------------------------------
 
+/** Löpnummer för trädhämtningar. Bara den senaste får skriva sitt svar. */
+let loadSeq = 0;
+
 async function load({ force = false } = {}) {
   if (needsConsent()) return;
+  const seq = ++loadSeq;
   state.loading = true;
   state.error = null;
   renderStatus("Fetching groups …");
   ui.refresh.disabled = true;
 
   const response = await send({ type: "tree", force });
+
+  // En nyare hämtning startade medan den här pågick — efter ett byte av
+  // tenant, demoläge eller prefix. Dess svar gäller, inte det här.
+  if (seq !== loadSeq) return;
 
   ui.refresh.disabled = false;
   state.loading = false;
@@ -656,8 +667,21 @@ async function load({ force = false } = {}) {
 chrome.runtime.onMessage.addListener((message) => {
   if (message?.type === "token-changed") {
     const hadApps = state.tokenStatus?.capabilities?.apps?.have;
+    const previousTenant = state.tokenStatus?.tenant;
     state.tokenStatus = message.status;
     renderTokens();
+
+    // Katalogbyte i portalen: allt som visas hör till den förra tenanten.
+    // Släng det och hämta om — även mitt i en pågående hämtning.
+    const tenant = message.status?.tenant;
+    if (previousTenant && tenant && previousTenant !== tenant) {
+      state.data = null;
+      state.health = emptyHealth();
+      state.score = emptyScore();
+      invalidateModules();
+      load();
+      return;
+    }
 
     // Moduler som visar behörighetsläge ska följa med direkt.
     const module = activeModule();

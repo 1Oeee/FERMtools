@@ -200,7 +200,46 @@ const scoreFlight = singleFlight();
 const devicesFlight = singleFlight();
 
 /** Vilket läge en hämtning gäller. Samma nyckel = samma svar. */
-const modeKey = (settings) => `${settings.demo ? "demo" : "tenant"}|${settings.prefix}`;
+const modeKey = (settings, tenant) => `${settings.demo ? "demo" : tenant}|${settings.prefix}`;
+
+/**
+ * Vilken tenant en hämtning gäller: demots, eller den aktiva källans. Saknas
+ * tokens — servicearbetaren har somnat och tappat poolen — hämtas de först,
+ * så att cachen inte lämnas ut utan att vi vet vems den är.
+ */
+async function tenantFor(settings) {
+  if (settings.demo) return "demo";
+  await settingsReady;
+  const current = () => (authMode === "msal" ? msalTokens.describe().tenant : portalTokens.tenant ?? portalTokens.describe().tenant);
+  if (!current()) await ensureTokens().catch(() => {});
+  return current() ?? null;
+}
+
+/**
+ * Cachen, men bara om den gäller samma läge och samma tenant. Utan tenanten i
+ * nyckeln visades den förra tenantens träd i upp till en kvart efter ett
+ * katalogbyte i portalen.
+ */
+async function cachedFor(key, settings, tenant, sameSettings = () => true) {
+  const cached = await readCache(key);
+  if (!cached || cached.demo !== settings.demo || !sameSettings(cached)) return null;
+  return tenant && cached.tenant === tenant ? cached : null;
+}
+
+/**
+ * Hämtningen gäller tenanten den startade i. Bytte portalen tenant under
+ * tiden kan svaret vara ett lapptäcke av två tenanter — det sparas inte och
+ * lämnas inte ut.
+ */
+async function sameTenantAfter(settings, tenant) {
+  if (settings.demo) return;
+  if ((await tenantFor(settings)) !== tenant) {
+    throw new Error("The tenant changed while fetching. Fetching again for the new tenant.");
+  }
+}
+
+const CACHE_KEYS = () => [CACHE_KEY, CONNECTIONS_KEY, HEALTH_KEY, SCORE_KEY, DEVICES_KEY];
+const clearAllCaches = () => Promise.all(CACHE_KEYS().map(clearCache));
 
 function broadcast(message) {
   chrome.runtime.sendMessage(message, () => void chrome.runtime.lastError);
@@ -283,13 +322,14 @@ async function ensureTokens() {
 
 async function loadTree({ force = false } = {}) {
   const settings = await readSettings();
+  const tenant = await tenantFor(settings);
 
   if (!force) {
-    const cached = await readCache(CACHE_KEY);
-    if (cached && cached.prefix === settings.prefix && cached.demo === settings.demo) return cached;
+    const cached = await cachedFor(CACHE_KEY, settings, tenant, (c) => c.prefix === settings.prefix);
+    if (cached) return cached;
   }
 
-  return treeFlight(modeKey(settings), async () => {
+  return treeFlight(modeKey(settings, tenant), async () => {
     const progress = (stage, detail) => broadcast({ type: "progress", stage, detail });
     const clients = clientsFor(settings);
 
@@ -321,9 +361,12 @@ async function loadTree({ force = false } = {}) {
     }
 
     // chrome.runtime-meddelanden JSON-serialiseras, så Map måste plattas ut.
+    await sameTenantAfter(settings, tenant);
+
     const payload = {
       prefix: settings.prefix,
       demo: settings.demo,
+      tenant,
       groups,
       edges: [...edges.entries()],
       assignments: [...assignmentData.byGroup.entries()],
@@ -345,26 +388,29 @@ async function loadTree({ force = false } = {}) {
 
 async function loadConnections({ force = false } = {}) {
   const settings = await readSettings();
+  const tenant = await tenantFor(settings);
 
   if (!force) {
-    const cached = await readCache(CONNECTIONS_KEY);
-    if (cached && cached.demo === settings.demo) return cached;
+    const cached = await cachedFor(CONNECTIONS_KEY, settings, tenant);
+    if (cached) return cached;
   }
 
-  return connectionsFlight(modeKey(settings), async () => {
+  return connectionsFlight(modeKey(settings, tenant), async () => {
     const clients = clientsFor(settings);
     if (!settings.demo) await ensureTokens();
 
     const data = await fetchConnections(clients.apps, clients.backend, (key) =>
       broadcast({ type: "progress", stage: "connections", detail: key })
     );
+    await sameTenantAfter(settings, tenant);
 
     // VPP-licenserna kommer ur apparna trädet redan hämtat — inga extra anrop.
     const tree = await readCache(CACHE_KEY);
-    const sameMode = tree?.demo === settings.demo;
+    const sameMode = tree?.demo === settings.demo && tree?.tenant === tenant;
     const payload = {
       ...data,
       demo: settings.demo,
+      tenant,
       vppApps: sameMode ? (tree.vppApps ?? []) : [],
       haveTreeData: sameMode
     };
@@ -383,13 +429,14 @@ const HEALTH_KEY = "health-data";
  */
 async function loadHealth({ force = false } = {}) {
   const settings = await readSettings();
+  const tenant = await tenantFor(settings);
 
   if (!force) {
-    const cached = await readCache(HEALTH_KEY);
-    if (cached && cached.demo === settings.demo && cached.prefix === settings.prefix) return cached;
+    const cached = await cachedFor(HEALTH_KEY, settings, tenant, (c) => c.prefix === settings.prefix);
+    if (cached) return cached;
   }
 
-  return healthFlight(modeKey(settings), async () => {
+  return healthFlight(modeKey(settings, tenant), async () => {
     // Samma träd som sidan redan visar — ⟳ i fliken hämtar om medlemmarna, inte trädet.
     const tree = await loadTree();
     const clients = clientsFor(settings);
@@ -417,9 +464,16 @@ async function loadHealth({ force = false } = {}) {
       // Utan anslutningar blir bara den kontrollen okänd.
     }
 
+    await sameTenantAfter(settings, tenant);
+    // Trädet det bygger på måste vara samma tenants.
+    if (!settings.demo && tree.tenant !== tenant) {
+      throw new Error("The tenant changed while fetching. Fetching again for the new tenant.");
+    }
+
     const payload = {
       demo: settings.demo,
       prefix: settings.prefix,
+      tenant,
       composition: [...composition.entries()],
       failedComposition: failed.length,
       outside: lookup?.found ?? [],
@@ -441,21 +495,23 @@ const DEVICES_KEY = "devices-data";
  */
 async function loadDevices({ force = false } = {}) {
   const settings = await readSettings();
+  const tenant = await tenantFor(settings);
 
   if (!force) {
-    const cached = await readCache(DEVICES_KEY);
-    if (cached && cached.demo === settings.demo) return cached;
+    const cached = await cachedFor(DEVICES_KEY, settings, tenant);
+    if (cached) return cached;
   }
 
-  return devicesFlight(modeKey(settings), async () => {
+  return devicesFlight(modeKey(settings, tenant), async () => {
     const clients = clientsFor(settings);
     if (!settings.demo) await ensureTokens();
 
     const data = await fetchManagedDevices(clients.apps, clients.backend, (n) =>
       broadcast({ type: "progress", stage: "devices", detail: n })
     );
+    await sameTenantAfter(settings, tenant);
 
-    const payload = { ...data, demo: settings.demo };
+    const payload = { ...data, demo: settings.demo, tenant };
     await writeCache(DEVICES_KEY, payload);
     return payload;
   });
@@ -469,21 +525,23 @@ const SCORE_KEY = "score-data";
  */
 async function loadScore({ force = false } = {}) {
   const settings = await readSettings();
+  const tenant = await tenantFor(settings);
 
   if (!force) {
-    const cached = await readCache(SCORE_KEY);
-    if (cached && cached.demo === settings.demo) return cached;
+    const cached = await cachedFor(SCORE_KEY, settings, tenant);
+    if (cached) return cached;
   }
 
-  return scoreFlight(modeKey(settings), async () => {
+  return scoreFlight(modeKey(settings, tenant), async () => {
     const clients = clientsFor(settings);
     if (!settings.demo) await ensureTokens();
 
     const posture = await fetchPosture(clients.apps, clients.backend, (label) =>
       broadcast({ type: "progress", stage: "score", detail: label })
     );
+    await sameTenantAfter(settings, tenant);
 
-    const payload = { ...posture, demo: settings.demo, fetchedAt: Date.now() };
+    const payload = { ...posture, demo: settings.demo, tenant, fetchedAt: Date.now() };
     await writeCache(SCORE_KEY, payload);
     return payload;
   });
@@ -615,10 +673,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     "sign-out": async () => {
       await msalTokens.signOut();
-      await clearCache(CACHE_KEY);
-      await clearCache(CONNECTIONS_KEY);
-      await clearCache(HEALTH_KEY);
-      await clearCache(SCORE_KEY);
+      // Allt som hämtats hör till kontot som loggade ut — enheterna också.
+      await clearAllCaches();
       return { ok: true, status: msalTokens.describe() };
     },
 
@@ -629,11 +685,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (shouldCapture(next)) startCapture();
       else stopCapture();
       // Prefixet styr urvalet och demoläget källan — cachen är ogiltig.
-      await clearCache(CACHE_KEY);
-      await clearCache(CONNECTIONS_KEY);
-      await clearCache(HEALTH_KEY);
-      await clearCache(SCORE_KEY);
-      await clearCache(DEVICES_KEY);
+      await clearAllCaches();
       broadcast({ type: "settings-changed", settings: next, status: await currentStatus() });
       return next;
     }

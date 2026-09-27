@@ -1035,7 +1035,7 @@ export function findingsByGroup(analysis, parentsOf) {
       for (const groupId of new Set(finding.groups)) {
         const list = direct.get(groupId) ?? [];
         list.push({
-          ref: `${check.id}#${index}`,
+          ref: finding.ref,
           checkId: check.id,
           index,
           severity: check.severity,
@@ -1073,6 +1073,29 @@ export function findingsByGroup(analysis, parentsOf) {
 }
 
 /**
+ * Ge varje fynd en nyckel som följer fyndet, inte dess plats i listan.
+ *
+ * Plattformsfiltret och varje ny analys numrerar om fynden. En nyckel av typen
+ * `kontroll#index` pekade då på ett annat fynd än det man valt — och
+ * granskningsloggen som hämtats för det gamla fyndet visades för det nya.
+ * Nyckeln byggs därför av det fyndet handlar om: poster, grupper och texten.
+ */
+function withRefs(checkId, findings) {
+  const taken = new Map();
+  for (const finding of findings) {
+    const stable = [
+      [...new Set(finding.items ?? [])].sort().join(","),
+      [...new Set(finding.groups ?? [])].sort().join(","),
+      finding.text ?? ""
+    ].join("|");
+    // Två fynd som ser exakt likadana ut skiljs åt med ett löpnummer.
+    const seen = taken.get(stable) ?? 0;
+    taken.set(stable, seen + 1);
+    finding.ref = `${checkId}#${stable}${seen ? `~${seen}` : ""}`;
+  }
+}
+
+/**
  * Kör alla kontroller.
  * @returns {{ checks: Array<{id, title, severity, right, status: "ok"|"found"|"unknown", findings: Finding[]}>,
  *            counts: { bad: number, warn: number, info: number, ok: number, unknown: number } }}
@@ -1099,6 +1122,7 @@ export function analyse(input) {
       return { ...base, status: "unknown", findings: [] };
     }
     const findings = check.run(ctx);
+    withRefs(check.id, findings);
     return { ...base, status: findings.length ? "found" : "ok", findings };
   });
 

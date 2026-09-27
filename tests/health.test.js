@@ -3,7 +3,7 @@
 // måttstocken för det första; en liten, välskött tenant för det andra.
 
 import { test, assert } from "./tree.test.js";
-import { analyse, findingsByGroup, CHECKS } from "../src/health/checks.js";
+import { analyse, findingsByGroup, forPlatform, CHECKS } from "../src/health/checks.js";
 import { GUIDANCE } from "../src/health/guidance.js";
 import { createDemoClient } from "../src/demo/client.js";
 import { MISTAKES } from "../src/demo/tenant.js";
@@ -155,9 +155,29 @@ test("hälsa: fynden hamnar på sina grupper, och fel syns uppåt i grenen", () 
   const onCart = direct.get("vagn") ?? [];
   assert.ok(onCart.some((f) => f.checkId === "user-licence-to-devices"), "fyndet ligger på vagnen");
   assert.equal(onCart[0].severity, "bad", "allvarligast först");
-  assert.ok(/^user-licence-to-devices#\d+$/.test(onCart.find((f) => f.checkId === "user-licence-to-devices").ref), "ref pekar på kontroll och index");
+  const ref = onCart.find((f) => f.checkId === "user-licence-to-devices").ref;
+  assert.ok(ref.startsWith("user-licence-to-devices#"), "ref börjar med kontrollen");
+  assert.ok(ref.includes("GeoGebra") && ref.includes("vagn"), "ref byggs av fyndets post och grupp, inte dess plats");
   assert.equal(below.get("ipads")?.severity, "bad", "föräldern får en markering för grenen");
   assert.notOk(below.has("vagn"), "gruppen själv markeras inte som 'längre ner'");
+});
+
+test("hälsa: plattformsfiltret byter inte vilket fynd en ref pekar på", () => {
+  const input = tidyTenant();
+  input.assignments.push({ itemId: "GeoGebra", target: "group", groupId: "vagn", intent: "required", deviceLicensing: false });
+  const full = analyse(input);
+  const refs = (analysis) =>
+    new Map(analysis.checks.flatMap((c) => c.findings.map((f) => [f.ref, f.text])));
+  const before = refs(full);
+  // Filtret tar bort fynd och numrerar om resten; varje kvarvarande ref ska
+  // fortfarande höra till samma fynd som innan.
+  for (const platform of ["iOS", "Windows", "macOS", "Android"]) {
+    for (const [ref, text] of refs(forPlatform(full, input.items, platform))) {
+      assert.equal(before.get(ref), text, `${platform}: ${ref} pekar på samma fynd`);
+    }
+  }
+  const all = [...before.keys()];
+  assert.equal(new Set(all).size, all.length, "varje fynd har en egen ref");
 });
 
 test("hälsa: tips sprids inte uppåt i grenen", () => {

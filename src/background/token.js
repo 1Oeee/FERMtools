@@ -57,6 +57,17 @@ export class PortalTokenSource {
   #acceptedListeners = new Set();
   #hooks = [];
 
+  /**
+   * Vilken tenant portalen arbetar i just nu (tokens `tid`). Byter man katalog
+   * i portalen ligger den förra tenantens tokens kvar i poolen tills de går ut,
+   * och utan det här kunde grupperna hämtas ur en tenant och tilldelningarna ur
+   * en annan. Portalens egen trafik avgör; det content scriptet hittar i
+   * lagringen — där kan flera tenanters tokens ligga samtidigt — får bara
+   * avgöra så länge ingen trafik setts.
+   */
+  #tenant = null;
+  #tenantFromTraffic = false;
+
   /** Avgör om en flik är portalen. Utan filter fångas ingenting. */
   #fromPortal = () => false;
 
@@ -93,6 +104,32 @@ export class PortalTokenSource {
     this.#hooks = [];
     this.#pool[GRAPH].clear();
     this.#pool[INTUNE].clear();
+    this.#tenant = null;
+    this.#tenantFromTraffic = false;
+  }
+
+  /** Tenanten poolen lämnar ut tokens för, eller null innan någon token setts. */
+  get tenant() {
+    return this.#tenant;
+  }
+
+  /** Sätt aktiv tenant utifrån en ny token. Trafik väger tyngre än lagring. */
+  #track(claims, fromTraffic) {
+    const tid = typeof claims.tid === "string" ? claims.tid : null;
+    if (!tid) return;
+    if (tid === this.#tenant) {
+      if (fromTraffic) this.#tenantFromTraffic = true;
+      return;
+    }
+    if (this.#tenant && this.#tenantFromTraffic && !fromTraffic) return;
+    this.#tenant = tid;
+    this.#tenantFromTraffic = fromTraffic;
+  }
+
+  /** Hör token till den tenant portalen arbetar i? */
+  #inTenant(held) {
+    const tid = held.claims.tid;
+    return !this.#tenant || !tid || tid === this.#tenant;
   }
 
   /** Anropas när en ny token tagits emot, så sidan kan uppdatera sig. */
@@ -154,8 +191,17 @@ export class PortalTokenSource {
     if (resolved === INTUNE && !kind && !looksLikeIntuneToken(claims)) return false;
 
     const pool = this.#pool[resolved];
-    if (pool.has(token)) return false;
+    if (pool.has(token)) {
+      // Samma token igen, men nu i portalens trafik: den tenanten är den aktiva.
+      const before = this.#tenant;
+      this.#track(claims, tabId >= 0);
+      if (this.#tenant !== before) for (const fn of this.#listeners) fn(this.describe());
+      return false;
+    }
 
+    // Anrop från en portalflik har ett flik-id; det content scriptet hittar i
+    // lagringen har det inte.
+    this.#track(claims, tabId >= 0);
     pool.set(token, { token, claims, source, seenAt: Date.now() });
     this.#prune(resolved);
 
@@ -184,11 +230,16 @@ export class PortalTokenSource {
 
     if (pool.size <= POOL_MAX) return;
 
-    // Behåll dem som täcker mest, och vid lika dem som lever längst.
+    // Behåll den aktiva tenantens först, sedan dem som täcker mest, och vid
+    // lika dem som lever längst.
     const ranked = [...pool.values()].sort((a, b) => {
       const reach = (held) =>
         covers(held.claims, GROUP_SCOPES).length + covers(held.claims, INTUNE_SCOPES).length;
-      return reach(b) - reach(a) || secondsLeft(b.claims) - secondsLeft(a.claims);
+      return (
+        this.#inTenant(b) - this.#inTenant(a) ||
+        reach(b) - reach(a) ||
+        secondsLeft(b.claims) - secondsLeft(a.claims)
+      );
     });
 
     for (const held of ranked.slice(POOL_MAX)) pool.delete(held.token);
@@ -201,6 +252,7 @@ export class PortalTokenSource {
     let bestReach = -1;
 
     for (const held of this.#pool[kind].values()) {
+      if (!this.#inTenant(held)) continue;
       const reach = wanted ? covers(held.claims, wanted).length : 0;
       if (
         reach > bestReach ||
@@ -299,7 +351,7 @@ export class PortalTokenSource {
       // Utan grupp-token finns inget träd att visa alls.
       haveToken: Boolean(groupToken),
       upn: groupToken?.claims.upn ?? groupToken?.claims.preferred_username ?? null,
-      tenant: groupToken?.claims.tid ?? null,
+      tenant: this.#tenant ?? groupToken?.claims.tid ?? null,
       hint: "Open intune.microsoft.com and go to Groups — then we can capture a token.",
       // Ren diagnostik: vad ligger i poolen just nu?
       pool: [GRAPH, INTUNE].flatMap((kind) =>

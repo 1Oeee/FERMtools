@@ -81,9 +81,9 @@ const itemIndex = () => new Map((ctx.data?.items ?? []).map((item) => [item.id, 
 
 function findingByRef(ref) {
   if (!ref) return null;
-  const [checkId, index] = ref.split("#");
+  const checkId = ref.split("#")[0];
   const check = ctx.health?.analysis?.checks.find((c) => c.id === checkId && c.status === "found");
-  const finding = check?.findings[Number(index)];
+  const finding = check?.findings.find((f) => f.ref === ref);
   return finding ? { check, finding } : null;
 }
 
@@ -169,14 +169,12 @@ function renderFound(check, labels, items) {
 
   box.append(el("div", "health-right", `How it should be: ${check.right}`));
 
-  // Ett fynd man letar efter ritas alltid, även om det ligger bortom taket.
-  const focusIndex = state.focus?.startsWith(`${check.id}#`) ? Number(state.focus.split("#")[1]) : -1;
-
   const list = el("ul", "health-findings");
   list.setAttribute("role", "listbox");
   check.findings.forEach((finding, index) => {
-    if (index >= MAX_FINDINGS && index !== focusIndex) return;
-    const ref = `${check.id}#${index}`;
+    const ref = finding.ref;
+    // Ett fynd man letar efter ritas alltid, även om det ligger bortom taket.
+    if (index >= MAX_FINDINGS && ref !== state.focus) return;
     const li = el("li");
     li.dataset.ref = ref;
     li.tabIndex = 0;
