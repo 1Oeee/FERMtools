@@ -4,6 +4,45 @@ Version scheme: `0.1`, `0.2`, `0.3` … One step per delivered batch of work.
 The version lives in `manifest.json` and must always match the top entry here.
 `1.0` when the extension is stable enough to use daily without reservations.
 
+## 0.21 — 2026-09-28
+
+The first version released to the Chrome Web Store by the release workflow
+itself. Demo mode gets a portal to live in, and two bugs that showed wrong data
+that looked right are fixed.
+
+### Demo mode
+
+- **Demo in a copy of the Intune portal.** Demo mode opens
+  `src/demo/portal.html`: the Intune admin center's start page, with Inu+ in the
+  left nav right under Home, where it sits in the real portal. Home and Inu+
+  work; the rest of the nav and the start page's links are inert. A "Demo" tag
+  in the header keeps it from passing for the real portal.
+- The toolbar button opens (or brings forward) the demo portal in demo mode, and
+  "Try the demo first" in a tab of its own goes there too.
+
+### Fixes
+
+- **Tenants no longer mix.** After switching directory in the portal, the old
+  tenant's tree could show for up to 15 minutes, and groups and assignments
+  could come from different tenants. Tokens are now handed out only for the
+  tenant the portal is using, every cached result carries its tenant, and the
+  page refetches when the tenant changes.
+- **Sign-out clears everything.** The device list used for Shared accounts
+  stayed cached after signing out.
+- **Audit history sticks to its finding.** In Health check, changing the
+  platform filter could move a looked-up audit log onto a different finding.
+  Findings now have a key built from what they are about, not their place in
+  the list.
+- **Score tab styling.** A missing brace in `page.css` left the gauges as black
+  circles.
+- A slow tree fetch can no longer overwrite a newer one.
+
+### Releases
+
+- **Automatic Chrome Web Store releases.** Pushing a new version in
+  `manifest.json` to `main` uploads the package, submits it for review and tags
+  `v<version>` once the upload has succeeded. No tag to push by hand.
+
 ## 0.20 — 2026-09-26
 
 Two features built next to the 0.17–0.19 work, merged into it here: a sign-in
