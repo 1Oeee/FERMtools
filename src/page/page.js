@@ -877,7 +877,11 @@ function renderConsent() {
   });
   const demo = el("button", "secondary", "Try the demo first");
   demo.type = "button";
-  demo.addEventListener("click", () => send({ type: "save-settings", patch: { demo: true } }));
+  demo.addEventListener("click", async () => {
+    await send({ type: "save-settings", patch: { demo: true } });
+    // I en egen flik finns ingen portal omkring — demot har en egen kopia av den.
+    if (!embedded) location.replace(chrome.runtime.getURL("src/demo/portal.html#inu"));
+  });
   actions.append(allow, own, demo);
   card.append(actions);
   card.append(

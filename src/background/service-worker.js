@@ -661,7 +661,29 @@ async function openInPortal(tabId, attemptsLeft = 20) {
   }
 }
 
+const DEMO_PORTAL = chrome.runtime.getURL("src/demo/portal.html");
+
+/** Demot visas i en kopia av portalen. En som redan står öppen tas fram. */
+async function openDemoPortal() {
+  const [open] = await chrome.runtime.getContexts({ contextTypes: ["TAB"] }).then(
+    (contexts) => contexts.filter((c) => c.documentUrl?.startsWith(DEMO_PORTAL) && c.tabId >= 0),
+    () => []
+  );
+  if (open) {
+    await chrome.tabs.update(open.tabId, { active: true });
+    await chrome.windows.update(open.windowId, { focused: true });
+    return;
+  }
+  await chrome.tabs.create({ url: `${DEMO_PORTAL}#inu` });
+}
+
 chrome.action.onClicked.addListener(async () => {
+  // Demot har ingen tenant att visa i den riktiga portalen — det har en egen.
+  if ((await readSettings()).demo) {
+    await openDemoPortal();
+    return;
+  }
+
   const tabs = await chrome.tabs.query({ url: "https://intune.microsoft.com/*" });
 
   if (tabs.length) {
@@ -671,10 +693,10 @@ chrome.action.onClicked.addListener(async () => {
     return;
   }
 
-  // Utan portal och utan inloggning finns ingenting att bädda in i. Demot
-  // visas då i en egen flik — det är så en granskare utan Intune ser det.
+  // Utan portal och utan inloggning finns ingenting att bädda in i — sidan
+  // visas då i en egen flik, där man kan välja att prova demot.
   const settings = await readSettings();
-  if (settings.demo || !settings.consent) {
+  if (!settings.consent) {
     await chrome.tabs.create({ url: chrome.runtime.getURL("src/page/page.html") });
     return;
   }

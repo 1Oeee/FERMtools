@@ -1,0 +1,531 @@
+/* Demoportalen — Intune-portalens startsida i standardtemat (Azure, ljust).
+   Måtten är tagna ur Microsofts skärmbild av startsidan och räknade om till
+   100 % zoom. */
+
+:root {
+  --header: #484644;
+  --sidebar: #e9e9e9;
+  --ink: #323130;
+  --muted: #605e5c;
+  --link: #0078d4;
+  --line: #edebe9;
+  --bad: #a4262c;
+  --neutral-bar: #c8c6c4;
+  --font: "Segoe UI", "Segoe UI Web (West European)", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue",
+    system-ui, sans-serif;
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  display: grid;
+  grid-template-rows: 40px 1fr;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    "top top"
+    "side main";
+  overflow: hidden;
+  background: #fff;
+  color: var(--ink);
+  font: 13px/1.4 var(--font);
+}
+
+button {
+  font: inherit;
+}
+
+/* --- Översta raden ------------------------------------------------------- */
+
+.topbar {
+  grid-area: top;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px 0 20px;
+  background: var(--header);
+  color: #fff;
+}
+
+.brand {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.demo-tag {
+  padding: 1px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 10px;
+  font-size: 11px;
+  line-height: 16px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.topbar-icons {
+  display: flex;
+  margin-left: auto;
+}
+
+.topbar-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+}
+
+.topbar-icon svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.1;
+  stroke-linejoin: round;
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin-left: 60px;
+}
+
+.avatar svg {
+  width: 28px;
+  height: 28px;
+}
+
+/* --- Vänsterlisten ------------------------------------------------------- */
+
+.sidebar {
+  grid-area: side;
+  width: 220px;
+  overflow: hidden auto;
+  background: var(--sidebar);
+  transition: width 0.15s ease;
+}
+
+.collapse {
+  display: block;
+  width: 32px;
+  height: 28px;
+  margin: 0 4px 0 auto;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.collapse:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.sidebar ul {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 31px;
+  padding: 0 12px 0 18px;
+  color: var(--ink);
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+.nav-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.nav-item:focus-visible {
+  outline: 1px solid var(--ink);
+  outline-offset: -2px;
+}
+
+.nav-item.selected {
+  background: rgba(127, 127, 127, 0.18);
+}
+
+/* Samma markering som tillägget ger punkten i den riktiga portalen. */
+.nav-item.selected::before {
+  content: "";
+  position: absolute;
+  inset: 2px auto 2px 0;
+  width: 2px;
+  border-radius: 1px;
+  background: currentColor;
+}
+
+.nav-item.inert {
+  cursor: default;
+}
+
+.nav-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.nav-item.inu .nav-icon {
+  color: var(--ink);
+}
+
+body.collapsed .sidebar {
+  width: 52px;
+}
+
+body.collapsed .nav-label {
+  display: none;
+}
+
+body.collapsed .collapse {
+  margin: 0 auto;
+}
+
+/* --- Innehållsytan ------------------------------------------------------- */
+
+.content {
+  grid-area: main;
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.home {
+  height: 100%;
+  overflow: auto;
+  padding: 0 34px 24px 20px;
+}
+
+.title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 22px;
+  padding: 7px 0 28px;
+}
+
+.title-row h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.more {
+  color: var(--muted);
+  font-size: 14px;
+  letter-spacing: 1px;
+}
+
+/* Den blå duken bakom korten: ljusblå överst, vit längre ner. */
+.canvas {
+  padding: 0 45px 20px;
+  border-radius: 8px 8px 0 0;
+  background: linear-gradient(180deg, #d5e8f6 0, #e8f2fa 260px, #f7fafd 520px, #fff 760px);
+}
+
+.welcome {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 160px;
+  padding: 32px 0 38px;
+}
+
+.welcome-text {
+  max-width: 680px;
+}
+
+.welcome h2 {
+  margin: 0 0 6px;
+  font-size: 31px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.welcome p {
+  margin: 0 0 12px;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.welcome-art {
+  flex: none;
+  width: 230px;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid #8a8886;
+  border-radius: 2px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 13px;
+  cursor: default;
+}
+
+.button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.1;
+}
+
+.button.small {
+  padding: 3px 16px;
+}
+
+.row {
+  display: grid;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.row.two {
+  grid-template-columns: 1fr 1fr;
+}
+
+.card {
+  margin-bottom: 20px;
+  padding: 26px 28px 32px;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 1.6px 3.6px rgba(0, 0, 0, 0.13), 0 0.3px 0.9px rgba(0, 0, 0, 0.11);
+}
+
+.row > .card {
+  margin-bottom: 0;
+}
+
+.card h3 {
+  margin: 0 0 30px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* Status */
+
+.status-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px 60px;
+}
+
+.status {
+  display: flex;
+  flex-direction: column;
+  padding-left: 10px;
+  border-left: 3px solid var(--neutral-bar);
+}
+
+.status.bad {
+  border-left-color: var(--bad);
+}
+
+.status span {
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.status strong {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+/* Spotlight */
+
+.spotlight {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.spot {
+  padding-right: 24px;
+}
+
+.spot + .spot {
+  padding: 0 0 0 24px;
+  border-left: 1px solid var(--line);
+}
+
+.spot-art {
+  width: 78px;
+  height: 78px;
+}
+
+.spot h4 {
+  margin: 8px 0 2px;
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.spot p {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+/* Get more out of Intune */
+
+.more-out {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 0 30px;
+}
+
+.resource-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.resource-head strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.resource p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.resource.divided {
+  padding-left: 24px;
+  border-left: 1px solid var(--line);
+}
+
+.tile {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 62px;
+  height: 62px;
+  border-radius: 3px;
+  background: #11508f;
+}
+
+.tile svg {
+  width: 30px;
+  height: 30px;
+}
+
+.links {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.links li + li {
+  margin-top: 14px;
+}
+
+.links a,
+a.doc {
+  color: var(--link);
+  font-size: 15px;
+  line-height: 1.4;
+  text-decoration: none;
+  cursor: default;
+}
+
+/* Documentation and training */
+
+.docs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+
+a.doc {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 106px;
+  padding: 16px 16px;
+  border-radius: 4px;
+  box-shadow: 0 1.6px 3.6px rgba(0, 0, 0, 0.13), 0 0.3px 0.9px rgba(0, 0, 0, 0.11);
+}
+
+a.doc svg {
+  flex: none;
+  width: 66px;
+  height: 66px;
+}
+
+/* --- Inu+:s ruta --------------------------------------------------------- */
+
+.inu-host {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  box-shadow: inset 1px 0 0 rgba(127, 127, 127, 0.35);
+}
+
+.inu-host[hidden] {
+  display: none;
+}
+
+.inu-host > iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+/* Smalt fönster: korten staplas i stället för att tryckas ihop. */
+@media (max-width: 1100px) {
+  .row.two,
+  .more-out,
+  .docs {
+    grid-template-columns: 1fr;
+  }
+
+  .resource.divided {
+    padding-left: 0;
+    border-left: 0;
+    margin-top: 24px;
+  }
+
+  .spot + .spot {
+    padding-left: 0;
+    border-left: 0;
+    margin-top: 24px;
+  }
+
+  .spotlight {
+    grid-template-columns: 1fr;
+  }
+
+  .welcome {
+    gap: 40px;
+  }
+
+  .welcome-art {
+    display: none;
+  }
+}

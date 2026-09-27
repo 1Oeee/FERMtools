@@ -13,10 +13,14 @@
 // portalen säger till när rutan tagits fram igen och vilka färger den målar
 // med. Ingen tenantdata korsar gränsen åt något håll.
 
-const PORTAL_ORIGIN = "https://intune.microsoft.com";
+const params = new URLSearchParams(location.search);
 
 /** Ligger sidan i portalens ram? */
-export const embedded = new URLSearchParams(location.search).get("embed") === "1";
+export const embedded = params.get("embed") === "1";
+
+// Demoportalen (src/demo/portal.html) är tilläggets egen sida, inte Intune —
+// där är det vår egen origin som är portalen.
+const PORTAL_ORIGIN = params.get("portal") === "demo" ? location.origin : "https://intune.microsoft.com";
 
 function tell(type) {
   if (!embedded) return;
