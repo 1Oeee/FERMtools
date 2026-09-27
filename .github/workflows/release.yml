@@ -11,6 +11,12 @@
 #   secrets.CWS_SERVICE_ACCOUNT_JSON  nyckel-JSON för servicekontot
 #   vars.CWS_PUBLISHER_ID             utgivar-ID från Developer Dashboard
 #   vars.CWS_EXTENSION_ID             tilläggets ID i Chrome Web Store
+#
+# Valfritt: vars.CWS_UPLOAD_ONLY = true laddar upp paketet som utkast utan att
+# skicka det till granskning, och skapar ingen tagg. Behövs när en version
+# lägger till en behörighet: butiken visar fältet för dess motivering först när
+# ett paket med behörigheten laddats upp. Fyll i motiveringen, ta bort
+# variabeln och kör om arbetsflödet — då skickas versionen och taggas.
 
 name: Release
 
@@ -168,7 +174,18 @@ jobs:
             exit 1
           fi
 
+      - name: Bara uppladdning
+        if: vars.CWS_UPLOAD_ONLY == 'true'
+        run: |
+          {
+            echo "### Uppladdad som utkast — inte skickad till granskning"
+            echo "CWS_UPLOAD_ONLY är satt. Fyll i det som saknas i Developer Dashboard"
+            echo "(t.ex. motiveringen för en ny behörighet under Integritet), ta bort"
+            echo "variabeln och kör om arbetsflödet."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Skicka till granskning
+        if: vars.CWS_UPLOAD_ONLY != 'true'
         env:
           TOKEN: ${{ steps.auth.outputs.access_token }}
         # DEFAULT_PUBLISH: går ut till användarna så fort Google godkänt.
@@ -181,6 +198,7 @@ jobs:
           echo "Läge hos Chrome Web Store: $(jq -r '.state // "okänt"' publish.json)" >> "$GITHUB_STEP_SUMMARY"
 
       - name: GitHub-release
+        if: vars.CWS_UPLOAD_ONLY != 'true'
         # Skapar taggen v<version> på den här committen — beviset på att
         # versionen är uppladdad, så att nästa push inte laddar upp den igen.
         uses: softprops/action-gh-release@v2
