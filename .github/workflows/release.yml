@@ -143,12 +143,40 @@ jobs:
           zip -r -X "../inuplus-${{ needs.package.outputs.version }}.zip" .
           unzip -l "../inuplus-${{ needs.package.outputs.version }}.zip" | head -5
 
-      - id: auth
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.CWS_SERVICE_ACCOUNT_JSON }}
-          token_format: access_token
-          access_token_scopes: https://www.googleapis.com/auth/chromewebstore
+      - name: Logga in hos Google
+        id: auth
+        # Servicekontots nyckel byts direkt mot en token för Chrome Web Store
+        # (OAuth 2.0 JWT bearer, så som butikens dokumentation beskriver det).
+        # google-github-actions/auth går i stället via IAM Credentials API och
+        # kräver då att kontot har rollen Service Account Token Creator på sig
+        # självt — här behövs varken den rollen eller det API:et.
+        env:
+          KEY: ${{ secrets.CWS_SERVICE_ACCOUNT_JSON }}
+        run: |
+          set -euo pipefail
+          if ! jq -e '.type == "service_account" and .client_email and .private_key' >/dev/null <<<"$KEY"; then
+            echo "::error::CWS_SERVICE_ACCOUNT_JSON är inte en nyckelfil för ett servicekonto (hela JSON-filen, från { till })"
+            exit 1
+          fi
+          b64() { openssl base64 -e -A | tr '+/' '-_' | tr -d '='; }
+          email=$(jq -r .client_email <<<"$KEY")
+          now=$(date +%s)
+          header=$(printf '%s' '{"alg":"RS256","typ":"JWT"}' | b64)
+          claims=$(jq -nc --arg iss "$email" --argjson now "$now" \
+            '{iss:$iss, scope:"https://www.googleapis.com/auth/chromewebstore", aud:"https://oauth2.googleapis.com/token", iat:$now, exp:($now+3600)}' | b64)
+          sig=$(printf '%s.%s' "$header" "$claims" | openssl dgst -sha256 -sign <(jq -r .private_key <<<"$KEY") | b64)
+
+          res=$(curl -sS -X POST https://oauth2.googleapis.com/token \
+            --data-urlencode grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer \
+            --data-urlencode "assertion=$header.$claims.$sig")
+          token=$(jq -r '.access_token // empty' <<<"$res")
+          if [[ -z "$token" ]]; then
+            echo "::error::Google gav ingen token: $(jq -c '{error, error_description}' <<<"$res")"
+            exit 1
+          fi
+          echo "::add-mask::$token"
+          echo "access_token=$token" >> "$GITHUB_OUTPUT"
+          echo "Inloggad som $email"
 
       - name: Ladda upp
         env:
