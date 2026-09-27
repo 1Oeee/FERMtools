@@ -91,6 +91,14 @@ ui.detach.hidden = !embedded;
 // följa med i samma ögonblick, inte vid nästa omladdning.
 onTheme(applyPortalTheme);
 
+const ROW_SCALES = [1, 1.1, 1.2, 1.3];
+
+/** Trädradernas storlek ur Settings. Okända värden ger vanlig storlek. */
+function applyRowScale() {
+  const scale = Number(state.settings?.rowScale);
+  document.documentElement.style.setProperty("--row-scale", String(ROW_SCALES.includes(scale) ? scale : 1));
+}
+
 function send(message) {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage(message, (response) => {
@@ -708,6 +716,18 @@ chrome.runtime.onMessage.addListener((message) => {
   if (message?.type === "settings-changed") {
     state.settings = message.settings;
     state.tokenStatus = message.status;
+    applyRowScale();
+
+    // Bara visningen ändrades: rita om det som redan finns. `refetch` saknas i
+    // meddelanden från policyändringar — då hämtas allt om, som förut.
+    if (message.refetch === false && !needsConsent()) {
+      renderTabs();
+      renderTokens();
+      invalidateModules();
+      showModule(state.activeId);
+      return;
+    }
+
     state.data = null;
     state.health = emptyHealth();
     state.score = emptyScore();
@@ -939,6 +959,7 @@ function renderConsent() {
   renderPlatform();
 
   state.settings = await send({ type: "settings" });
+  applyRowScale();
   if (needsConsent()) {
     renderConsent();
     return;

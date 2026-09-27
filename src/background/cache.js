@@ -40,6 +40,8 @@ export const DEFAULT_SETTINGS = {
   sharedPatterns: "del, delad",
   // Intunes tak för enheter per användare. Lediga platser räknas mot det.
   deviceLimit: 15,
+  // Trädradernas storlek: 1, 1.1, 1.2 eller 1.3. Större rader är lättare att träffa.
+  rowScale: 1,
   // Påhittad tenant i stället för portalens. Se src/demo/.
   demo: false,
   // Fliken Hälsokontroll: regler för rätt och fel i tilldelningarna.

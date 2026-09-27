@@ -4,6 +4,7 @@ const fields = {
   onlyWithAssignments: document.getElementById("onlyWithAssignments"),
   sharedPatterns: document.getElementById("sharedPatterns"),
   deviceLimit: document.getElementById("deviceLimit"),
+  rowScale: document.getElementById("rowScale"),
   demo: document.getElementById("demo"),
   consent: document.getElementById("consent"),
   msalClientId: document.getElementById("msalClientId"),
@@ -63,6 +64,8 @@ function send(message) {
   fields.onlyWithAssignments.checked = Boolean(settings.onlyWithAssignments);
   fields.sharedPatterns.value = settings.sharedPatterns ?? "";
   fields.deviceLimit.value = settings.deviceLimit ?? 15;
+  fields.rowScale.value = String(settings.rowScale ?? 1);
+  if (!fields.rowScale.value) fields.rowScale.value = "1";
   fields.demo.checked = Boolean(settings.demo);
   fields.consent.checked = Boolean(settings.consent);
   fields.msalClientId.value = settings.msalClientId ?? "";
@@ -103,6 +106,7 @@ function save() {
     onlyWithAssignments: fields.onlyWithAssignments.checked,
     sharedPatterns: fields.sharedPatterns.value,
     deviceLimit: Math.min(15, Math.max(1, Math.round(Number(fields.deviceLimit.value) || 15))),
+    rowScale: Number(fields.rowScale.value) || 1,
     demo: fields.demo.checked,
     consent: fields.consent.checked,
     authMode: selectedMode(),

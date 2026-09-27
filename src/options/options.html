@@ -27,6 +27,14 @@
         font-size: 12px;
         margin-top: 3px;
       }
+      select {
+        padding: 5px 8px;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        background: var(--bg);
+        color: var(--fg);
+        font: inherit;
+      }
       input[type="text"] {
         width: 100%;
         padding: 6px 8px;
@@ -157,6 +165,21 @@
           Hides groups that have no apps or configurations, and have nothing beneath
           them that does.
         </div>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="rowScale">Tree row size</label>
+      <select id="rowScale">
+        <option value="1">100 % (normal)</option>
+        <option value="1.1">110 %</option>
+        <option value="1.2">120 %</option>
+        <option value="1.3">130 %</option>
+      </select>
+      <div class="hint">
+        Makes the rows in the tree bigger — the group names, the arrow on the left
+        and the markers on the right — so they are easier to hit. Takes effect as
+        soon as you save, without fetching anything again.
       </div>
     </div>
 

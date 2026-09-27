@@ -1150,13 +1150,17 @@ export function forPlatform(analysis, items, platform) {
   const keep = (finding) =>
     !finding.items?.length || finding.items.some((id) => matchesPlatform(platformOf.get(id) ?? null, platform));
 
+  // En kontroll vars fynd alla gäller andra plattformar har inte "passerat" —
+  // den har fel, bara inte här. Den får ett eget läge, så att den inte hamnar
+  // bland de godkända och ser ut som ett friskintyg.
   const checks = analysis.checks.map((check) => {
     if (check.status !== "found") return check;
     const findings = check.findings.filter(keep);
-    return { ...check, status: findings.length ? "found" : "ok", findings };
+    if (findings.length) return { ...check, findings };
+    return { ...check, status: "filtered", findings, hidden: check.findings.length };
   });
 
-  const counts = { bad: 0, warn: 0, info: 0, ok: 0, unknown: 0 };
+  const counts = { bad: 0, warn: 0, info: 0, ok: 0, unknown: 0, filtered: 0 };
   for (const check of checks) {
     if (check.status === "found") counts[check.severity] += 1;
     else counts[check.status] += 1;

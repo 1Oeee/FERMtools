@@ -15,6 +15,7 @@
 
 import { el, section } from "../dom.js";
 import { URLS, itemLinkButton, connectionButton, openInIntuneTab, openInNewTab } from "../portal.js";
+import { platformLabel } from "../../common/platforms.js";
 
 /** Så många fynd per kontroll ritas; resten sammanfattas. */
 const MAX_FINDINGS = 100;
@@ -51,6 +52,7 @@ function renderSummary({ counts }) {
   const parts = [`${counts.ok} checks passed`];
   if (counts.info) parts.push(`${counts.info} worth a look`);
   if (counts.unknown) parts.push(`${counts.unknown} could not be run`);
+  if (counts.filtered) parts.push(`${counts.filtered} with findings only on other platforms`);
   box.append(el("div", "headline-when", parts.join(" · ")));
   return box;
 }
@@ -535,6 +537,20 @@ function draw() {
 
   const ok = analysis.checks.filter((c) => c.status === "ok");
   if (ok.length) body.append(renderPlain("Passed", ok, { mark: "✓", className: "exp-ok", text: (c) => c.right }));
+
+  // Fel som finns, fast på andra plattformar än filtrets. Inte godkända.
+  const filtered = analysis.checks.filter((c) => c.status === "filtered");
+  if (filtered.length) {
+    body.append(
+      renderPlain(`Findings on other platforms`, filtered, {
+        mark: "–",
+        className: "exp-unknown",
+        text: (c) =>
+          `${c.hidden} finding(s) hidden by the platform filter (${platformLabel(ctx.platform)} only). ` +
+          "Show all platforms to see them."
+      })
+    );
+  }
 
   const unknown = analysis.checks.filter((c) => c.status === "unknown");
   if (unknown.length) {

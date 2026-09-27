@@ -238,6 +238,13 @@ async function sameTenantAfter(settings, tenant) {
   }
 }
 
+/**
+ * Inställningar som ändrar vad som hämtas: urvalet, källan och vems tokens.
+ * Övriga (showLoose, onlyWithAssignments, sharedPatterns, deviceLimit,
+ * rowScale) ändrar bara hur det redan hämtade visas.
+ */
+const DATA_SETTINGS = ["prefix", "demo", "consent", "authMode", "msalClientId", "msalTenant"];
+
 const CACHE_KEYS = () => [CACHE_KEY, CONNECTIONS_KEY, HEALTH_KEY, SCORE_KEY, DEVICES_KEY];
 const clearAllCaches = () => Promise.all(CACHE_KEYS().map(clearCache));
 
@@ -680,13 +687,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     "save-settings": async () => {
       await settingsReady;
+      const previous = await readSettings();
       const next = await writeSettings(message.patch ?? {});
       applyAuthSettings(next);
       if (shouldCapture(next)) startCapture();
       else stopCapture();
-      // Prefixet styr urvalet och demoläget källan — cachen är ogiltig.
-      await clearAllCaches();
-      broadcast({ type: "settings-changed", settings: next, status: await currentStatus() });
+      // Bara det som styr vad som hämtas gör cachen ogiltig. Att rita trädet
+      // annorlunda — lösa grupper, radstorlek — ska inte kosta en ny hämtning
+      // av hela tenanten och portalens throttling-budget.
+      const refetch = DATA_SETTINGS.some((key) => previous[key] !== next[key]);
+      if (refetch) await clearAllCaches();
+      broadcast({ type: "settings-changed", settings: next, status: await currentStatus(), refetch });
       return next;
     }
   };

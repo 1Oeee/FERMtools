@@ -63,8 +63,9 @@ test("plattform: hälsofynd står kvar bara om någon post gäller plattformen",
 
   const ios = forPlatform(analysis, items, "iOS");
   assert.same(ios.checks[0].findings.map((f) => f.text), ["ios", "struktur"], "kvar för iOS");
-  assert.equal(ios.checks[1].status, "ok", "kontrollen utan iOS-fynd blir ok");
-  assert.same(ios.counts, { bad: 1, warn: 0, info: 0, ok: 1, unknown: 0 }, "räkning");
+  assert.equal(ios.checks[1].status, "filtered", "kontrollen utan iOS-fynd räknas inte som godkänd");
+  assert.equal(ios.checks[1].hidden, 1, "antalet dolda fynd följer med");
+  assert.same(ios.counts, { bad: 1, warn: 0, info: 0, ok: 0, unknown: 0, filtered: 1 }, "räkning");
   assert.equal(forPlatform(analysis, items, ""), analysis, "inget filter = samma analys");
 });
 

@@ -678,6 +678,13 @@ button.linklike.group-link {
   white-space: nowrap;
 }
 
+/* Radstorlek ur Settings (100–130 %). zoom skalar allt i raden på en gång —
+   text, pil, pluppar, märken och indrag — så att pilen och raden blir
+   lättare att träffa utan att proportionerna ändras. */
+.tree-rows .row {
+  zoom: var(--row-scale, 1);
+}
+
 .row:hover {
   background: var(--hover);
 }

@@ -28,6 +28,34 @@ const state = {
 const ui = {};
 let ctx = null;
 
+// --- Medlemmar ------------------------------------------------------------
+
+/**
+ * Hämtade medlemmar per grupp, för den hämtning av trädet de hör till.
+ * Detaljpanelen ritas om vid varje sökning, filterbyte och hälsouppdatering;
+ * utan det här gick två anrop till Graph varje gång.
+ */
+const members = { stamp: null, byGroup: new Map() };
+
+function requestMembers(groupId) {
+  const stamp = ctx.data?.fetchedAt ?? null;
+  if (members.stamp !== stamp) {
+    members.stamp = stamp;
+    members.byGroup.clear();
+  }
+
+  let pending = members.byGroup.get(groupId);
+  if (!pending) {
+    pending = ctx.send({ type: "members", groupId }).then((result) => {
+      // Ett misslyckat svar sparas inte — nästa ritning försöker igen.
+      if (!result?.ok) members.byGroup.delete(groupId);
+      return result;
+    });
+    members.byGroup.set(groupId, pending);
+  }
+  return pending;
+}
+
 // --- Sparat UI-läge ------------------------------------------------------
 
 async function loadUiState() {
@@ -290,7 +318,7 @@ function drawDetails(built) {
       onOpen: (ref) => ctx.openFinding(ref)
     },
     onPick: select,
-    requestMembers: (groupId) => ctx.send({ type: "members", groupId }),
+    requestMembers,
     collapsed: state.detailsCollapsed,
     onToggleCollapse: () => {
       state.detailsCollapsed = !state.detailsCollapsed;
