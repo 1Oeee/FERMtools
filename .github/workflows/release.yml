@@ -1,5 +1,11 @@
-# Bygger store-paketet på varje push, och publicerar till Chrome Web Store
-# när en tagg som v0.13 pushas. Taggen måste stämma med manifest.json.
+# Bygger store-paketet på varje push till main, och publicerar till Chrome
+# Web Store av sig själv när versionen i manifest.json är ny.
+#
+# Så släpps en version: höj "version" i manifest.json, lägg en post överst i
+# CHANGELOG.md och pusha till main. Finns ingen tagg v<version> ännu laddas
+# paketet upp och skickas till granskning; efter Googles godkännande går det
+# ut till användarna. Taggen och GitHub-releasen skapas först när
+# uppladdningen lyckats — misslyckas den försöker nästa push igen.
 #
 # Kräver (Settings → Secrets and variables → Actions):
 #   secrets.CWS_SERVICE_ACCOUNT_JSON  nyckel-JSON för servicekontot
@@ -11,7 +17,8 @@ name: Release
 on:
   push:
     branches: [main]
-    tags: ["v*"]
+  # Kör om för hand, t.ex. när en uppladdning föll på att förra versionen
+  # fortfarande låg i granskning.
   workflow_dispatch:
 
 permissions:
@@ -22,6 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.check.outputs.version }}
+      release: ${{ steps.released.outputs.release }}
     steps:
       - uses: actions/checkout@v4
 
@@ -43,13 +51,22 @@ jobs:
             exit 1
           fi
 
-          if [[ "$GITHUB_REF" == refs/tags/* && "${GITHUB_REF_NAME#v}" != "$version" ]]; then
-            echo "::error::Taggen $GITHUB_REF_NAME stämmer inte med manifest.json ($version)"
-            exit 1
-          fi
-
           if [[ $(jq '.icons["128"] // empty' manifest.json) == "" ]]; then
             echo "::warning file=manifest.json::Ingen 128px-ikon i manifest.json — Chrome Web Store kräver en"
+          fi
+
+      - name: Är versionen redan släppt?
+        id: released
+        # Taggen v<version> skapas när en uppladdning lyckats. Finns den är
+        # versionen redan ute (eller i granskning) — då byggs bara paketet.
+        run: |
+          version="${{ steps.check.outputs.version }}"
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
+            echo "v$version finns redan — ingen publicering."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "v$version är ny — publiceras till Chrome Web Store."
+            echo "release=true" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: actions/setup-node@v4
@@ -82,13 +99,32 @@ jobs:
 
   publish:
     needs: package
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.ref == 'refs/heads/main' && needs.package.outputs.release == 'true'
     runs-on: ubuntu-latest
     environment: chrome-web-store
+    # Två versioner får aldrig laddas upp samtidigt.
+    concurrency:
+      group: chrome-web-store
+      cancel-in-progress: false
     env:
       ITEM: publishers/${{ vars.CWS_PUBLISHER_ID }}/items/${{ vars.CWS_EXTENSION_ID }}
       API: https://chromewebstore.googleapis.com
     steps:
+      - name: Kontrollera uppsättningen
+        env:
+          HAS_KEY: ${{ secrets.CWS_SERVICE_ACCOUNT_JSON != '' }}
+          PUBLISHER: ${{ vars.CWS_PUBLISHER_ID }}
+          EXTENSION: ${{ vars.CWS_EXTENSION_ID }}
+        run: |
+          missing=()
+          [[ "$HAS_KEY" == "true" ]] || missing+=("secret CWS_SERVICE_ACCOUNT_JSON")
+          [[ -n "$PUBLISHER" ]] || missing+=("variable CWS_PUBLISHER_ID")
+          [[ -n "$EXTENSION" ]] || missing+=("variable CWS_EXTENSION_ID")
+          if (( ${#missing[@]} )); then
+            echo "::error::Chrome Web Store är inte uppsatt — saknas: ${missing[*]} (Settings → Secrets and variables → Actions)"
+            exit 1
+          fi
+
       - uses: actions/download-artifact@v4
         with:
           name: inuplus-${{ needs.package.outputs.version }}
@@ -135,15 +171,22 @@ jobs:
       - name: Skicka till granskning
         env:
           TOKEN: ${{ steps.auth.outputs.access_token }}
+        # DEFAULT_PUBLISH: går ut till användarna så fort Google godkänt.
         run: |
           curl -sS --fail-with-body -X POST \
             -H "Authorization: Bearer $TOKEN" \
             -H "Content-Type: application/json" \
             -d '{"publishType":"DEFAULT_PUBLISH"}' \
-            "$API/v2/$ITEM:publish" | jq .
+            "$API/v2/$ITEM:publish" | tee publish.json | jq .
+          echo "Läge hos Chrome Web Store: $(jq -r '.state // "okänt"' publish.json)" >> "$GITHUB_STEP_SUMMARY"
 
       - name: GitHub-release
+        # Skapar taggen v<version> på den här committen — beviset på att
+        # versionen är uppladdad, så att nästa push inte laddar upp den igen.
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ needs.package.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          name: Inu+ ${{ needs.package.outputs.version }}
           files: inuplus-${{ needs.package.outputs.version }}.zip
           generate_release_notes: true
