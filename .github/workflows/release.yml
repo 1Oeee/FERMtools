@@ -182,19 +182,28 @@ jobs:
         env:
           TOKEN: ${{ steps.auth.outputs.access_token }}
         run: |
-          res=$(curl -sS --fail-with-body -X POST \
-            -H "Authorization: Bearer $TOKEN" \
-            -H "Content-Type: application/zip" \
-            --data-binary @"inuplus-${{ needs.package.outputs.version }}.zip" \
-            "$API/upload/v2/$ITEM:upload")
-          echo "$res" | jq .
+          set -euo pipefail
+          # Butikens svar skrivs alltid ut — vid fel är det där orsaken står.
+          cws() {
+            local code
+            code=$(curl -sS -o response.json -w '%{http_code}' -H "Authorization: Bearer $TOKEN" "$@")
+            jq . response.json 2>/dev/null || cat response.json
+            if [[ "$code" != 2* ]]; then
+              echo "::error::Chrome Web Store svarade HTTP $code: $(jq -r '.error.message // empty' response.json 2>/dev/null)"
+              return 1
+            fi
+          }
 
-          state=$(echo "$res" | jq -r .uploadState)
+          cws -X POST -H "Content-Type: application/zip" \
+            --data-binary @"inuplus-${{ needs.package.outputs.version }}.zip" \
+            "$API/upload/v2/$ITEM:upload"
+
+          state=$(jq -r .uploadState response.json)
           for i in $(seq 1 30); do
             [[ "$state" != "IN_PROGRESS" ]] && break
             sleep 10
-            state=$(curl -sS --fail-with-body -H "Authorization: Bearer $TOKEN" \
-              "$API/v2/$ITEM:fetchStatus" | tee /dev/stderr | jq -r '.lastAsyncUploadState // .uploadState')
+            cws "$API/v2/$ITEM:fetchStatus"
+            state=$(jq -r '.lastAsyncUploadState // .uploadState' response.json)
           done
 
           if [[ "$state" != "SUCCEEDED" ]]; then
@@ -217,12 +226,20 @@ jobs:
         env:
           TOKEN: ${{ steps.auth.outputs.access_token }}
         # DEFAULT_PUBLISH: går ut till användarna så fort Google godkänt.
+        # Utan pipefail räknades ett avvisat anrop som lyckat, och taggen
+        # skapades för en version som aldrig skickats.
         run: |
-          curl -sS --fail-with-body -X POST \
+          set -euo pipefail
+          code=$(curl -sS -o publish.json -w '%{http_code}' -X POST \
             -H "Authorization: Bearer $TOKEN" \
             -H "Content-Type: application/json" \
             -d '{"publishType":"DEFAULT_PUBLISH"}' \
-            "$API/v2/$ITEM:publish" | tee publish.json | jq .
+            "$API/v2/$ITEM:publish")
+          jq . publish.json 2>/dev/null || cat publish.json
+          if [[ "$code" != 2* ]]; then
+            echo "::error::Chrome Web Store svarade HTTP $code: $(jq -r '.error.message // empty' publish.json 2>/dev/null)"
+            exit 1
+          fi
           echo "Läge hos Chrome Web Store: $(jq -r '.state // "okänt"' publish.json)" >> "$GITHUB_STEP_SUMMARY"
 
       - name: GitHub-release
