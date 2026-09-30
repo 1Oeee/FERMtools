@@ -9,8 +9,8 @@
 //   - **I en egen flik**, öppnad direkt på tilläggets adress. Då finns
 //     ingen portal utanför, och allt nedan är tyst.
 //
-// Meddelandena går bara åt det håll de behöver: sidan ber om att få stängas,
-// portalen säger till när rutan tagits fram igen och vilka färger den målar
+// Meddelandena går bara åt det håll de behöver: sidan ber om att portalen ska
+// fram, portalen säger till när rutan tagits fram igen och vilka färger den målar
 // med. Ingen tenantdata korsar gränsen åt något håll.
 
 const params = new URLSearchParams(location.search);
@@ -37,8 +37,6 @@ function tell(type) {
  */
 export const showPortal = () => tell("show-portal");
 
-/** Användaren stängde sidan. */
-export const closePage = () => tell("close");
 
 // --- Vad portalen säger till oss ----------------------------------------
 

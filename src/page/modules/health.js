@@ -14,6 +14,7 @@
 // flashes yellow three times.
 
 import { el, section } from "../dom.js";
+import { skeletonLines, skeletonTable } from "../skeleton.js";
 import { URLS, itemLinkButton, connectionButton, openInIntuneTab, openInNewTab } from "../portal.js";
 import { platformLabel } from "../../common/platforms.js";
 
@@ -354,7 +355,7 @@ function renderAudit(ref, itemsInFinding, groupsInFinding, labels) {
       )
     );
   } else if (result.loading) {
-    box.append(el("div", "d-empty", "Reading the audit logs …"));
+    box.append(skeletonLines(3, "Reading the audit logs …"));
   } else if (result.error) {
     box.append(el("div", "d-empty", `Could not read the audit logs: ${result.error}`));
   } else {
@@ -518,7 +519,7 @@ function draw() {
 
   const analysis = health.analysis;
   if (!analysis) {
-    body.append(el("div", "d-empty", health.loading ? "Reading what each group contains …" : "No health check run yet."));
+    body.append(health.loading ? skeletonTable(10, 3, "Reading what each group contains …") : el("div", "d-empty", "No health check run yet."));
     ui.list.replaceWith(body);
     ui.list = body;
     drawDetails();

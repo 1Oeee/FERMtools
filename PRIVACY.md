@@ -1,6 +1,6 @@
 # Inu+ Privacy Policy
 
-_Last updated: 2026-09-25_
+_Last updated: 2026-09-30_
 
 Inu+ is a browser extension that shows the group structure of your
 Microsoft Entra / Intune tenant as a tree inside the Intune admin portal
@@ -24,6 +24,14 @@ organisation's policy) choose which:
   headers or storage at all. The only extra network destination is Microsoft's
   sign-in service, `login.microsoftonline.com`.
 - **Portal mode**, described below.
+
+**Optional Data warehouse source.** If you choose Intune's Data warehouse as
+the Reports tab's source in Settings (off by default), Inu+ reads the devices,
+users, device types and management states tables from your tenant's Data
+warehouse feed on `*.manage.microsoft.com`. In sign-in mode it gets a token for
+the Intune API from `login.microsoftonline.com` for that, using the same
+sign-in. To find the feed's address it may call Intune's service-location
+lookup on `manage.microsoft.com`.
 
 ### Portal mode
 
@@ -53,6 +61,14 @@ When you open the Score tab it also reads the tenant's compliance policy
 settings, enrollment configurations and device cleanup rules, and a summary of
 the managed device inventory: each device's operating system, compliance state,
 encryption state and last check-in time.
+When you open the **Reports** tab it reads the managed devices with: name,
+serial number, manufacturer, model, OS version, device type, management and
+compliance state, last check-in, and the primary user's email address, display
+name and ID. The municipality shown for a device is worked out from that email
+address's domain, in the browser. Only when you open the Reports tab's
+**Installed app** filter does it read Intune's app inventory (Discovered apps:
+app names, versions and how many devices have them), and, for the apps you pick,
+which devices have them installed.
 A token carries **your** admin permissions, so Inu+
 can read whatever your account can read there. It never sends a
 create, update or delete request.
@@ -60,7 +76,11 @@ create, update or delete request.
 Besides tokens and tenant data, the extension also reads on the portal page:
 - the URL fragment (the part after `#`), to tell which portal page you are on;
 - the portal's background and text colours, to match the light/dark theme;
-- the position of the portal's left menu and top bar, to place its own page.
+- the position of the portal's left menu and top bar, to place its own page;
+- whether you clicked somewhere in the portal's left menu or top bar, and
+  whether the portal's address changed, so that Inu+ steps aside when you go
+  somewhere else in the portal, like any other portal page. It notes only that
+  a click happened in those areas, not what you clicked.
 It does not read anything else on the page and does not read other websites.
 
 The only things it does in the portal itself: when you click a shared
@@ -93,9 +113,18 @@ the search box can't be reached.
   (`chrome.storage.session`), which is memory-only and cleared when the
   browser closes.
 - **Settings and navigation hints** (your options including, in sign-in mode,
-  the app registration's client ID and tenant, and portal page addresses that
-  worked) are stored locally in `chrome.storage.local` on your device. They
-  contain no tenant content and no tokens.
+  the app registration's client ID and tenant, portal page addresses that
+  worked, and the address of your tenant's Intune service) are stored locally in
+  `chrome.storage.local` on your device. They contain no tokens and no device
+  or user data. Two things there can name parts of your tenant: the Reports
+  settings you type in (email domains, device-name prefixes and the names you
+  give them), and the Reports filters you last used (for example the chosen
+  municipality, model or manufacturer names), kept so the tab opens as you left
+  it.
+- **Excel exports** from the Reports tab are created in the browser and saved
+  as a file on your computer through the browser's normal download. They are
+  not uploaded or sent anywhere; what happens to the file afterwards is up to
+  you.
 
 Removing the extension deletes everything it stored.
 

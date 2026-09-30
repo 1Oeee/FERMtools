@@ -496,7 +496,7 @@ function reveal(groupId) {
 
 export const treeModule = {
   id: "tree",
-  label: "Tree",
+  label: "Group Tree",
   needs: ["groups", "apps", "config"],
 
   async mount(host, context) {

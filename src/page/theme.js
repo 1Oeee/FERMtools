@@ -21,6 +21,8 @@ const INK = { light: "#1b1a19", dark: "#f3f2f1" };
 /** Minsta kontrast vi accepterar mellan text och bakgrund (WCAG AA, brödtext). */
 const MIN_CONTRAST = 4.5;
 
+// series1–8: Reportss kategorier (enhetstyper), i fast ordning. Validerade
+// mot färgblindhet och kontrast på ljus (#ffffff) och mörk (#1b1a19) yta.
 const SIGNAL = {
   light: {
     accent: "#0f6cbd",
@@ -28,7 +30,16 @@ const SIGNAL = {
     app: "#2f9e4f",
     bad: "#a4262c",
     warn: "#8a6100",
-    mark: "#fde68a"
+    mark: "#fde68a",
+    series1: "#2a78d6",
+    series2: "#eb6834",
+    series3: "#1baf7a",
+    series4: "#eda100",
+    series5: "#e87ba4",
+    series6: "#008300",
+    series7: "#4a3aa7",
+    series8: "#e34948",
+    seriesOther: "#a19f9d"
   },
   dark: {
     accent: "#479ef5",
@@ -36,7 +47,16 @@ const SIGNAL = {
     app: "#6bb700",
     bad: "#f1707b",
     warn: "#d9a441",
-    mark: "#6b5600"
+    mark: "#6b5600",
+    series1: "#3987e5",
+    series2: "#d95926",
+    series3: "#199e70",
+    series4: "#c98500",
+    series5: "#d55181",
+    series6: "#008300",
+    series7: "#9085e9",
+    series8: "#e66767",
+    seriesOther: "#605e5c"
   }
 };
 

@@ -7,6 +7,7 @@
 // this tab fetches their data (on first view) and draws the result.
 
 import { el } from "../dom.js";
+import { skeletonFor } from "../skeleton.js";
 import { renderDocs } from "../findings.js";
 import { scoreTenant } from "../../score/audits.js";
 
@@ -207,7 +208,12 @@ function draw() {
 
   const payload = score.payload;
   if (!payload) {
-    body.append(el("div", "d-empty", score.loading ? "Reading how the tenant is set up …" : "No score yet."));
+    // Under hämtningen: mätarnas och granskningarnas form i grått.
+    if (score.loading && !score.error) {
+      host.replaceChildren(skeletonFor("score"));
+      return;
+    }
+    body.append(el("div", "d-empty", "No score yet."));
     host.replaceChildren(body);
     return;
   }

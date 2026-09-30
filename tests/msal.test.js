@@ -242,3 +242,58 @@ test("msal: byte av app-registrering glömmer sessionen", async () => {
     assert.equal(await source.getGraphToken(null), null, "sparad session från annan app används inte");
   });
 });
+
+test("msal: datalagret får en egen token till Intunes API, utan att Graph-sessionen byts ut", async () => {
+  const graph = graphToken("Group.Read.All");
+  const intune = fakeJwt({
+    aud: "https://api.manage.microsoft.com/",
+    scp: "get_data_warehouse",
+    exp: Math.floor(Date.now() / 1000) + 3600,
+    tid: "tenant-id"
+  });
+  await withFakes(
+    { fetchImpl: () => ({ json: { access_token: intune, refresh_token: "R2" } }) },
+    async ({ calls, session }) => {
+      session.set("msal-session", { accessToken: graph, refreshToken: "R1", account: "anna@skola.se", clientId: CLIENT, tenant: "organizations" });
+      const source = new MsalTokenSource();
+      source.configure({ clientId: CLIENT, tenant: "organizations" });
+
+      assert.notOk(source.describe().capabilities.warehouse.have, "saknas innan den hämtats");
+      assert.equal(await source.getWarehouseToken(), intune, "Intune-token");
+      assert.equal(calls.fetch[0].body.grant_type, "refresh_token", "bytt mot refresh-token");
+      assert.equal(calls.fetch[0].body.scope, "https://api.manage.microsoft.com/.default offline_access", "Intunes API");
+      assert.equal(await source.getGraphToken(["Group.Read.All"]), graph, "Graph-token orörd");
+      assert.equal(session.get("msal-session").refreshToken, "R2", "refresh-token roteras");
+      assert.ok(source.describe().capabilities.warehouse.have, "förmågan syns");
+
+      await source.getWarehouseToken();
+      assert.equal(calls.fetch.length, 1, "återanvänds medan den gäller");
+    }
+  );
+});
+
+test("msal: nekad datalagertoken ger Entras besked", async () => {
+  await withFakes(
+    {
+      fetchImpl: () => ({
+        status: 400,
+        json: { error: "invalid_grant", error_description: "AADSTS65001: The user or administrator has not consented.\r\nTrace ID: x" }
+      })
+    },
+    async ({ session }) => {
+      session.set("msal-session", { accessToken: graphToken("Group.Read.All"), refreshToken: "R1", account: "anna@skola.se", clientId: CLIENT, tenant: "organizations" });
+      const source = new MsalTokenSource();
+      source.configure({ clientId: CLIENT, tenant: "organizations" });
+
+      let error = null;
+      try {
+        await source.getWarehouseToken();
+      } catch (e) {
+        error = e;
+      }
+      assert.ok(/AADSTS65001/.test(error?.message ?? ""), "felet når fliken");
+      assert.notOk(/Trace ID/.test(error?.message ?? ""), "bara första raden");
+      assert.ok(source.describe().signedIn, "Graph-sessionen står kvar");
+    }
+  );
+});

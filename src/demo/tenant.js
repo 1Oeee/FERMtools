@@ -975,7 +975,8 @@ function managedDevice(upn, displayName, kind, { lastSyncDays = -0.5 } = {}) {
   const iphone = kind === "iphone";
   const android = kind === "android";
   const look = {
-    ipad: { name: `IPAD-${String(n).padStart(4, "0")}`, os: "iOS", version: "17.6.1", model: "iPad (9th generation)" },
+    // Flera generationer, som i en riktig skola — Reports filtrerar på modellen.
+    ipad: { name: `IPAD-${String(n).padStart(4, "0")}`, os: "iOS", version: "17.6.1", model: `iPad (${["9th", "10th", "6th", "8th"][n % 4]} generation)` },
     iphone: { name: `iPhone ${n}`, os: "iOS", version: "17.6.1", model: "iPhone 13" },
     android: { name: `AND-${String(n).padStart(4, "0")}`, os: "Android", version: "14", model: "Galaxy A35" },
     pc: { name: `PC-${String(n).padStart(4, "0")}`, os: "Windows", version: "10.0.22631.4169", model: "Latitude 5440" }
@@ -986,6 +987,11 @@ function managedDevice(upn, displayName, kind, { lastSyncDays = -0.5 } = {}) {
     userId: upn ? `40000000-0000-4000-8000-${String(upn.length * 97 + upn.charCodeAt(0)).padStart(12, "0")}` : "",
     userPrincipalName: upn ?? "",
     userDisplayName: displayName ?? "",
+    emailAddress: upn ?? "",
+    // Reports läser de här (beta): samma värden som Intune själv ger.
+    manufacturer: { ipad: "Apple", iphone: "Apple", android: "samsung" }[kind] ?? "Dell Inc.",
+    deviceType: { ipad: "iPad", iphone: "iPhone", android: "androidForWork" }[kind] ?? "desktop",
+    managementState: "managed",
     operatingSystem: look.os,
     osVersion: look.version,
     model: look.model,
@@ -1031,6 +1037,108 @@ export const managedDevices = [
   // Enheter utan användare räknas inte på något konto.
   ...cart(null, null, 5)
 ];
+
+// --- Appinventeringen (Reports: filter på installerade appar) -----------
+//
+// Discovered apps: en post per app och version, och enheterna varje post
+// finns på. Chrome finns i två versioner — Reports slår ihop dem på namnet.
+
+const isIpadDevice = (d) => /ipad/i.test(d.model ?? "");
+const APP_CATALOGUE = [
+  ["Book Creator", "5.4.1", "ios", (d, i) => isIpadDevice(d) && i % 2 === 0],
+  ["GeoGebra", "6.0.846", "ios", (d, i) => isIpadDevice(d) && i % 3 === 0],
+  ["Minecraft Education", "1.21.03", "ios", (d, i) => isIpadDevice(d) && i % 5 === 0],
+  ["Google Chrome", "129.0.6668.101", "windows", (d, i) => d.operatingSystem === "Windows" && i % 2 === 0],
+  ["Google Chrome", "130.0.6723.59", "windows", (d, i) => d.operatingSystem === "Windows" && i % 2 === 1],
+  ["Microsoft Teams", "24.215.1", "other", (d, i) => i % 4 === 0]
+];
+
+export const detectedAppDevices = new Map();
+export const detectedApps = APP_CATALOGUE.map(([displayName, version, platform, has], k) => {
+  const id = `demo-app-${k + 1}`;
+  const devices = managedDevices.filter((d, i) => has(d, i)).map((d) => ({ id: d.id, deviceName: d.deviceName }));
+  detectedAppDevices.set(id, devices);
+  return { id, displayName, version, platform, deviceCount: devices.length };
+});
+
+// --- Datalagret (Reports) -----------------------------------------
+//
+// Datalagrets fyra tabeller, som Intune lämnar ut dem: nycklar i stället för
+// namn, och uppslagstabeller för enhetstyp och hanteringsläge. Samma enheter
+// som ovan, plus elevernas iPads på en egen domän (edu.contoso.com), några
+// med namnprefixet N- som i en skolas namnstandard. Två enheter är på väg
+// bort (RetirePending) och en är borttagen — ingen av dem ska räknas.
+
+const DW_TYPES = ["IPad", "IPhone", "AndroidForWork", "Desktop", "MacMDM"];
+const DW_STATES = ["Managed", "RetirePending", "Retired"];
+
+const dwType = (device) =>
+  /ipad/i.test(device.model) ? "IPad" : /iphone/i.test(device.model) ? "IPhone" : device.operatingSystem === "Android" ? "AndroidForWork" : "Desktop";
+const dwMaker = (device) => ({ IPad: "Apple", IPhone: "Apple", AndroidForWork: "samsung", Desktop: "Dell Inc." })[dwType(device)];
+
+const pupils = Array.from({ length: 24 }, (_, i) => {
+  const n = i + 1;
+  const upn = `elev${n}@edu.contoso.com`;
+  const device = managedDevice(upn, `Elev ${n}`, "ipad");
+  // Hälften följer Norrskolans namnstandard: N-<klass>-<serienummer>.
+  if (n % 2) device.deviceName = `N-7A-${device.serialNumber}`;
+  return device;
+});
+
+const macs = Array.from({ length: 3 }, (_, i) => ({
+  ...managedDevice(`larare${i + 1}@contoso.com`, `Lärare ${i + 1}`, "pc"),
+  operatingSystem: "macOS",
+  model: "MacBook Air",
+  osVersion: "14.6.1",
+  manufacturer: "Apple",
+  deviceType: "macMDM"
+}));
+
+const dwSource = [...managedDevices, ...pupils, ...macs];
+
+// De två sista eleverna är på väg bort; den allra sista är dessutom borttagen.
+const retiring = new Set(pupils.slice(-2).map((d) => d.id));
+const deleted = pupils.at(-1).id;
+
+// Egna användar-id per UPN. Enhetslistans id räknas ur namnets längd och kan
+// krocka (del1 och del2), och datalagret slår upp användaren på id.
+const dwUserId = new Map(
+  [...new Set(dwSource.map((d) => d.userPrincipalName).filter(Boolean))].map((upn, i) => [
+    upn,
+    `50000000-0000-4000-8000-${String(i + 1).padStart(12, "0")}`
+  ])
+);
+
+export const dataWarehouse = {
+  deviceTypes: DW_TYPES.map((name, i) => ({ deviceTypeId: i, deviceTypeKey: 100 + i, deviceTypeName: name })),
+  managementStates: DW_STATES.map((name, i) => ({ managementStateId: i, managementStateKey: 200 + i, managementStateName: name })),
+  users: [...dwUserId].map(([upn, id], i) => ({
+    userKey: i + 1,
+    userId: id,
+    userEmail: upn,
+    userPrincipalName: upn,
+    displayName: dwSource.find((d) => d.userPrincipalName === upn)?.userDisplayName ?? upn,
+    isDeleted: false
+  })),
+  devices: dwSource.map((device, i) => {
+    const type = device.operatingSystem === "macOS" ? "MacMDM" : dwType(device);
+    return {
+      deviceKey: 1000 + i,
+      deviceId: device.id,
+      deviceName: device.deviceName,
+      deviceTypeKey: 100 + DW_TYPES.indexOf(type),
+      managementStateKey: 200 + (retiring.has(device.id) ? 1 : 0),
+      lastSyncDateTime: device.lastSyncDateTime,
+      enrolledDateTime: device.enrolledDateTime,
+      osVersion: device.osVersion,
+      serialNumber: device.serialNumber,
+      manufacturer: type === "MacMDM" ? "Apple" : dwMaker(device),
+      model: device.model,
+      isDeleted: device.id === deleted,
+      primaryUser: dwUserId.get(device.userPrincipalName) ?? null
+    };
+  })
+};
 
 // --- Poäng: hur tenanten är inställd -------------------------------------
 //

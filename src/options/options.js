@@ -5,6 +5,10 @@ const fields = {
   sharedPatterns: document.getElementById("sharedPatterns"),
   deviceLimit: document.getElementById("deviceLimit"),
   rowScale: document.getElementById("rowScale"),
+  summarySource: document.getElementById("summarySource"),
+  warehouseUrl: document.getElementById("warehouseUrl"),
+  orgLabel: document.getElementById("orgLabel"),
+  orgMapping: document.getElementById("orgMapping"),
   demo: document.getElementById("demo"),
   consent: document.getElementById("consent"),
   msalClientId: document.getElementById("msalClientId"),
@@ -46,6 +50,13 @@ function showAccount(status) {
   signOutBtn.disabled = !status.signedIn;
 }
 
+// Flödesadressen gäller bara datalagret.
+const warehouseFields = document.getElementById("warehouseFields");
+function showSource() {
+  warehouseFields.hidden = fields.summarySource.value !== "warehouse";
+}
+fields.summarySource.addEventListener("change", showSource);
+
 const saveBtn = document.getElementById("save");
 const saved = document.getElementById("saved");
 
@@ -66,6 +77,11 @@ function send(message) {
   fields.deviceLimit.value = settings.deviceLimit ?? 15;
   fields.rowScale.value = String(settings.rowScale ?? 1);
   if (!fields.rowScale.value) fields.rowScale.value = "1";
+  fields.summarySource.value = settings.summarySource === "warehouse" ? "warehouse" : "graph";
+  showSource();
+  fields.warehouseUrl.value = settings.warehouseUrl ?? "";
+  fields.orgLabel.value = settings.orgLabel ?? "";
+  fields.orgMapping.value = settings.orgMapping ?? "";
   fields.demo.checked = Boolean(settings.demo);
   fields.consent.checked = Boolean(settings.consent);
   fields.msalClientId.value = settings.msalClientId ?? "";
@@ -107,6 +123,10 @@ function save() {
     sharedPatterns: fields.sharedPatterns.value,
     deviceLimit: Math.min(15, Math.max(1, Math.round(Number(fields.deviceLimit.value) || 15))),
     rowScale: Number(fields.rowScale.value) || 1,
+    summarySource: fields.summarySource.value === "warehouse" ? "warehouse" : "graph",
+    warehouseUrl: fields.warehouseUrl.value.trim(),
+    orgLabel: fields.orgLabel.value.trim(),
+    orgMapping: fields.orgMapping.value,
     demo: fields.demo.checked,
     consent: fields.consent.checked,
     authMode: selectedMode(),

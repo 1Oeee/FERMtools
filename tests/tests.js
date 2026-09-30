@@ -12,6 +12,8 @@ import "./msal.test.js";
 import "./score.test.js";
 import "./devices.test.js";
 import "./platforms.test.js";
+import "./warehouse.test.js";
+import "./xlsx.test.js";
 
 const list = document.getElementById("list");
 const summary = document.getElementById("summary");

@@ -35,7 +35,8 @@
         color: var(--fg);
         font: inherit;
       }
-      input[type="text"] {
+      input[type="text"],
+      textarea {
         width: 100%;
         padding: 6px 8px;
         border: 1px solid var(--line);
@@ -183,6 +184,58 @@
       </div>
     </div>
 
+    <fieldset>
+      <legend>Reports</legend>
+
+      <div class="field">
+        <label for="summarySource">Source</label>
+        <select id="summarySource">
+          <option value="graph">Intune device list (live, no setup)</option>
+          <option value="warehouse">Intune Data warehouse (daily snapshot, needs an app registration)</option>
+        </select>
+        <div class="hint">
+          The device list is read with the same permission as Shared accounts, picked up
+          from the portal's Devices page. The Data warehouse gives the exact numbers of a
+          Power Query Excel report, but needs a token with the Intune permission
+          <code>get_data_warehouse</code> — the portal never gets one, so this only works in
+          sign-in mode with that permission granted.
+        </div>
+      </div>
+
+      <div class="field" id="warehouseFields">
+        <label for="warehouseUrl">Data warehouse feed URL</label>
+        <input id="warehouseUrl" type="text" spellcheck="false"
+          placeholder="https://fef.msub…manage.microsoft.com/ReportingService/DataWarehouseFEService?api-version=v1.0" />
+        <div class="hint">
+          In the portal: Reports → Data warehouse → “OData feed for reporting service”.
+          Leave empty and Inu+ will work it out from your tenant's region — paste it
+          here if that guess fails.
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="orgLabel">Name of the rows</label>
+        <input id="orgLabel" type="text" spellcheck="false" placeholder="Municipality" />
+        <div class="hint">What the rows are called in the tab and the Excel report, e.g. <code>Kommun</code>.</div>
+      </div>
+
+      <div class="field">
+        <label for="orgMapping">Municipality names (optional)</label>
+        <textarea id="orgMapping" rows="6" spellcheck="false"
+          placeholder="alvkarleby.se = Älvkarleby&#10;K = Knivsta&#10;H = Heby"></textarea>
+        <div class="hint">
+          Without anything here, the municipality comes from the primary user's email
+          address: <code>@tierp.se</code> and <code>@edu.tierp.se</code> → Tierp,
+          <code>@alvkarleby.se</code> → Alvkarleby. Use this to change a name
+          (<code>alvkarleby.se = Älvkarleby</code>), to join domains under one name, or
+          to place devices by their name: a key without a dot is a device-name prefix —
+          the part before the first hyphen, so <code>K</code> matches
+          <code>K-SKOLA-1234</code> — and wins over the email address. One per line,
+          <code>key = name</code>, or two columns pasted from Excel.
+        </div>
+      </div>
+    </fieldset>
+
     <fieldset id="access">
       <legend>How Inu+ reads your tenant</legend>
       <div id="managedNote" class="hint" hidden>
@@ -242,6 +295,8 @@
             <code>DeviceManagementConfiguration.Read.All</code>,
             <code>DeviceManagementServiceConfig.Read.All</code>, and for the Score
             tab's device inventory <code>DeviceManagementManagedDevices.Read.All</code>.
+            For Reports, also the Intune API (under “APIs my organization
+            uses” → Microsoft Intune API) permission <code>get_data_warehouse</code>.
           </div>
         </div>
         <div class="field row">

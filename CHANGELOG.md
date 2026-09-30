@@ -4,6 +4,59 @@ Version scheme: `0.1`, `0.2`, `0.3` … One step per delivered batch of work.
 The version lives in `manifest.json` and must always match the top entry here.
 `1.0` when the extension is stable enough to use daily without reservations.
 
+## 0.22 — 2026-09-30
+
+A Reports tab: devices per municipality and client type — the report a Power
+Query Excel sheet builds — as a page in the portal, with filters and a
+formatted Excel export. Inu+ also behaves like a real portal page now, and
+every tab shows its shape while it loads.
+
+### Reports
+
+- **Devices per municipality and client type**, from Intune's live device list
+  (Graph), with the same permission as Shared accounts — nothing to set up.
+  Summary tiles, an overview per municipality with a distribution bar, and the
+  device list: device name and primary user (email) as links into the Intune
+  console, last check-in, OS version, serial number, manufacturer, model,
+  compliance, municipality and client type. 1–50, 1–100, 1–200 or all rows per
+  page.
+- **Municipality from the primary user's email domain** (`@tierp.se`,
+  `@edu.tierp.se` → Tierp). Settings → Reports can rename, join domains or place
+  devices by a device-name prefix, which wins over the domain.
+- **Filters**: municipality, client type (click the tiles), model (in
+  generation order), manufacturer, compliance (compliant / not compliant),
+  installed app and search. **Installed app** reads Intune's app inventory
+  (Discovered apps) with all versions of an app under one name, shows how each
+  app is assigned (Required, Available, Available without enrollment,
+  Uninstall, Not assigned) and narrows the list to one intent.
+- **Export** writes the selection to one formatted sheet: the device list with
+  the municipality in column I and an autofilter, and a summary per
+  municipality to the right — devices, users and each client type, with a
+  total — placed above the list so filtering never hides it. A small
+  dependency-free xlsx writer (`src/common/xlsx.js`).
+- **Data warehouse as an optional source** (Settings → Reports → Source): the
+  Power Query report's exact numbers, for sign-in mode with the Intune API
+  permission `get_data_warehouse`. The portal's own tokens are not accepted by
+  the warehouse, so Graph is the default.
+
+### The portal
+
+- **Inu+ is a page among the others, not an overlay.** The ✕ is gone; clicking
+  anything in the portal's left menu or top bar — All services, Devices,
+  search — leaves Inu+ at once, as does any change of the portal's address. The
+  portal navigates with `history.pushState`, which fires no event a content
+  script hears, so before this you navigated underneath Inu+ without seeing it.
+- **Tabs renamed**: Tree → Group Tree, and the new Reports.
+- **Ghost loading.** Every tab shows its shape in grey while it loads — tree
+  rows, report tiles and lists, score gauges — instead of an empty page. No
+  shimmer for anyone who has chosen reduced motion.
+
+### Fixes
+
+- **Reloading the extension under an open page** no longer throws "Extension
+  context invalidated" every 30 seconds. The page asks to be reloaded, and the
+  portal's token scanner goes quiet until the tab is refreshed.
+
 ## 0.21 — 2026-09-28
 
 The first version released to the Chrome Web Store by the release workflow

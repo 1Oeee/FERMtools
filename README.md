@@ -21,7 +21,7 @@ even when the branch is collapsed.
 The extension is **read-only**. It only makes `GET` requests to Microsoft Graph
 and the Intune backend, and writes nothing to the tenant.
 
-Current version: **0.18**. The version scheme is `0.1`, `0.2`, `0.3` … with one
+Current version: **0.22**. The version scheme is `0.1`, `0.2`, `0.3` … with one
 step per delivered batch of work, and `1.0` when the extension can be used
 daily without reservations. What changed when is in [CHANGELOG.md](CHANGELOG.md),
 and the version there must always match `manifest.json`.
@@ -96,9 +96,15 @@ portal. That is deliberate: the extension's own origin applies there, so
 their own, and the portal's DOM is never touched by anything but the link and
 the frame. The content script that places them reads nothing from the portal.
 
-The page folds itself away when it sends the tab somewhere else — after a click
-on a permission button or on **Open group** it is the blade you want to see, not
-Inu+. It also closes when you switch blades in the portal.
+Inu+ behaves like one blade among the others, not like something on top of
+them: there is no close button. Clicking anything in the portal's left rail or
+top bar — All services, Devices, search, notifications — leaves Inu+ at once, and
+so does any change of the portal's address, however it happens (the portal
+navigates with `history.pushState`, which fires no event a content script can
+hear, so the address is also watched). The page also folds itself away when it
+sends the tab somewhere else — after a click on a permission button or on
+**Open group** it is the blade you want to see. Click **Inu+** in the rail to come
+back; the page keeps its state.
 
 ### The theme
 
@@ -253,6 +259,8 @@ applications**, and logged under its own name in the sign-in logs.
      Score's enrollment and cleanup settings
    - `DeviceManagementManagedDevices.Read.All` — Score's device inventory
      (optional)
+   - Microsoft Intune API → `get_data_warehouse` — Reports (optional;
+     under **APIs my organization uses**)
 
    Then **Grant admin consent**. Only read permissions; leave out what you don't
    want Inu+ to see and that part of the page simply stays grey.
@@ -292,9 +300,10 @@ The page is divided into tabs. The active tab is remembered between visits.
 
 | Tab | Needs | Status |
 | --- | --- | --- |
-| **Tree** | Groups, Apps, Configuration | Built. Group structure, markers, search, filter, details panel. |
+| **Group Tree** | Groups, Apps, Configuration | Built. Group structure, markers, search, filter, details panel. |
 | **Score** | Configuration, Connections, Devices | Built. How the tenant is set up, graded like a Lighthouse report against Microsoft's recommendations — see below. |
 | **Connections** | Apps, Configuration, Connections | Built. VPP tokens, Apple ADE/DEP, Android enrollment and APNS in three subtrees, sorted by what expires first. Licences per VPP token: total, used and free, filterable and searchable. |
+| **Reports** | Devices | Built. Devices per organisation and device type, the report a Power Query Excel sheet builds — from the live device list, or optionally the Data warehouse — see below. |
 | **Health check** | Groups, Apps, Configuration | Built, turned on in the settings. 27 rules for what is right and wrong in the assignments — see below. |
 | _Reports (hidden)_ | Groups, Apps, Devices | Not built. Excel export per group with devices, serial numbers, users, inventory and apps. A custom xlsx writer with no dependencies. |
 
@@ -338,6 +347,65 @@ Microsoft Learn, not a score Microsoft publishes. The demo tenant is half-way
 there on purpose: antivirus, BitLocker, ASR, LAPS and update rings are in place;
 firewall, baseline, Windows Hello and cleanup rules are not.
 
+### Reports
+
+The devices per municipality and client type — the report a Power Query Excel
+sheet builds — laid out like the portal's own report blades: a command bar with
+**Export**, filter pills, client-type tiles, an overview per municipality and
+the device and primary-user lists, 50 rows per page.
+
+- **Select what you want, then export it.** Filter by municipality (the pill, or
+  click a name in the overview), click one or more **client-type tiles** to show
+  only those (Total resets), and narrow by **model** (iPad (5th generation), (6th)
+  … in order), manufacturer, **installed app** and **compliance** (compliant / not
+  compliant — the latter includes grace period, conflict and error), or search.
+  Everything below the tiles and the export follows the selection. Only managed
+  devices are counted.
+- **Installed app** reads Intune's app inventory (*Discovered apps*,
+  `/deviceManagement/detectedApps`) when the menu is first opened, with every
+  version of an app under one name. Picking apps keeps the devices that have any
+  of them installed. On iOS/iPadOS the inventory covers company-owned devices;
+  personally owned ones only report managed apps. Each app shows how it is
+  assigned in Intune — Required, Available, Available without enrollment,
+  Uninstall, or Not assigned — and chips at the top narrow the list to one of
+  them. The intents come from the assignments the Group Tree already fetched,
+  matched on the app's name (the inventory does not say which Intune app an
+  installed app came from); exclusions do not count.
+- **Rows per page**: 1–50, 1–100, 1–200 or All, top right of the device list.
+  The choice is kept between visits.
+- **The device list** has the primary user's email right after the device name.
+  Both are links: the device and the user open in the Intune console.
+- **Export** writes one formatted sheet: the device list with the
+  **municipality in column I** and an autofilter, and a **summary per
+  municipality** to the right — devices, users (unique primary users) and each
+  client type, with a total. The summary sits above the list's header row, so
+  filtering the list never hides it. The selection is written at the top.
+- **Municipality** comes from the primary user's email domain: `@tierp.se` and
+  `@edu.tierp.se` → Tierp. Settings → Reports can rename (`alvkarleby.se =
+  Älvkarleby`) or place devices by name prefix (`K = Knivsta` for `K-…`).
+- **What it reads** (only when the tab is opened, read-only): by default
+  Intune's live device list from Graph (`/beta/deviceManagement/managedDevices`)
+  — name, last check-in, OS version, serial number, manufacturer, model, device
+  type, management state and primary user — with the same Devices permission as
+  Shared accounts, so nothing to set up. Values are spelled as in the Data
+  warehouse (`IPad`, `Managed` …), so a report built on either matches. By
+  default only devices whose management state is *Managed* count.
+- **Data warehouse as source** (Settings → Reports → Source): four
+  tables of the feed — `devices`, `users`, `deviceTypes` and `managementStates` —
+  joined like the Power Query query, deleted devices left out. It gives the
+  exact numbers of the Excel report, but needs a token with `get_data_warehouse`,
+  which the portal never obtains — so in practice only sign-in mode.
+- **The feed address** (Data warehouse only) is tenant-specific
+  (`fef.<region>.manage.microsoft.com`) and worked out automatically: from the
+  portal's traffic, Intune's service lookup, or the address Graph names when it
+  forwards a request to Intune. The Settings field is a last resort.
+- **The token** (Data warehouse only) is an Intune API token, not Graph. In
+  sign-in mode the same sign-in is exchanged for one; the app registration needs
+  the Microsoft Intune API permission `get_data_warehouse` (delegated, admin
+  consent). The portal's own Intune token is not accepted by the warehouse.
+
+The fetch and all counting are pure functions in `src/graph/warehouse.js`.
+
 ### Health check
 
 Turned on with **Health check** in the settings. The tab reviews the tenant's
@@ -365,7 +433,7 @@ Every check has a fix under **How to fix it**, with links to Microsoft Learn. Th
 texts are drafts built on Microsoft's documentation and are collected in
 `src/health/guidance.js` — go through them against your own procedures.
 
-The errors are also visible in **Tree**. Every group gets a diamond next to the
+The errors are also visible in **Group Tree**. Every group gets a diamond next to the
 dots:
 
 | Diamond | Means |
@@ -420,8 +488,10 @@ row.
   already in, and folds Inu+ away so the blade is visible.
 - **Without hierarchy** at the bottom of the tree is also collapsible, and keeps
   its state both when you select groups in it and between visits.
-- **✕** closes the page and gives the portal back. It only exists when the page
-  is in the portal — in a tab of its own there is nothing to close down to.
+- **Loading** shows each tab's shape in grey — the tree's rows, the report's
+  tiles and lists, the score's gauges — instead of an empty page, so nothing
+  jumps when the data arrives (`src/page/skeleton.js`). The shimmer is off for
+  anyone who has chosen reduced motion.
 
 ## Settings
 

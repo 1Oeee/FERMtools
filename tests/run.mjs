@@ -14,6 +14,8 @@ await import("./msal.test.js");
 await import("./score.test.js");
 await import("./devices.test.js");
 await import("./platforms.test.js");
+await import("./warehouse.test.js");
+await import("./xlsx.test.js");
 
 const { passed, total } = await runAll(({ name, ok, error }) => {
   console.log(`${ok ? "✓" : "✗"} ${name}${ok ? "" : `\n    ${error}`}`);

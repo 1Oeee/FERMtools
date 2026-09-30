@@ -6,6 +6,7 @@
 // you search for the account under Devices.
 
 import { el, section, relativeDays, daysUntil } from "../dom.js";
+import { skeletonFor } from "../skeleton.js";
 import { createSplit, fillDetails, markSelected } from "../split.js";
 import { headerRow, sortRows } from "../sort.js";
 import {
@@ -344,8 +345,7 @@ function draw() {
   const body = el("div", "module-pad");
 
   if (state.loading && !state.data) {
-    body.append(el("div", "d-empty", "Reading devices …"));
-    host.replaceChildren(body);
+    host.replaceChildren(skeletonFor("accounts"));
     ui.details = null;
     return;
   }

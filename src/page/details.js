@@ -2,6 +2,7 @@
 
 import { describeGroup, isDynamic } from "../graph/groups.js";
 import { URLS, openInIntuneTab, itemLinkButton, groupPortalButton } from "./portal.js";
+import { skeletonLines } from "./skeleton.js";
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -175,7 +176,8 @@ export function renderDetails(container, ctx) {
 
   // Members are fetched only when the panel is opened, not on every tree build.
   body.append(section("Members"));
-  const members = el("div", "d-empty", "Loading …");
+  const members = el("div", "d-empty");
+  members.append(skeletonLines(3, "Loading members …"));
   body.append(members);
 
   const id = el("div", "d-id");

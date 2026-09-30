@@ -42,6 +42,15 @@ export const DEFAULT_SETTINGS = {
   deviceLimit: 15,
   // Trädradernas storlek: 1, 1.1, 1.2 eller 1.3. Större rader är lättare att träffa.
   rowScale: 1,
+  // Reports: källan ("graph" = Intunes enhetslista, samma token som
+  // övriga flikar; "warehouse" = datalagret, kräver get_data_warehouse),
+  // datalagrets flödesadress (tom = räkna fram den) och vilken organisation
+  // en domän eller ett namnprefix hör till.
+  summarySource: "graph",
+  warehouseUrl: "",
+  orgMapping: "",
+  // Rubriken för raderna, t.ex. "Kommun". Tom = "Municipality".
+  orgLabel: "",
   // Påhittad tenant i stället för portalens. Se src/demo/.
   demo: false,
   // Fliken Hälsokontroll: regler för rätt och fel i tilldelningarna.

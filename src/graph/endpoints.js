@@ -26,6 +26,7 @@ const PATTERNS = [
   ["appleEnrollment", /\/deviceManagement\/depOnboardingSettings$/i],
   ["apns", /\/deviceManagement\/applePushNotificationCertificate$/i],
   ["managedDevices", /\/deviceManagement\/managedDevices$/i],
+  ["detectedApps", /\/deviceManagement\/detectedApps$/i],
   // Poängens källor (posture.js).
   ["tenantSettings", /\/deviceManagement$/i],
   ["enrollmentConfigs", /\/deviceManagement\/deviceEnrollmentConfigurations$/i],
@@ -33,7 +34,9 @@ const PATTERNS = [
   ["cleanupSettings", /\/deviceManagement\/managedDeviceCleanupSettings$/i],
   ["intents", /\/deviceManagement\/intents$/i],
   ["templates", /\/deviceManagement\/templates$/i],
-  ["auditEvents", /\/deviceManagement\/auditEvents$/i]
+  ["auditEvents", /\/deviceManagement\/auditEvents$/i],
+  // Datalagrets OData-flöde (warehouse.js). Roten eller en tabell i den.
+  ["dataWarehouse", /\/ReportingService\/DataWarehouseFEService(\/|$)/i]
 ];
 
 /**
@@ -50,12 +53,14 @@ const CAPABILITY_BY_SOURCE = {
   appleEnrollment: "serviceConfig",
   apns: "serviceConfig",
   managedDevices: "devices",
+  detectedApps: "devices",
   tenantSettings: "config",
   enrollmentConfigs: "serviceConfig",
   cleanupRules: "serviceConfig",
   cleanupSettings: "serviceConfig",
   intents: "config",
-  templates: "config"
+  templates: "config",
+  dataWarehouse: "warehouse"
   // auditEvents saknas med flit: granskningsloggens blad ska inte bli vägen
   // tokenraden pekar på för profiler.
 };
@@ -118,7 +123,8 @@ export function urlFromError(error) {
   return url;
 }
 
-async function readAll() {
+/** Alla inlärda adresser. Datalagret letar region ur vilken som helst av dem. */
+export async function readAll() {
   try {
     const stored = await chrome.storage.local.get(KEY);
     return stored?.[KEY] ?? {};
@@ -156,6 +162,36 @@ export async function remember(key, url) {
   }
 
   return entry;
+}
+
+/**
+ * Intune-värden portalen pratar med, oavsett vilken tjänst anropet gällde.
+ * Den bär tenantens region (proxy.msub03.manage.microsoft.com → msub03), och
+ * mer än så behövs inte för att hitta datalagret. Nästan varje Intune-blad
+ * anropar någon sådan värd, så regionen är känd långt innan någon av
+ * datakällorna ovan behövt reservvägen.
+ *
+ * @returns {Promise<boolean>} Var värden ny?
+ */
+export async function rememberHost(url) {
+  if (!isIntuneBackend(url)) return false;
+  let origin;
+  try {
+    origin = new URL(url).origin;
+  } catch {
+    return false;
+  }
+  // manage.microsoft.com självt, utan region, säger ingenting.
+  if (new URL(origin).hostname.split(".").length !== 5) return false;
+
+  const all = await readAll();
+  if (all.host?.base === origin) return false;
+  try {
+    await chrome.storage.local.set({ [KEY]: { ...all, host: { base: origin, seenAt: Date.now() } } });
+  } catch {
+    return false;
+  }
+  return true;
 }
 
 export async function recall(key) {

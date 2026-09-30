@@ -49,6 +49,9 @@ const ROUTES = [
   [/^\/deviceManagement\/applePushNotificationCertificate$/, () =>
     tenant.applePushNotificationCertificate],
   [/^\/deviceManagement\/managedDevices$/, () => tenant.managedDevices],
+  [/^\/deviceManagement\/detectedApps$/, () => tenant.detectedApps],
+  [/^\/deviceManagement\/detectedApps\/([^/]+)\/managedDevices$/, ([, id]) =>
+    tenant.detectedAppDevices.get(decodeURIComponent(id)) ?? null],
   [/^\/deviceManagement\/auditEvents$/, () => tenant.auditEvents],
   // Bara filtret audit.js själv skickar: targetResources/any(t: t/id eq '…').
   [/^\/auditLogs\/directoryAudits$/, (_, query) => {
@@ -62,7 +65,10 @@ const ROUTES = [
   [/^\/deviceManagement\/managedDeviceCleanupRules$/, () => tenant.managedDeviceCleanupRules],
   [/^\/deviceManagement\/managedDeviceCleanupSettings$/, () => tenant.managedDeviceCleanupSettings],
   [/^\/deviceManagement\/intents$/, () => tenant.intents],
-  [/^\/deviceManagement\/templates$/, () => tenant.templates]
+  [/^\/deviceManagement\/templates$/, () => tenant.templates],
+  // Datalagret (warehouse.js). Värden och api-versionen spelar ingen roll här.
+  [/^\/ReportingService\/DataWarehouseFEService\/(devices|users|deviceTypes|managementStates)$/i, ([, table]) =>
+    tenant.dataWarehouse[table]]
 ];
 
 /** Svaret för en adress: en lista, ett objekt, eller fel. */

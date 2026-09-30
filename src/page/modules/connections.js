@@ -4,6 +4,7 @@
 // and inside each subtree. Nobody should have to hunt for what is urgent.
 
 import { el, daysUntil, relativeDays, expiryTone } from "../dom.js";
+import { skeletonFor } from "../skeleton.js";
 import { vppLicences, licenceTotals, licencesForToken, withTokens } from "../../graph/connections.js";
 import { connectionButton } from "../portal.js";
 import { headerRow, sortRows } from "../sort.js";
@@ -160,8 +161,7 @@ function draw() {
   const body = el("div", "module-pad");
 
   if (state.loading) {
-    body.append(el("div", "d-empty", "Loading …"));
-    host.replaceChildren(body);
+    host.replaceChildren(skeletonFor("connections"));
     return;
   }
 

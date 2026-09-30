@@ -99,15 +99,17 @@
 
     link.append(iconBox, label);
 
+    // Som portalens egna punkter: ett klick tar fram sidan. Den stängs inte av
+    // ett klick till — man lämnar den genom att gå någon annanstans i portalen.
     link.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      toggle();
+      show();
     });
     link.addEventListener("keydown", (event) => {
       if (event.key !== "Enter" && event.key !== " ") return;
       event.preventDefault();
-      toggle();
+      show();
     });
 
     return link;
@@ -321,6 +323,7 @@
     const isNew = ensureHost();
     open = true;
     openedAt = Date.now();
+    hrefAtOpen = location.href;
     host.hidden = false;
     watchEdges();
     place();
@@ -340,11 +343,6 @@
     markSelected();
   }
 
-  function toggle() {
-    if (open) hide();
-    else show();
-  }
-
   function tell(message) {
     try {
       frame?.contentWindow?.postMessage({ source: "inuplus", ...message }, PAGE_ORIGIN);
@@ -354,28 +352,59 @@
   }
 
   // --- Vad som stänger rutan ---------------------------------------------
-
-  // Portalen byter blad genom att ändra adressens hash. Sker det har
-  // användaren klickat sig vidare i portalen — eller Inu+ har skickat dem
-  // dit för att fånga en behörighet — och då ska bladet synas, inte vår ruta.
   //
-  // Portalen städar däremot gärna i sin egen adress strax efter att den
-  // hämtat sig. Det är inget bladbyte, och ska inte stänga något man just
-  // öppnat — därför en kort respit.
+  // Inu+ ska bete sig som ett blad bland de andra, inte som något som ligger
+  // över dem: går man någon annanstans i portalen ska det synas direkt. Förr
+  // lyssnade vi bara på `hashchange` — men portalen byter blad med
+  // history.pushState, som aldrig ger den händelsen. Då navigerade man under
+  // Inu+ utan att se det, och fick stänga rutan med krysset för att hitta dit
+  // man gått. Nu stängs den på tre sätt:
+
+  // 1. Ett klick i portalens vänsterlist eller översta rad — utom på vår egen
+  //    punkt. Det är att gå någon annanstans: All services, Devices, sökning,
+  //    notiser, inställningar. Fångas innan portalen själv hanterar klicket,
+  //    så att dess blad och menyer syns direkt, inte bakom oss.
+  document.addEventListener(
+    "click",
+    (event) => {
+      if (!open) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (!target || target.closest("#" + LINK_ID) || target.closest("#" + HOST_ID)) return;
+      if (target.closest(SIDEBAR) || target.closest(HEADER)) hide();
+    },
+    true
+  );
+
+  // 2. Adressen ändras, oavsett hur — pushState, hash, ett sökresultat eller
+  //    Inu+ som skickar fliken till ett blad för att fånga en behörighet.
+  //    Portalen städar gärna i sin egen adress strax efter att den hämtat
+  //    sig; det är inget bladbyte, därför en kort respit efter öppningen.
   const SETTLE_MS = 700;
-  addEventListener("hashchange", () => {
-    if (Date.now() - openedAt < SETTLE_MS) return;
-    hide();
-  });
+  let hrefAtOpen = location.href;
+  const urlChanged = () => {
+    if (!open) return;
+    if (Date.now() - openedAt < SETTLE_MS) {
+      hrefAtOpen = location.href;
+      return;
+    }
+    if (location.href !== hrefAtOpen) hide();
+  };
+  addEventListener("hashchange", urlChanged);
+  addEventListener("popstate", urlChanged);
+  // pushState ger ingen händelse som når ett content script — titta efter.
+  setInterval(urlChanged, 400);
+
+  // 3. Sidan själv ber om det (se nedan), när den skickat fliken till ett blad.
+
   addEventListener("resize", place);
 
-  // Sidan i ramen kan be om att få stänga sig själv, eller om att portalen
-  // ska fram så att man hinner se bladet den just skickade fliken till.
+  // Sidan i ramen kan be om att portalen ska fram, så att man hinner se
+  // bladet den just skickade fliken till.
   addEventListener("message", (event) => {
     if (event.origin !== PAGE_ORIGIN) return;
     if (!frame || event.source !== frame.contentWindow) return;
     if (event.data?.source !== "inuplus") return;
-    if (event.data.type === "close" || event.data.type === "show-portal") hide();
+    if (event.data.type === "show-portal") hide();
   });
 
   // --- Sökning i enhetslistan --------------------------------------------

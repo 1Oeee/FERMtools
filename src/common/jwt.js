@@ -93,8 +93,21 @@ export const CAPABILITIES = {
       "DeviceManagementManagedDevices.Read.All",
       "DeviceManagementManagedDevices.ReadWrite.All"
     ]
+  },
+  // Datalagret ligger inte bakom Graph utan på Intunes eget API. Ingen Graph-
+  // token bär den här behörigheten — i portalläget räcker en Intune-token
+  // kanske, och tokenraden visar den därför som osäker, inte grön.
+  warehouse: {
+    label: "Data warehouse",
+    needFor: "Reports",
+    where: "Reports → Data warehouse",
+    scopes: ["get_data_warehouse"]
   }
 };
+
+/** Intunes API (inte Graph). Datalagret kräver en token till den här. */
+export const INTUNE_API = "https://api.manage.microsoft.com/";
+export const WAREHOUSE_SCOPES = CAPABILITIES.warehouse.scopes;
 
 export const GROUP_SCOPES = CAPABILITIES.groups.scopes;
 

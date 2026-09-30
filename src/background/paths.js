@@ -14,7 +14,10 @@ const PORTAL = "https://intune.microsoft.com/";
 const DEFAULTS = {
   // Den enda djuplänk vi är trygga med: Entras grupplista, oförändrad i åratal.
   groups:
-    "https://intune.microsoft.com/#view/Microsoft_AAD_IAM/GroupsManagementMenuBlade/~/AllGroups"
+    "https://intune.microsoft.com/#view/Microsoft_AAD_IAM/GroupsManagementMenuBlade/~/AllGroups",
+  // Sidan som visar datalagrets flödesadress.
+  warehouse:
+    "https://intune.microsoft.com/#view/Microsoft_Intune_Enrollment/ReportingMenu/~/dataWarehouse"
 };
 
 async function readAll() {

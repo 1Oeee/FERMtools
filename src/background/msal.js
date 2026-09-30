@@ -16,7 +16,7 @@
 // Klassen har samma yta som PortalTokenSource, så att servicearbetaren och
 // Graph-klienterna inte behöver veta vilken källa som används.
 
-import { decodeJwt, secondsLeft, covered, CAPABILITIES, GROUP_SCOPES } from "../common/jwt.js";
+import { decodeJwt, secondsLeft, covered, CAPABILITIES, GROUP_SCOPES, INTUNE_API } from "../common/jwt.js";
 
 export const LOGIN_HOST = "https://login.microsoftonline.com";
 
@@ -25,6 +25,11 @@ export const LOGIN_HOST = "https://login.microsoftonline.com";
 // läsa, och en behörighet som saknas syns som en grå förmåga i stället för
 // att hela inloggningen fälls på ett medgivande en vanlig användare inte kan ge.
 const SCOPE = "https://graph.microsoft.com/.default offline_access openid profile";
+
+// Datalagret ligger på Intunes API, inte Graph. En refresh-token från Entra
+// gäller för flera resurser, så samma inloggning räcker — om administratören
+// gett app-registreringen Intunes behörighet "get_data_warehouse".
+export const WAREHOUSE_SCOPE = `${INTUNE_API}.default offline_access`;
 
 const MIN_SECONDS_LEFT = 300;
 const SILENT_RETRY_MS = 60_000;
@@ -106,6 +111,8 @@ const NEEDS_INTERACTION = /interaction_required|login_required|consent_required|
 export class MsalTokenSource {
   #config = { clientId: "", tenant: "organizations" };
   #session = null; // { accessToken, claims, refreshToken, account }
+  /** Token till Intunes API för datalagret. Bara i minnet — den går att hämta om. */
+  #warehouse = null; // { accessToken, claims }
   #loaded = null;
   #refreshing = null;
   #silentFailedAt = 0;
@@ -255,6 +262,7 @@ export class MsalTokenSource {
 
   async signOut() {
     this.#session = null;
+    this.#warehouse = null;
     this.#lastError = null;
     this.#silentFailedAt = 0;
     this.#loaded = Promise.resolve();
@@ -318,6 +326,49 @@ export class MsalTokenSource {
     return kind === "graph" ? this.getGraphToken(null) : null;
   }
 
+  /**
+   * Token till Intunes datalager, bytt mot sessionens refresh-token. Kastar
+   * med Entras eget besked om det nekas — oftast att behörigheten saknas på
+   * app-registreringen, och det ska stå i fliken, inte bara "ingen token".
+   * @returns {Promise<string|null>}
+   */
+  async getWarehouseToken() {
+    if (this.#warehouse && secondsLeft(this.#warehouse.claims) >= MIN_SECONDS_LEFT) {
+      return this.#warehouse.accessToken;
+    }
+
+    const session = await this.#valid();
+    if (!session?.refreshToken) return null;
+
+    const response = await fetch(tokenUrl(this.#config.tenant), {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: this.#config.clientId,
+        grant_type: "refresh_token",
+        refresh_token: session.refreshToken,
+        scope: WAREHOUSE_SCOPE
+      })
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok || !json.access_token) {
+      throw new Error(
+        "Your app registration could not get a token for the Intune Data Warehouse: " +
+          (json.error_description?.split("\r\n")[0] || json.error || `HTTP ${response.status}`)
+      );
+    }
+
+    this.#warehouse = { accessToken: json.access_token, claims: decodeJwt(json.access_token) };
+    // Entra byter ut refresh-token vid varje användning. Den nya gäller för
+    // Graph-sessionen också.
+    if (json.refresh_token && this.#session) {
+      this.#session = { ...this.#session, refreshToken: json.refresh_token };
+      await this.#save();
+    }
+    this.#emit();
+    return json.access_token;
+  }
+
   async waitFor(check) {
     return Boolean(await check());
   }
@@ -327,18 +378,26 @@ export class MsalTokenSource {
     const session = this.#session?.claims && secondsLeft(this.#session.claims) > 0 ? this.#session : null;
     const claims = session?.claims ?? null;
 
+    // Datalagrets behörighet sitter på Intune-token, inte på Graph-token.
+    const warehouse =
+      this.#warehouse?.claims && secondsLeft(this.#warehouse.claims) > 0 ? this.#warehouse.claims : null;
+
     const capabilities = {};
     for (const [name, capability] of Object.entries(CAPABILITIES)) {
-      const scopes = claims ? covered(claims, capability.scopes) : [];
+      const held = name === "warehouse" ? warehouse : claims;
+      const scopes = held ? covered(held, capability.scopes) : [];
       capabilities[name] = {
         label: capability.label,
         needFor: capability.needFor,
         // I det här läget är det app-registreringen som ger behörigheten,
         // inte ett blad i portalen.
-        where: `API permissions on your app registration (${capability.scopes[0]})`,
+        where:
+          name === "warehouse"
+            ? "API permissions on your app registration (Intune → get_data_warehouse)"
+            : `API permissions on your app registration (${capability.scopes[0]})`,
         have: scopes.length > 0,
         via: scopes.length > 0 ? "graph" : null,
-        secondsLeft: claims ? secondsLeft(claims) : 0,
+        secondsLeft: held ? secondsLeft(held) : 0,
         scopes
       };
     }

@@ -8,6 +8,7 @@ import { GROUP_SCOPES, INTUNE_SCOPES, AUDIT_SCOPES } from "../common/jwt.js";
 import {
   classify,
   remember as rememberEndpoint,
+  rememberHost,
   capabilityForSource
 } from "../graph/endpoints.js";
 import { pathFor, rememberPath } from "./paths.js";
@@ -24,6 +25,20 @@ import { fetchConnections } from "../graph/connections.js";
 import { fetchPosture } from "../graph/posture.js";
 import { fetchIntuneAudit, fetchEntraAudit } from "../graph/audit.js";
 import { fetchManagedDevices } from "../graph/devices.js";
+import {
+  fetchWarehouse,
+  fetchSummaryFromGraph,
+  fetchDetectedApps,
+  fetchAppDevices,
+  resolveFeed,
+  rootForRegion,
+  regionIn,
+  DISCOVERY_URL,
+  GRAPH_PROBES,
+  PORTAL_PAGE
+} from "../graph/warehouse.js";
+import { readAll as readEndpoints } from "../graph/endpoints.js";
+import { readable } from "../graph/source.js";
 import { readCache, writeCache, clearCache, readSettings, writeSettings } from "./cache.js";
 import { createDemoClient, demoStatus } from "../demo/client.js";
 
@@ -96,6 +111,15 @@ portalTokens.onAccepted(({ capabilities, tabId }) => learnPaths(capabilities, ta
 // Portalens anrop mot Intunes backend lär oss både var tjänsten ligger och
 // vilket blad som når den.
 const learnEndpoint = (details) => {
+  // Regionen ur vilket portalanrop som helst — det är den datalagret behöver.
+  // Bara portalens flikar, som för tokens.
+  if (portalTabs.has(details.tabId)) {
+    rememberHost(details.url).then(
+      (fresh) => fresh && broadcast({ type: "intune-host-learned" }),
+      () => {}
+    );
+  }
+
   const key = classify(details.url);
   if (!key) return;
   rememberEndpoint(key, details.url);
@@ -167,6 +191,12 @@ const graphAudit = createGraphClient(async () => {
   await settingsReady;
   return tokens().getGraphToken(AUDIT_SCOPES);
 });
+// Datalagret: Intunes API, inte Graph. Samma klient — adresserna kontrolleras
+// mot samma värdlista, och nextLink följs på samma sätt.
+const warehouseClient = createGraphClient(async () => {
+  await settingsReady;
+  return tokens().getWarehouseToken();
+});
 
 const CACHE_KEY = "tree-data";
 const CONNECTIONS_KEY = "connections-data";
@@ -198,6 +228,7 @@ const connectionsFlight = singleFlight();
 const healthFlight = singleFlight();
 const scoreFlight = singleFlight();
 const devicesFlight = singleFlight();
+const warehouseFlight = singleFlight();
 
 /** Vilket läge en hämtning gäller. Samma nyckel = samma svar. */
 const modeKey = (settings, tenant) => `${settings.demo ? "demo" : tenant}|${settings.prefix}`;
@@ -243,9 +274,9 @@ async function sameTenantAfter(settings, tenant) {
  * Övriga (showLoose, onlyWithAssignments, sharedPatterns, deviceLimit,
  * rowScale) ändrar bara hur det redan hämtade visas.
  */
-const DATA_SETTINGS = ["prefix", "demo", "consent", "authMode", "msalClientId", "msalTenant"];
+const DATA_SETTINGS = ["prefix", "demo", "consent", "authMode", "msalClientId", "msalTenant", "warehouseUrl", "summarySource"];
 
-const CACHE_KEYS = () => [CACHE_KEY, CONNECTIONS_KEY, HEALTH_KEY, SCORE_KEY, DEVICES_KEY];
+const CACHE_KEYS = () => [CACHE_KEY, CONNECTIONS_KEY, HEALTH_KEY, SCORE_KEY, DEVICES_KEY, WAREHOUSE_KEY, APPS_KEY];
 const clearAllCaches = () => Promise.all(CACHE_KEYS().map(clearCache));
 
 function broadcast(message) {
@@ -524,6 +555,190 @@ async function loadDevices({ force = false } = {}) {
   });
 }
 
+const WAREHOUSE_KEY = "warehouse-data";
+const APPS_KEY = "detected-apps";
+const appsFlight = singleFlight();
+
+/** Appinventeringen, en gång per kvart och tenant — den är stor och ändras sällan. */
+async function loadDetectedApps({ force = false } = {}) {
+  const settings = await readSettings();
+  const tenant = await tenantFor(settings);
+  if (!force) {
+    const cached = await cachedFor(APPS_KEY, settings, tenant);
+    if (cached) return cached;
+  }
+  return appsFlight(modeKey(settings, tenant), async () => {
+    const clients = clientsFor(settings);
+    if (!settings.demo) await ensureTokens();
+    const data = await fetchDetectedApps(clients.apps, clients.backend, (n) =>
+      broadcast({ type: "progress", stage: "warehouse", detail: `apps ${n}` })
+    );
+    await sameTenantAfter(settings, tenant);
+    const payload = { ...data, demo: settings.demo, tenant };
+    await writeCache(APPS_KEY, payload);
+    return payload;
+  });
+}
+
+/** Demots flöde. Demoklienten svarar på sökvägen, värden spelar ingen roll. */
+const DEMO_FEED = { root: "https://fef.demo.manage.microsoft.com/ReportingService/DataWarehouseFEService", apiVersion: "v1.0", from: "demo" };
+
+/**
+ * Reports: enheterna med primär användare, enhetstyp och
+ * hanteringsläge. Hämtas först när fliken öppnas. Organisation, filter och
+ * pivot räknas i sidan — ändras mappningen behöver inget hämtas om.
+ *
+ * Källan är Graphs enhetslista, med samma token som Shared accounts. Intunes
+ * datalager väljs bara uttryckligen i Settings: det kräver en token med
+ * get_data_warehouse, som portalen aldrig hämtar — i praktiken inloggningsläget
+ * med en egen app-registrering.
+ */
+async function loadWarehouse({ force = false } = {}) {
+  const settings = await readSettings();
+  const tenant = await tenantFor(settings);
+  const source = settings.summarySource === "warehouse" ? "warehouse" : "graph";
+
+  if (!force) {
+    const cached = await cachedFor(WAREHOUSE_KEY, settings, tenant, (c) => c.source === source);
+    if (cached) return cached;
+  }
+
+  if (source === "graph") {
+    return warehouseFlight(`${modeKey(settings, tenant)}|graph`, async () => {
+      const clients = clientsFor(settings);
+      if (!settings.demo) await ensureTokens();
+
+      let data;
+      try {
+        data = await fetchSummaryFromGraph(clients.apps, clients.backend, (n) =>
+          broadcast({ type: "progress", stage: "warehouse", detail: n })
+        );
+      } catch (e) {
+        const noToken = /No valid token|token missing/i.test(e.message ?? "");
+        const error = new Error(
+          noToken
+            ? authMode === "msal"
+              ? "your app registration needs DeviceManagementManagedDevices.Read.All. Ask an admin to grant it, then sign in again."
+              : "no permission to read devices yet. Open Devices in the portal (the button below) and this tab fills in by itself."
+            : readable(e)
+        );
+        error.code = noToken ? "NoToken" : "Failed";
+        throw error;
+      }
+      await sameTenantAfter(settings, tenant);
+
+      const payload = { ...data, source, demo: settings.demo, tenant };
+      await writeCache(WAREHOUSE_KEY, payload);
+      return payload;
+    });
+  }
+
+  return warehouseFlight(`${modeKey(settings, tenant)}|warehouse`, async () => {
+    if (!settings.demo) await ensureTokens();
+    const feed = settings.demo ? DEMO_FEED : await findFeed(settings);
+
+    const client = settings.demo ? demoClient : warehouseClient;
+    const progress = (table, n) => broadcast({ type: "progress", stage: "warehouse", detail: n ? `${table} ${n}` : table });
+
+    let data;
+    try {
+      data = await fetchWarehouse(client, feed, progress);
+    } catch (e) {
+      throw warehouseError(e, feed);
+    }
+    await sameTenantAfter(settings, tenant);
+
+    const payload = { ...data, source, feed: { root: feed.root, from: feed.from }, demo: settings.demo, tenant };
+    await writeCache(WAREHOUSE_KEY, payload);
+    return payload;
+  });
+}
+
+/**
+ * Var ligger datalagret? I tur och ordning: inställningen och det som lärts
+ * ur portalens trafik, Intunes tjänsteuppslag med Intune-token, och till sist
+ * adressen Graph skriver i sitt fel när det skickar ett nekat anrop vidare
+ * till Intune. Det som hittas sparas, så uppslaget görs en gång per tenant.
+ * Hittas inget säger felet vad som provades — det är det man behöver för att
+ * felsöka, inte en uppmaning att klistra in något.
+ */
+async function findFeed(settings) {
+  const known = resolveFeed(settings.warehouseUrl, await readEndpoints());
+  if (known) return known;
+
+  const tried = [];
+  const found = async (region, how) => {
+    await rememberHost(`https://fef.${region}.manage.microsoft.com`);
+    return { ...rootForRegion(region), from: how };
+  };
+
+  // Intunes tjänsteuppslag.
+  if (await tokens().getWarehouseToken().catch(() => null)) {
+    try {
+      const region = regionIn(await warehouseClient.request(DISCOVERY_URL));
+      if (region) return found(region, "discovery");
+      tried.push("Intune service lookup: answered, but without an address");
+    } catch (e) {
+      tried.push(`Intune service lookup: ${e.status ? `HTTP ${e.status}` : e.message}`);
+    }
+  } else {
+    tried.push("Intune service lookup: no Intune token held yet");
+  }
+
+  // Graphs felmeddelande när det skickar vidare till Intune.
+  let graphAnswered = false;
+  for (const probe of GRAPH_PROBES) {
+    for (const client of [graphGroups, graphApps]) {
+      try {
+        await client.request(probe);
+        graphAnswered = true; // tokenen räckte — inget fel, ingen adress
+      } catch (e) {
+        const region = regionIn([e.message, e.body].filter(Boolean).join("\n"));
+        if (region) return found(region, "graph");
+        if (!/No valid token/i.test(e.message ?? "")) graphAnswered = true;
+      }
+    }
+  }
+  tried.push(graphAnswered ? "Graph: answered, but no Intune address in the reply" : "Graph: no token held yet");
+  tried.push("Portal traffic: no Intune address seen yet");
+
+  const error = new Error(
+    "Could not find your tenant's Data warehouse address automatically. Tried — " + tried.join(" · ") +
+      ". Open Devices in the portal and press ⟳; if it still fails, send this message to whoever maintains Inu+."
+  );
+  error.code = "NoFeed";
+  throw error;
+}
+
+/** Datalagrets fel, sagda så att man vet vad man ska göra åt dem. */
+function warehouseError(error, feed) {
+  const status = error?.status ?? 0;
+  const guessed = ["region", "discovery", "graph"].includes(feed.from) ? " (the address was worked out from your tenant's region)" : "";
+  let message;
+  if (/No valid token/i.test(error?.message ?? "")) {
+    message = authMode === "msal"
+      ? "No token for the Intune Data Warehouse. Sign in again."
+      : "No Intune token yet. Open Reports → Data warehouse in the portal (the button above) and we will capture one.";
+  } else if (status === 401 || status === 403) {
+    message =
+      `The Data warehouse refused the request (HTTP ${status}). Your account needs an Intune role that can read ` +
+      "reports" +
+      (authMode === "msal"
+        ? ", and the app registration needs the Intune API permission get_data_warehouse with admin consent."
+        : ". If it has one, the portal's Intune token may not be accepted by the Data warehouse — sign-in mode with " +
+          "the get_data_warehouse permission is the documented route.") +
+      // Intunes eget svar: utan det går det inte att se vad som faktiskt nekades.
+      (error?.message ? ` Intune said: ${readable(error)}` : "");
+  } else if (status === 404 || (status === 0 && guessed)) {
+    message = `The Data warehouse feed was not found at ${feed.root}${guessed}. Copy the OData feed URL from Reports → Data warehouse into Settings.`;
+  } else {
+    message = `The Data warehouse could not be read${guessed}: ${error?.message ?? error}`;
+  }
+  const wrapped = new Error(message);
+  wrapped.code = status === 401 || status === 403 ? "Forbidden" : "Failed";
+  return wrapped;
+}
+
 const SCORE_KEY = "score-data";
 
 /**
@@ -623,6 +838,37 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return { ok: true, data: await loadDevices({ force: Boolean(message.force) }) };
       } catch (e) {
         return { ok: false, error: e.message ?? String(e) };
+      }
+    },
+
+    // Reports: appinventeringen (Discovered apps), och enheterna som har vissa appar.
+    "detected-apps": async () => {
+      try {
+        return { ok: true, data: await loadDetectedApps({ force: Boolean(message.force) }) };
+      } catch (e) {
+        return { ok: false, error: readable(e) };
+      }
+    },
+
+    "app-devices": async () => {
+      try {
+        const settings = await readSettings();
+        if (!settings.demo) await ensureTokens();
+        const { apps } = await loadDetectedApps();
+        const wanted = new Set((message.names ?? []).map((n) => String(n).toLocaleLowerCase("sv")));
+        const ids = apps.filter((a) => wanted.has(a.name.toLocaleLowerCase("sv"))).flatMap((a) => a.ids);
+        const clients = clientsFor(settings);
+        return { ok: true, deviceIds: await fetchAppDevices(clients.apps, clients.backend, ids) };
+      } catch (e) {
+        return { ok: false, error: readable(e) };
+      }
+    },
+
+    warehouse: async () => {
+      try {
+        return { ok: true, data: await loadWarehouse({ force: Boolean(message.force) }) };
+      } catch (e) {
+        return { ok: false, error: e.message ?? String(e), code: e.code ?? null, portalPage: PORTAL_PAGE };
       }
     },
 

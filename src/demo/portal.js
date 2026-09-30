@@ -75,7 +75,8 @@
   }
 
   activate(home, () => show("home"));
-  activate(inu, () => show(host.hidden ? "inu" : "home"));
+  // Som portalens egna punkter: klick tar fram bladet, stänger det inte.
+  activate(inu, () => show("inu"));
 
   // Kulisserna: länkar och knappar som inte leder någonstans.
   for (const node of document.querySelectorAll(".inert")) {
@@ -91,13 +92,13 @@
     collapse.setAttribute("aria-label", collapse.title);
   });
 
-  // Sidan i ramen ber om att få stängas (krysset), eller om att portalen ska
-  // fram — i demot finns inget blad att visa, så Start får stå för det.
+  // Sidan i ramen ber om att portalen ska fram — i demot finns inget blad att
+  // visa, så Start får stå för det.
   addEventListener("message", (event) => {
     if (event.origin !== location.origin) return;
     if (!frame || event.source !== frame.contentWindow) return;
     if (event.data?.source !== "inuplus") return;
-    if (event.data.type === "close" || event.data.type === "show-portal") show("home");
+    if (event.data.type === "show-portal") show("home");
   });
 
   // Slår man av demoläget ("Use my own tenant") hör sidan hemma i den riktiga

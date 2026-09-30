@@ -23,6 +23,15 @@
   --bad: #a4262c;
   --warn: #8a6100;
   --mark: #fde68a;
+  --series1: #2a78d6;
+  --series2: #eb6834;
+  --series3: #1baf7a;
+  --series4: #eda100;
+  --series5: #e87ba4;
+  --series6: #008300;
+  --series7: #4a3aa7;
+  --series8: #e34948;
+  --seriesOther: #a19f9d;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -41,6 +50,15 @@
     --bad: #f1707b;
     --warn: #d9a441;
     --mark: #6b5600;
+    --series1: #3987e5;
+    --series2: #d95926;
+    --series3: #199e70;
+    --series4: #c98500;
+    --series5: #d55181;
+    --series6: #008300;
+    --series7: #9085e9;
+    --series8: #e66767;
+    --seriesOther: #605e5c;
   }
 }
 
@@ -1668,4 +1686,661 @@ th.num button.sort-head {
 
 .score-detail {
   margin: 0 0 6px;
+}
+
+/* Reports: en rapportsida som portalens egna — kommandorad och
+   filterpiller överst, sedan sammanfattning, översikt och de fullständiga
+   listorna uppifrån och ned. Exporten har samma avsnitt i samma ordning. */
+.module-pane[data-module="warehouse"] {
+  position: relative;
+}
+
+.wh-page {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.wh-top {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  padding: 0 14px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+
+.wh-content {
+  padding: 16px 14px 20px;
+}
+
+.wh-commands {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin: 0 -14px;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+button.wh-command {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 5px 8px;
+  border: 0;
+  background: none;
+}
+
+button.wh-command:hover {
+  background: var(--hover);
+}
+
+button.wh-command[hidden] {
+  display: none;
+}
+
+.wh-command-icon {
+  color: var(--accent);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.wh-jumps {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+
+button.wh-jump {
+  padding: 5px 10px;
+  border: 0;
+  background: none;
+  color: var(--accent);
+}
+
+button.wh-jump:hover {
+  background: var(--hover);
+}
+
+.wh-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 0;
+}
+
+.wh-search {
+  width: 220px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+}
+
+.wh-pill {
+  position: relative;
+  padding: 3px 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.wh-pill:hover {
+  background: var(--hover);
+}
+
+.wh-pill.wh-pill-set {
+  border-color: var(--accent);
+  background: var(--selected);
+}
+
+.wh-pill-menu summary {
+  list-style: none;
+}
+
+.wh-pill-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.wh-pill-menu summary::after {
+  content: " ▾";
+  color: var(--muted);
+}
+
+.wh-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 5;
+  min-width: 200px;
+  max-height: 260px;
+  overflow: auto;
+  padding: 4px 0;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+  box-shadow: 0 6px 16px rgb(0 0 0 / 18%);
+  cursor: default;
+}
+
+.wh-menu-item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 5px 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.wh-menu-item:hover {
+  background: var(--hover);
+}
+
+/* Pillren blir aldrig bredare än sitt innehåll — inte heller rullgardinerna. */
+.wh-filters > .wh-pill {
+  flex: none;
+  width: auto;
+}
+
+/* Antal rader i enhetslistan, uppe till höger i kortet. */
+select.wh-size {
+  margin-left: auto;
+  width: auto;
+  padding: 2px 10px;
+}
+
+/* Appväljaren: chips för tilldelningsavsikt, och etiketter per app. */
+.wh-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 8px 6px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 4px;
+}
+
+button.wh-chip {
+  padding: 1px 9px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--bg);
+  font-size: 12px;
+}
+
+button.wh-chip:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+button.wh-chip.wh-chip-on {
+  border-color: var(--accent);
+  background: var(--selected);
+}
+
+button.wh-chip:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.wh-app-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wh-badges {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: auto;
+  padding-left: 8px;
+}
+
+.wh-badge {
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.wh-badge.wh-badge-required {
+  border-color: var(--accent);
+  color: var(--fg);
+}
+
+/* Appfiltret: sökruta överst i menyn, och bredare, för långa appnamn. */
+/* Förankrad i pillrets högerkant: pillret står längst till höger i raden, och
+   en bred meny åt höger sticker annars ut över kanten. */
+.wh-menu-wide {
+  left: auto;
+  right: 0;
+  max-width: calc(100vw - 32px);
+  min-width: 420px;
+  max-height: 340px;
+}
+
+.wh-menu-search {
+  width: calc(100% - 16px);
+  margin: 4px 8px 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+}
+
+.wh-menu-note {
+  padding: 6px 12px;
+  white-space: normal;
+}
+
+.wh-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+button.wh-tile {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+  text-align: left;
+  transition: opacity 0.12s;
+}
+
+button.wh-tile:hover {
+  background: var(--hover);
+}
+
+/* Vald klienttyp: markerad. Övriga, när något är valt: tonade, men klickbara. */
+button.wh-tile.wh-on {
+  border-color: var(--accent);
+  background: var(--selected);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+button.wh-tile.wh-off {
+  opacity: 0.5;
+}
+
+button.wh-tile.wh-off:hover {
+  opacity: 0.85;
+}
+
+button.linklike.wh-picked {
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--selected);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+button.wh-command:disabled {
+  color: var(--muted);
+  background: none;
+  cursor: default;
+}
+
+.wh-tile-label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wh-tile-value {
+  margin-top: 6px;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.wh-hero {
+  margin-top: 4px;
+  font-size: 36px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.wh-dot {
+  display: inline-block;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border-radius: 50%;
+  vertical-align: baseline;
+}
+
+.wh-tile-label .wh-dot {
+  margin-right: 0;
+}
+
+.wh-card {
+  margin-bottom: 16px;
+  padding: 14px 16px 12px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+  scroll-margin-top: 110px;
+}
+
+.wh-card-head {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+
+.wh-card-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.wh-count {
+  padding: 0 8px;
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.wh-scroll {
+  overflow-x: auto;
+}
+
+/* Listorna som portalens: normala rubriker, luftiga rader, ingen versalrad. */
+table.grid.wh-table {
+  margin-top: 4px;
+  font-size: 13px;
+}
+
+table.grid.wh-table th {
+  color: var(--fg);
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+table.grid.wh-table td {
+  padding: 6px 8px;
+  white-space: nowrap;
+}
+
+table.grid.wh-table tbody tr:hover td {
+  background: var(--hover);
+}
+
+table.grid.wh-overview td,
+table.grid.wh-overview th {
+  vertical-align: middle;
+}
+
+table.grid.wh-overview tr.wh-sum td {
+  border-top: 2px solid var(--line);
+  border-bottom: 0;
+}
+
+.wh-strong {
+  font-weight: 600;
+}
+
+/* Efterlevnad i listan: ikon och ord bär statusen, färgen förstärker bara. */
+.wh-ok {
+  color: var(--app);
+}
+
+.wh-bad {
+  color: var(--bad);
+}
+
+th.wh-dist-head,
+td.wh-dist {
+  width: 40%;
+  min-width: 160px;
+}
+
+.wh-bar {
+  display: flex;
+  gap: 2px;
+  height: 14px;
+}
+
+.wh-seg {
+  min-width: 3px;
+  height: 100%;
+}
+
+/* Rundad ände där värdet slutar, rak mot baslinjen. */
+.wh-seg:last-child {
+  border-radius: 0 4px 4px 0;
+}
+
+.wh-seg:hover {
+  filter: brightness(1.12);
+}
+
+.wh-pager {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 8px;
+}
+
+.wh-pager-nav {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+button.wh-jump:disabled {
+  color: var(--muted);
+  background: none;
+  cursor: default;
+}
+
+.wh-notes {
+  margin-top: 4px;
+}
+
+.wh-tip {
+  position: absolute;
+  z-index: 10;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 16%);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.wh-tip[hidden] {
+  display: none;
+}
+
+/* Spökladdning (skeleton.js): gråa platshållare i samma form som det som är
+   på väg. Färgerna är portalens egna grå, så de följer ljust och mörkt tema;
+   skimret stängs av för den som valt reducerad rörelse. */
+.sk-root {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sk-root.sk-small {
+  flex: none;
+  padding: 4px 0;
+}
+
+.sk-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.sk {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--hover);
+}
+
+.sk::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--bg) 55%, transparent), transparent);
+  animation: sk-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes sk-shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sk::after {
+    animation: none;
+    display: none;
+  }
+}
+
+.sk.sk-dot,
+.sk.sk-circle {
+  border-radius: 50%;
+}
+
+.sk.sk-pill {
+  border-radius: 13px;
+}
+
+.sk-lines,
+.sk-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sk-aside {
+  padding: 16px;
+}
+
+.sk-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.sk-toolbar {
+  display: flex;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.sk-tree {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 0;
+}
+
+.sk-tree-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  height: calc(28px * var(--row-scale, 1));
+  padding-right: 14px;
+}
+
+.sk-dots {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.sk-table {
+  display: flex;
+  flex-direction: column;
+}
+
+.sk-tr {
+  display: grid;
+  grid-template-columns: repeat(var(--sk-cols, 5), minmax(0, 1fr));
+  gap: 16px;
+  align-items: center;
+  padding: 9px 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.sk-th {
+  padding-top: 4px;
+}
+
+.sk-report-top {
+  padding: 10px 14px 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.sk-tile,
+.sk-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+.sk-card {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+}
+
+.sk-gauges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px;
+  margin-bottom: 20px;
+}
+
+.sk-gauge {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+}
+
+.sk-audit {
+  display: flex;
+  gap: 10px;
+  align-items: center;
 }

@@ -83,8 +83,20 @@
     update();
   });
 
+  // Laddas tillägget om medan portalfliken står öppen blir det här scriptet
+  // kvar utan kontakt med tillägget, och varje anrop till det kastar
+  // "Extension context invalidated". Då tiger vi — fliken får ett nytt
+  // script när den laddas om.
+  const alive = () => {
+    try {
+      return Boolean(chrome.runtime?.id);
+    } catch {
+      return false;
+    }
+  };
+
   function scan() {
-    if (!allowed) return;
+    if (!allowed || !alive()) return;
     for (const store of [sessionStorage, localStorage]) {
       let keys;
       try {
@@ -111,16 +123,25 @@
 
           sent.add(token);
           // Servicearbetaren väljer själv vilken kandidat som är bäst.
-          chrome.runtime.sendMessage({ type: "token-from-page", token }, () => {
-            void chrome.runtime.lastError;
-          });
+          try {
+            chrome.runtime.sendMessage({ type: "token-from-page", token }, () => {
+              void chrome.runtime.lastError;
+            });
+          } catch {
+            return; // tillägget har laddats om — se alive()
+          }
         }
       }
     }
   }
 
   function tell(message) {
-    chrome.runtime.sendMessage(message, () => void chrome.runtime.lastError);
+    if (!alive()) return;
+    try {
+      chrome.runtime.sendMessage(message, () => void chrome.runtime.lastError);
+    } catch {
+      /* tillägget har laddats om — se alive() */
+    }
   }
 
   // Servicearbetaren somnar och tappar då sina tokens, medan vi sitter kvar

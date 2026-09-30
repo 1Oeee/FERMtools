@@ -2,20 +2,22 @@
 // Each module owns its own surface and its own state.
 
 import { el } from "./dom.js";
-import { embedded, showPortal, closePage, onShown, onTheme } from "./embed.js";
+import { embedded, showPortal, onShown, onTheme } from "./embed.js";
 import { applyPortalTheme } from "./theme.js";
+import { skeletonFor } from "./skeleton.js";
 import { treeModule } from "./modules/tree.js";
 import { connectionsModule } from "./modules/connections.js";
 import { healthModule } from "./modules/health.js";
 import { scoreModule } from "./modules/score.js";
 import { licensesModule } from "./modules/licenses.js";
 import { accountsModule } from "./modules/accounts.js";
+import { warehouseModule } from "./modules/warehouse.js";
 import { analyse, findingsByGroup, forPlatform } from "../health/checks.js";
 import { PLATFORMS } from "../common/platforms.js";
 import { buildForest } from "../tree/build.js";
 
 // reportsModule is not listed until the Excel export is built.
-const MODULES = [treeModule, scoreModule, connectionsModule, licensesModule, accountsModule, healthModule];
+const MODULES = [treeModule, scoreModule, connectionsModule, licensesModule, accountsModule, warehouseModule, healthModule];
 
 /** Moduler med en `setting` visas bara när den inställningen är på. */
 const availableModules = () => MODULES.filter((m) => !m.setting || state.settings?.[m.setting]);
@@ -28,7 +30,6 @@ const ui = {
   refresh: document.getElementById("refresh"),
   detach: document.getElementById("detach"),
   settings: document.getElementById("settings"),
-  close: document.getElementById("close"),
   module: document.getElementById("module"),
   footer: document.getElementById("footer"),
   platform: document.getElementById("platform")
@@ -81,10 +82,10 @@ async function loadDemoMistakes() {
   }
 }
 
-// Sidan ser likadan ut på båda ställena den kan stå. Skillnaden är vilka
-// knappar som betyder något: krysset stänger bara något som ligger över
-// portalen, och "öppna i egen flik" är bara vettigt när man inte redan är i en.
-ui.close.hidden = !embedded;
+// Sidan ser likadan ut på båda ställena den kan stå. "Öppna i egen flik" är
+// bara vettigt när man inte redan är i en. Något kryss finns inte: i portalen
+// är Inu+ ett blad bland de andra, och man lämnar det genom att gå någon
+// annanstans i portalens meny (se content/portal-nav.js).
 ui.detach.hidden = !embedded;
 
 // Portalen målar om sig när man byter tema i dess inställningar. Sidan ska
@@ -99,12 +100,49 @@ function applyRowScale() {
   document.documentElement.style.setProperty("--row-scale", String(ROW_SCALES.includes(scale) ? scale : 1));
 }
 
+/**
+ * Har tillägget laddats om medan sidan stod öppen? Då är den här sidan kvar
+ * från den förra versionen, utan kontakt med tillägget: varje anrop kastar
+ * "Extension context invalidated". I stället för att kasta var 30:e sekund
+ * slutar den fråga och ber om att få laddas om.
+ */
+let orphaned = false;
+/** Tokenraden frågas om var 30:e sekund; stoppas när sidan blivit föräldralös. */
+let tokenTimer = null;
+
 function send(message) {
   return new Promise((resolve) => {
-    chrome.runtime.sendMessage(message, (response) => {
-      resolve(chrome.runtime.lastError ? null : response);
-    });
+    if (orphaned) {
+      resolve(null);
+      return;
+    }
+    try {
+      chrome.runtime.sendMessage(message, (response) => {
+        resolve(chrome.runtime.lastError ? null : response);
+      });
+    } catch {
+      orphaned = true;
+      clearInterval(tokenTimer);
+      showReloadNotice();
+      resolve(null);
+    }
   });
+}
+
+/** Sidan är från en äldre version av tillägget. En omladdning av ramen räcker. */
+function showReloadNotice() {
+  if (document.getElementById("orphaned")) return;
+  const notice = el("div", "notice info");
+  notice.id = "orphaned";
+  const row = el("div", "notice-row");
+  row.append(el("div", "notice-text", "Inu+ was updated. Reload the page to continue — your settings are kept."));
+  notice.append(row);
+  const button = el("button", "secondary small", "Reload");
+  button.type = "button";
+  button.style.marginTop = "6px";
+  button.addEventListener("click", () => location.reload());
+  notice.append(button);
+  ui.notices.prepend(notice);
 }
 
 // --- Vad modulerna får se ------------------------------------------------
@@ -174,6 +212,18 @@ async function showModule(id) {
   // inte ärva den förra flikens — utom under trädhämtningen, som gäller alla.
   ui.footer.textContent = "";
   if (!state.loading) renderStatus(null);
+
+  // Den delade hämtningen pågår och fliken är inte uppsatt än: visa dess form
+  // i grått i stället för en tom yta. Hämtningen sätter upp fliken när den är klar.
+  if (state.loading && !state.data && !state.mounted.has(module.id)) {
+    if (!pane.querySelector(":scope > .sk-page")) pane.replaceChildren(skeletonFor(module.id));
+    try {
+      await chrome.storage.local.set({ activeModule: id });
+    } catch {
+      /* strunt samma */
+    }
+    return;
+  }
 
   if (state.mounted.has(module.id)) {
     module.update?.(moduleContext(module));
@@ -473,7 +523,9 @@ function renderNotices() {
     });
   }
 
-  if (state.error) {
+  // Utan kontakt med tillägget är varje fel en följd av det — uppmaningen att
+  // ladda om säger allt som behövs.
+  if (state.error && !orphaned) {
     notices.push({
       key: `error:${state.error}`,
       tone: state.needsPortal ? "info" : "bad",
@@ -614,6 +666,8 @@ function renderNotices() {
   }
 
   ui.notices.replaceChildren(...nodes);
+  // Uppmaningen att ladda om ska stå kvar när notiserna ritas om.
+  if (orphaned) showReloadNotice();
 }
 
 function saveDismissed() {
@@ -633,6 +687,12 @@ async function load({ force = false } = {}) {
   state.error = null;
   renderStatus("Fetching groups …");
   ui.refresh.disabled = true;
+
+  // Inget att visa än: fliken får sin spökform medan trädet hämtas.
+  if (!state.data) {
+    invalidateModules();
+    await showModule(state.activeId);
+  }
 
   const response = await send({ type: "tree", force });
 
@@ -747,7 +807,7 @@ chrome.runtime.onMessage.addListener((message) => {
   // ska synas på samma ställe.
   // Trädhämtningen gäller alla flikar. Connections, Hälsokontroll och Poäng hämtar
   // för sig själva, och deras framsteg hör bara hemma när de är framme.
-  const ownStage = { connections: ["connections"], health: ["health"], score: ["score"], devices: ["accounts"] }[message?.stage];
+  const ownStage = { connections: ["connections"], health: ["health"], score: ["score"], devices: ["accounts"], warehouse: ["warehouse"] }[message?.stage];
   if (
     message?.type === "progress" &&
     (state.loading || (ownStage && ownStage.includes(activeModule().id)))
@@ -759,7 +819,8 @@ chrome.runtime.onMessage.addListener((message) => {
       connections: "Reading connections",
       health: "Health check: analyzing",
       score: "Score: reading",
-      devices: "Reading devices"
+      devices: "Reading devices",
+      warehouse: "Reports: reading devices"
     };
     const detail = message.detail;
     const n = typeof detail === "number" || typeof detail === "string" ? ` (${detail})` : "";
@@ -783,7 +844,6 @@ ui.refresh.addEventListener("click", async () => {
 });
 ui.settings.addEventListener("click", () => chrome.runtime.openOptionsPage());
 
-ui.close.addEventListener("click", closePage);
 
 ui.detach.addEventListener("click", () => {
   // Samma sida, utan portalen omkring. Vill man ha Inu+ uppe medan man
@@ -972,4 +1032,4 @@ function renderConsent() {
 
 // Tokens går ur tiden efter ungefär en timme. Raden ska visa det innan man
 // undrar varför en uppdatering plötsligt inte ger något.
-setInterval(refreshTokens, 30_000);
+tokenTimer = setInterval(refreshTokens, 30_000);

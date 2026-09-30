@@ -33,6 +33,9 @@ Also included:
   Microsoft Learn link for every audit
 - Optional Health check: 27 rules that flag common assignment mistakes
   (for example user licences on device groups), with fix guidance
+- Reports: devices per municipality and client type, filtered by municipality,
+  client type, model, compliance and installed app, exported as a formatted
+  Excel file
 - Demo mode with a fictional tenant, so you can try it without signing in
 - Follows the portal's theme (light, dark, high contrast)
 
@@ -54,8 +57,9 @@ Inu+ is an independent project and is not affiliated with or endorsed by
 Microsoft. Microsoft, Intune and Entra are trademarks of Microsoft Corporation.
 
 ## Single purpose
-Visualise the nested structure of Entra groups, and where apps and
-configurations are assigned, inside the Intune admin portal.
+Give Intune administrators a read-only overview of their tenant inside the
+Intune admin portal: the nested structure of Entra groups, where apps and
+configurations are assigned, and reports on the managed devices.
 
 ## Permission justifications
 - **storage**: Saves the user's settings, caches fetched tenant data in
@@ -78,15 +82,18 @@ configurations are assigned, inside the Intune admin portal.
   yet. Every stored value is inspected; only unexpired Graph/Intune tokens are
   kept, everything else is discarded immediately.
 - **https://graph.microsoft.com/***, **https://*.manage.microsoft.com/***:
-  Read groups, memberships and assignments (read-only; GET requests, batched via $batch).
+  Read groups, memberships and assignments, managed devices and the discovered
+  app inventory for reports (read-only; GET requests, batched via $batch).
 
 ## Remote code
 No. All code is in the package.
 
 ## Data usage disclosures (Privacy tab)
 - Collects: **Authentication information** (portal access tokens, used locally
-  only) and **Website content** (tenant group/assignment data, displayed
-  locally only).
+  only), **Website content** (tenant group, assignment and device data,
+  displayed locally only) and **Personally identifiable information** (the
+  primary user's email address and name on managed devices in the Reports tab,
+  displayed locally and written only to an Excel file the user downloads).
 - Not sold, not used for unrelated purposes, not used for creditworthiness.
 - Privacy policy URL: https://github.com/1Oeee/FERMtools/blob/main/PRIVACY.md (works once PRIVACY.md is pushed to main)
 

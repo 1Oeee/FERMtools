@@ -21,7 +21,8 @@ import {
   covered,
   CAPABILITIES,
   GROUP_SCOPES,
-  INTUNE_SCOPES
+  INTUNE_SCOPES,
+  WAREHOUSE_SCOPES
 } from "../common/jwt.js";
 
 export const GRAPH = "graph";
@@ -281,6 +282,16 @@ export class PortalTokenSource {
   /** @returns {Promise<string|null>} */
   async getToken(kind = GRAPH) {
     return this.#best(kind)?.token ?? null;
+  }
+
+  /**
+   * Token till Intunes datalager. Det är samma API som portalens Intune-token
+   * gäller, så en sådan duger kanske — en som uttryckligen bär datalagrets
+   * behörighet går först. Om den accepteras avgör Intune, inte vi.
+   * @returns {Promise<string|null>}
+   */
+  async getWarehouseToken() {
+    return (this.#best(INTUNE, WAREHOUSE_SCOPES) ?? this.#best(INTUNE))?.token ?? null;
   }
 
   /**
