@@ -26,9 +26,12 @@ export const URLS = {
   // Tenant administration → Connectors and tokens → Apple VPP tokens. The
   // list is as far as a link goes: a blade per token does not exist.
   vppTokens: `${PORTAL}#view/Microsoft_Intune_DeviceSettings/TenantAdminConnectorsMenu/~/appleVpp`,
-  // Unverified: the enrollment tokens and profiles.
-  depToken: (id) =>
-    `${PORTAL}#view/Microsoft_Intune_Enrollment/EnrollmentProgramTokenMenuBlade/~/overview/tokenId/${id}`,
+  // Devices → Enrollment → Apple → Enrollment program tokens. Verified
+  // (October 2026). The per-token blade address we had
+  // (EnrollmentProgramTokenMenuBlade/…/tokenId/…) failed to open, so the
+  // link goes to the list and the token is searched for there, like VPP.
+  depTokens: `${PORTAL}#view/Microsoft_Intune_Enrollment/DepTokensPaging.ReactView`,
+  // Unverified: the Android enrollment profiles.
   androidEnrollment: (id) =>
     `${PORTAL}#view/Microsoft_Intune_Enrollment/AndroidDeviceOwnerProfileMenuBlade/~/overview/profileId/${id}`,
   apns: `${PORTAL}#view/Microsoft_Intune_Enrollment/AppleMdmPushCertificateBlade`,
@@ -76,7 +79,7 @@ export function connectionLink(item) {
       // Ingen sida per token: listan, sökt på namnet, och sedan raden.
       return { url: URLS.vppTokens, search: true, open: true, blade: "appleVpp" };
     case "appleEnrollment":
-      return { url: URLS.depToken(item.id) };
+      return { url: URLS.depTokens, search: true, open: true, blade: "DepTokensPaging" };
     case "androidEnrollment":
       return { url: URLS.androidEnrollment(item.id) };
     case "apns":

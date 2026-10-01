@@ -6,6 +6,7 @@
 
 import { fetchSource, runSequentially, readable } from "./source.js";
 import { platformFromType } from "../common/platforms.js";
+import { statusOf, programOf } from "./token-status.js";
 
 /** @type {Array<{key, kind, label, capability, url, single?, params?}>} */
 export const SOURCES = [
@@ -25,7 +26,10 @@ export const SOURCES = [
     kind: "enrollment",
     label: "Apple ADE/DEP",
     capability: "serviceConfig",
-    url: "/v1.0/deviceManagement/depOnboardingSettings"
+    // Bara beta: depOnboardingSettings finns inte i v1.0, där svarar Graph 400
+    // ("Resource not found for the segment"). Samma källa som portalens blad
+    // Enrollment program tokens (DepTokensPaging.ReactView).
+    url: "/beta/deviceManagement/depOnboardingSettings"
   },
   {
     key: "androidEnrollment",
@@ -91,6 +95,12 @@ function normalise(item, source) {
     organization: firstNonEmpty(item.organizationName),
     topic: firstNonEmpty(item.topicIdentifier),
     state: item.state ?? null,
+    status: statusOf(item, expires),
+    // Apple Business Manager eller Apple School Manager — avgör vart man ska
+    // för att åtgärda något hos Apple.
+    program: programOf(item),
+    syncErrorCode: item.lastSyncErrorCode || null,
+    syncedDevices: item.syncedDeviceCount ?? null,
     lastSync: item.lastSyncDateTime ?? item.lastSuccessfulSyncDateTime ?? null,
     enrollmentMode: item.enrollmentMode ?? null
   };

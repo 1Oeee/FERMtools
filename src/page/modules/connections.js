@@ -6,9 +6,10 @@
 import { el, daysUntil, relativeDays, expiryTone } from "../dom.js";
 import { skeletonFor } from "../skeleton.js";
 import { vppLicences, licenceTotals, licencesForToken, withTokens } from "../../graph/connections.js";
-import { connectionButton } from "../portal.js";
+import { connectionButton, openInNewTab } from "../portal.js";
 import { headerRow, sortRows } from "../sort.js";
 import { matchesPlatform, platformLabel } from "../../common/platforms.js";
+import { PROGRAMS, describeStatus, guidanceFor, hasGuidance } from "../../graph/token-status.js";
 
 const GROUPS = [
   { kind: "vpp", label: "VPP" },
@@ -28,6 +29,8 @@ const state = {
   open: { vpp: true, enrollment: true, apns: true },
   /** Sortering per tabell, t.ex. { vpp: { key: "free", dir: "asc" } }. */
   sort: {},
+  /** Id för den token vars statusförklaring är utfälld. */
+  expanded: null,
   data: null,
   loading: false,
   error: null
@@ -48,6 +51,100 @@ function expiryCell(iso) {
   cell.append(el("div", null, formatDate(iso)));
   cell.append(el("div", "hint", relativeDays(days)));
   return cell;
+}
+
+/**
+ * Status som portalen visar den, med Apples felkod när synken fallerat. Är
+ * statusen dålig går den att klicka på — då fälls orsak och åtgärd ut.
+ */
+function statusCell(item, onToggle) {
+  const { label, tone, icon } = describeStatus(item.status);
+  const cell = el("td", `exp-${tone}`);
+  // Symbolen som i portalen: ✓ i grönt, ✕ i rött.
+  const content = () => {
+    const parts = [];
+    if (icon) {
+      const mark = el("span", `status-icon status-icon-${icon}`, icon === "ok" ? "✓" : icon === "bad" ? "✕" : "!");
+      mark.setAttribute("aria-hidden", "true");
+      parts.push(mark);
+    }
+    parts.push(label);
+    return parts;
+  };
+  if (hasGuidance(item.status)) {
+    const button = el("button", "linklike status-toggle");
+    button.append(...content());
+    button.type = "button";
+    button.title = "Show the likely cause and what to do";
+    button.setAttribute("aria-expanded", String(state.expanded === item.id));
+    button.addEventListener("click", (event) => {
+      // Raden kan själv vara klickbar (VPP öppnar Licenses).
+      event.stopPropagation();
+      onToggle();
+    });
+    cell.append(button);
+  } else {
+    const plain = el("div");
+    plain.append(...content());
+    cell.append(plain);
+  }
+  // Felkoden bara när vi inte vet portalens text för den.
+  const hint = [
+    item.status === "syncError" && item.syncErrorCode ? `Error code ${item.syncErrorCode}` : null,
+    item.syncedDevices !== null ? `${item.syncedDevices} devices` : null
+  ].filter(Boolean).join(" · ");
+  if (hint) cell.append(el("div", "hint", hint));
+  return cell;
+}
+
+/** Den utfällda raden: vad som troligen hänt och vad man gör åt det. */
+function statusDetailRow(item, span) {
+  const info = guidanceFor(item);
+  const tr = el("tr", `status-detail status-detail-${info.tone}`);
+  const td = el("td");
+  td.colSpan = span;
+
+  td.append(el("div", "status-detail-title", `Why “${info.label}”?`));
+  td.append(el("p", null, info.cause));
+  if (item.syncErrorCode) {
+    td.append(el("p", "hint", `Error code from the last sync: ${item.syncErrorCode}.`));
+  }
+  if (item.lastSync) {
+    td.append(el("p", "hint", `Last successful sync: ${new Date(item.lastSync).toLocaleString("en-GB")}.`));
+  }
+
+  td.append(el("div", "status-detail-title", "What to do"));
+  const steps = el("ol");
+  for (const step of info.fix ?? []) steps.append(el("li", null, step));
+  td.append(steps);
+
+  if (info.docs?.length) {
+    const links = el("div", "hint");
+    info.docs.forEach((doc, i) => {
+      if (i) links.append(" · ");
+      const a = el("a", null, doc.label);
+      a.href = doc.url;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      links.append(a);
+    });
+    td.append(links);
+  }
+
+  // Åtgärden görs hos Apple — en knapp dit, när vi vet vilken portal.
+  if (info.program) {
+    const go = el("button", "status-detail-go", "Take me there");
+    go.type = "button";
+    go.title = `Open ${info.program.name} (${info.program.url.replace(/^https:\/\/|\/$/g, "")}) in a new tab`;
+    go.addEventListener("click", (event) => {
+      event.stopPropagation();
+      openInNewTab(info.program.url);
+    });
+    td.append(go);
+  }
+
+  tr.append(td);
+  return tr;
 }
 
 // --- Banderollen: det enda man måste se ---------------------------------
@@ -102,6 +199,7 @@ function renderGroup(group, items) {
   const columns = [
     { key: "name", label: "Name", type: "text", value: (item) => item.name },
     { key: "details", label: "Details" },
+    { key: "status", label: "Status", type: "text", value: (item) => describeStatus(item.status).label },
     { key: "expires", label: "Expires", type: "date", value: (item) => (item.expires ? Date.parse(item.expires) : null) },
     ...(isVpp
       ? [
@@ -128,11 +226,17 @@ function renderGroup(group, items) {
     tr.append(name);
 
     // Upprepa inte namnet i detaljerna — det är redan kolumnen bredvid.
-    const detail = [item.appleId, item.organization, item.topic, item.enrollmentMode]
+    const detail = [item.appleId, PROGRAMS[item.program]?.name, item.organization, item.topic, item.enrollmentMode]
       .filter((part) => part && part !== item.name)
       .join(" · ");
     tr.append(el("td", "hint", detail || item.sourceLabel));
 
+    tr.append(
+      statusCell(item, () => {
+        state.expanded = state.expanded === item.id ? null : item.id;
+        draw();
+      })
+    );
     tr.append(expiryCell(item.expires));
 
     // Varje VPP-token är en egen licenspool — visa dess status direkt i raden.
@@ -149,6 +253,9 @@ function renderGroup(group, items) {
     }
 
     table.append(tr);
+    if (state.expanded === item.id && hasGuidance(item.status)) {
+      table.append(statusDetailRow(item, columns.length));
+    }
   }
 
   box.append(table);
