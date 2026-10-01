@@ -185,7 +185,7 @@ test("VPP: fungerar inte betan hämtas tokens från v1.0 — och de andra källo
     request: async () => null,
     getAll: async (url) => {
       asked.push(url);
-      if (url.startsWith("/beta/")) throw new GraphError("Forbidden", { status: 403, code: "Forbidden", url });
+      if (url === "/beta/deviceAppManagement/vppTokens") throw new GraphError("Forbidden", { status: 403, code: "Forbidden", url });
       if (url.includes("vppTokens")) return [{ id: "1", appleId: "vpp@x.se", organizationName: "Org" }];
       if (url.includes("depOnboardingSettings")) return [{ id: "2", tokenName: "ADE", tokenExpirationDateTime: null }];
       return [];
@@ -195,4 +195,75 @@ test("VPP: fungerar inte betan hämtas tokens från v1.0 — och de andra källo
   assert.ok(asked.includes("/v1.0/deviceAppManagement/vppTokens"), "v1.0 efter betan");
   assert.same(items.map((i) => i.name).sort(), ["ADE", "vpp@x.se"], "både VPP och ADE kom med");
   assert.ok(sources.find((s) => s.key === "vppTokens").ok, "VPP räknas som hämtad");
+});
+
+test("ADE: tokens hämtas från beta — depOnboardingSettings finns inte i v1.0", async () => {
+  const { SOURCES } = await import("../src/graph/connections.js");
+  assert.equal(SOURCES.find((s) => s.key === "appleEnrollment").url, "/beta/deviceManagement/depOnboardingSettings", "beta");
+});
+
+test("ADE: status räknas fram ur utgångsdatum och Apples synkfel", async () => {
+  const { fetchConnections } = await import("../src/graph/connections.js");
+  const iso = (days) => new Date(Date.now() + days * 86_400_000).toISOString();
+  const stub = {
+    request: async () => null,
+    getAll: async (url) => url.includes("depOnboardingSettings")
+      ? [
+          { id: "a", tokenName: "Aktiv", tokenExpirationDateTime: iso(100), lastSyncErrorCode: 0, syncedDeviceCount: 12 },
+          { id: "b", tokenName: "Utgången", tokenExpirationDateTime: iso(-3), lastSyncErrorCode: 0 },
+          { id: "c", tokenName: "Synkfel", tokenExpirationDateTime: iso(50), lastSyncErrorCode: 401 },
+          { id: "d", tokenName: "Villkor", tokenExpirationDateTime: iso(112), lastSyncErrorCode: 3 }
+        ]
+      : []
+  };
+  const { items } = await fetchConnections(stub, stub);
+  const by = Object.fromEntries(items.map((i) => [i.name, i]));
+  assert.equal(by.Aktiv.status, "active", "aktiv");
+  assert.equal(by.Aktiv.syncedDevices, 12, "antal enheter");
+  assert.equal(by["Utgången"].status, "expired", "utgången");
+  assert.equal(by.Synkfel.status, "syncError", "synkfel");
+  assert.equal(by.Synkfel.syncErrorCode, 401, "felkoden");
+  // Kod 3 är avstämd mot portalens Enrollment program tokens.
+  assert.equal(by.Villkor.status, "termsNotAccepted", "kod 3 = villkor ej godkända");
+  const { describeStatus } = await import("../src/graph/token-status.js");
+  assert.equal(describeStatus("termsNotAccepted").label, "Terms & Conditions not accepted", "portalens text");
+  assert.equal(describeStatus("termsNotAccepted").tone, "critical", "rött, som i portalen");
+});
+
+test("ADE: programtypen avgör ABM eller ASM, och åtgärden nämner rätt portal", async () => {
+  const { programOf, guidanceFor, PROGRAMS } = await import("../src/graph/token-status.js");
+  assert.equal(programOf({ tokenType: "dep" }), "abm", "dep = Apple Business Manager");
+  assert.equal(programOf({ tokenType: "appleSchoolManager" }), "asm", "ASM");
+  assert.equal(programOf({ vppTokenAccountType: "education" }), "asm", "VPP education = ASM");
+  assert.equal(programOf({ tokenType: "none" }), null, "okänt");
+
+  const school = guidanceFor({ status: "termsNotAccepted", sourceKey: "appleEnrollment", program: "asm" });
+  assert.equal(school.program, PROGRAMS.asm, "knappen går till ASM");
+  assert.ok(school.fix.every((step) => !/Business/.test(step)), "ingen ABM i åtgärderna");
+  assert.ok(school.fix[0].includes("Apple School Manager"), "ASM nämns");
+
+  const unknown = guidanceFor({ status: "termsNotAccepted", sourceKey: "appleEnrollment", program: null });
+  assert.equal(unknown.program, null, "ingen knapp utan känt program");
+});
+
+test("ADE: länken går till Enrollment program tokens och söker fram tokenen", async () => {
+  globalThis.chrome ??= {};
+  const { connectionLink } = await import("../src/page/portal.js");
+  const link = connectionLink({ id: "x", sourceKey: "appleEnrollment" });
+  assert.ok(link.url.endsWith("#view/Microsoft_Intune_Enrollment/DepTokensPaging.ReactView"), "listans adress");
+  assert.ok(link.search && link.open, "söker och öppnar raden");
+});
+
+test("Status: varje dålig status har orsak, åtgärd och länk — bra statusar är inte klickbara", async () => {
+  const { STATUSES, hasGuidance, describeStatus } = await import("../src/graph/token-status.js");
+  for (const [key, info] of Object.entries(STATUSES)) {
+    if (info.tone === "ok") {
+      assert.ok(!hasGuidance(key), `${key} ska inte gå att fälla ut`);
+      continue;
+    }
+    assert.ok(info.cause, `${key} har en orsak`);
+    assert.ok(info.fix?.length, `${key} har åtgärder`);
+    assert.ok(info.docs?.every((d) => d.url.startsWith("https://")), `${key} länkar`);
+  }
+  assert.equal(describeStatus("somethingNew").label, "somethingNew", "okänd status visas som den är");
 });

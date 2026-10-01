@@ -1115,6 +1115,85 @@ table.grid th {
   color: var(--muted);
 }
 
+/* Klickbar status: behåll tonens färg, visa att den går att fälla ut. */
+button.linklike.status-toggle {
+  color: inherit;
+  font-weight: inherit;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+/* Statussymbolen, som portalens: fylld cirkel med ✓ eller ✕. */
+.status-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-right: 6px;
+  border-radius: 50%;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+  vertical-align: -2px;
+}
+
+.status-icon-ok {
+  background: var(--app);
+}
+
+.status-icon-bad {
+  background: var(--bad);
+}
+
+.status-icon-warn {
+  background: var(--warn);
+}
+
+tr.status-detail td {
+  --detail: var(--warn);
+  padding: 8px 12px 12px;
+  border-left: 3px solid var(--detail);
+  background: color-mix(in srgb, var(--detail) 6%, transparent);
+  white-space: normal;
+}
+
+tr.status-detail-critical td,
+tr.status-detail-expired td {
+  --detail: var(--bad);
+}
+
+tr.status-detail p,
+tr.status-detail ol {
+  margin: 4px 0 8px;
+}
+
+tr.status-detail ol {
+  padding-left: 20px;
+}
+
+.status-detail-go {
+  display: block;
+  margin-top: 12px;
+  padding: 5px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.status-detail-go:hover {
+  filter: brightness(1.1);
+}
+
+.status-detail-title {
+  font-weight: 600;
+  margin-top: 4px;
+}
+
 /* --- Tradmodulen --- */
 
 .tree-toolbar {

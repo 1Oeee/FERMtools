@@ -661,16 +661,24 @@ export const depOnboardingSettings = [
   {
     id: guid(),
     tokenName: "ADE Grundskola",
+    tokenType: "appleSchoolManager",
     appleIdentifier: "ade.grundskola@contoso.com",
     tokenExpirationDateTime: inDays(45),
-    lastSuccessfulSyncDateTime: inDays(-0.5)
+    lastSuccessfulSyncDateTime: inDays(-0.5),
+    lastSyncErrorCode: 0,
+    syncedDeviceCount: 412
   },
   {
     id: guid(),
     tokenName: "ADE Gymnasiet",
+    tokenType: "appleSchoolManager",
     appleIdentifier: "ade.gymnasiet@contoso.com",
     tokenExpirationDateTime: inDays(301),
-    lastSuccessfulSyncDateTime: inDays(-0.2)
+    // Nya villkor i Apple School Manager som ingen godkänt (felkod 3), så att
+    // statusförklaringen syns i demot. Senaste lyckade synk är gammal.
+    lastSuccessfulSyncDateTime: inDays(-9),
+    lastSyncErrorCode: 3,
+    syncedDeviceCount: 188
   }
 ];
 
