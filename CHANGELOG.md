@@ -4,6 +4,25 @@ Version scheme: `0.1`, `0.2`, `0.3` … One step per delivered batch of work.
 The version lives in `manifest.json` and must always match the top entry here.
 `1.0` when the extension is stable enough to use daily without reservations.
 
+## 0.23 — 2026-10-01
+
+Connections shows Apple's enrollment program tokens again, with the status the
+portal shows and what to do when it is bad.
+
+### Connections
+
+- **ADE tokens load again.** `depOnboardingSettings` only exists in Graph beta;
+  the v1.0 address answered 400, so the list stayed empty.
+- **Status as the portal shows it**, worked out from the expiry date and the
+  last sync error, with ✓ / ✕ like the Enrollment program tokens blade. A bad
+  status can be clicked: the likely cause and the fix fold out, with links to
+  Microsoft's troubleshooting article. Unknown sync error codes are shown as
+  "Sync error" with the code rather than a guessed text.
+- **Apple Business Manager or Apple School Manager** per token, with a link to
+  the right Apple portal.
+- **The link into Intune opens the token list** and searches for the token,
+  like VPP. The per-token address used before failed to open.
+
 ## 0.22 — 2026-09-30
 
 A Reports tab: devices per municipality and client type — the report a Power

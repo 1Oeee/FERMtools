@@ -21,7 +21,7 @@ even when the branch is collapsed.
 The extension is **read-only**. It only makes `GET` requests to Microsoft Graph
 and the Intune backend, and writes nothing to the tenant.
 
-Current version: **0.22**. The version scheme is `0.1`, `0.2`, `0.3` … with one
+Current version: **0.23**. The version scheme is `0.1`, `0.2`, `0.3` … with one
 step per delivered batch of work, and `1.0` when the extension can be used
 daily without reservations. What changed when is in [CHANGELOG.md](CHANGELOG.md),
 and the version there must always match `manifest.json`.
