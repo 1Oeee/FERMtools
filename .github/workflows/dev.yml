@@ -1,0 +1,105 @@
+# Dev-bygget: en enda rullande förhandsrelease, "Inu+ dev", som byts ut vid
+# varje push till en gren som inte är main. Där finns alltid det senaste att
+# ladda in och prova, med allt som gjorts sedan förra riktiga releasen
+# summerat i texten — utan att röra Chrome Web Store eller versionsnumret.
+#
+# Den riktiga releasen (Inu+ 0.24 …) sköts fortfarande av release.yml vid
+# push till main. Dev-releasen är markerad som förhandsversion, så "Latest"
+# på GitHub pekar alltid på den riktiga.
+#
+# Paketet har samma version som manifest.json, plus ett version_name som
+# visas på edge://extensions — t.ex. "0.25 dev (a1b2c3d)" — så att det syns
+# vilket bygge som är inladdat.
+
+name: Dev build
+
+on:
+  push:
+    # Bara grenfilter: taggpushar (även "dev", som arbetsflödet flyttar) startar det inte.
+    branches-ignore: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Bara den senaste pushen räknas — en äldre som fortfarande kör avbryts.
+concurrency:
+  group: dev-release
+  cancel-in-progress: true
+
+jobs:
+  dev:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Hela historiken och taggarna: texten räknar commits sedan förra releasen.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Tester
+        run: node tests/run.mjs
+
+      - name: Bygg paket
+        id: build
+        # Samma innehåll som release.yml packar, plus version_name.
+        run: |
+          set -euo pipefail
+          version=$(jq -r .version manifest.json)
+          short=$(git rev-parse --short HEAD)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "short=$short" >> "$GITHUB_OUTPUT"
+
+          mkdir -p dist/package
+          cp -r manifest.json managed_schema.json src tests dist/package/
+          [[ -d icons ]] && cp -r icons dist/package/
+          find dist/package/tests -name '*.mjs' -delete
+          jq --arg name "$version dev ($short)" '.version_name = $name' manifest.json > dist/package/manifest.json
+
+          (cd dist/package && zip -qr -X ../../inuplus-dev.zip .)
+          unzip -l inuplus-dev.zip | tail -1
+
+      - name: Skriv releasetexten
+        # Allt sedan förra riktiga releasen (taggen v<version>), nyast först,
+        # och den översta posten i CHANGELOG.md.
+        env:
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          last=$(git describe --tags --match 'v[0-9]*' --abbrev=0 2>/dev/null || true)
+          range=${last:+$last..}HEAD
+          {
+            echo "Rolling development build — replaced on every push. Not in the Chrome Web Store."
+            echo
+            echo "**Branch:** \`$BRANCH\` · **Commit:** $GITHUB_SHA"
+            echo
+            echo "### Install"
+            echo "Download \`inuplus-dev.zip\`, unzip it, and on \`edge://extensions\` (Developer mode on) choose **Load unpacked** and point to the folder."
+            echo "To update: replace the folder's contents and press the reload arrow on the extension's card."
+            echo
+            echo "### Changes since ${last:-the first commit}"
+            git log "$range" --no-merges --format='- %s (%h)'
+            echo
+            echo "### Changelog (top entry)"
+            awk '/^## /{n++} n==1' CHANGELOG.md
+          } > notes.md
+          cat notes.md
+
+      - name: Byt ut dev-releasen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.build.outputs.version }}
+          SHORT: ${{ steps.build.outputs.short }}
+        run: |
+          set -euo pipefail
+          # Den gamla releasen och dess tagg tas bort; den nya skapas på den här committen.
+          gh release delete dev --yes --cleanup-tag 2>/dev/null || true
+          gh release create dev inuplus-dev.zip \
+            --target "$GITHUB_SHA" \
+            --title "Inu+ dev ($VERSION · $SHORT)" \
+            --notes-file notes.md \
+            --prerelease \
+            --latest=false
