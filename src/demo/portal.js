@@ -57,7 +57,7 @@
       host.hidden = true;
     }
 
-    document.title = `${onInu ? "Inu+" : "Home"} - Microsoft Intune admin center`;
+    document.title = `${onInu ? "Inu+" : "Home"} - Microsoft Intune admin center (Inu+ demo)`;
     // Läget sitter i adressen, så att en omladdning hamnar på samma blad.
     history.replaceState(null, "", onInu ? "#inu" : "#home");
   }

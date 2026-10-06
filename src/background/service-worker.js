@@ -111,9 +111,14 @@ portalTokens.onAccepted(({ capabilities, tabId }) => learnPaths(capabilities, ta
 // Portalens anrop mot Intunes backend lär oss både var tjänsten ligger och
 // vilket blad som når den.
 const learnEndpoint = (details) => {
+  // Bara portalens flikar, som för tokens — andra flikar som råkar anropa
+  // Intunes backend (Company Portal på webben, t.ex.) har vi inget med att
+  // göra. Våra egna anrop (tabId -1) lär oss inget nytt, men får passera.
+  const fromPortal = portalTabs.has(details.tabId);
+  if (!fromPortal && details.tabId >= 0) return;
+
   // Regionen ur vilket portalanrop som helst — det är den datalagret behöver.
-  // Bara portalens flikar, som för tokens.
-  if (portalTabs.has(details.tabId)) {
+  if (fromPortal) {
     rememberHost(details.url).then(
       (fresh) => fresh && broadcast({ type: "intune-host-learned" }),
       () => {}
@@ -769,6 +774,9 @@ async function loadScore({ force = false } = {}) {
   });
 }
 
+const EXTENSION_ORIGIN = chrome.runtime.getURL("");
+const CONTENT_SCRIPT_MESSAGES = new Set(["token-from-page", "portal-blade"]);
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const handlers = {
     status: currentStatus,
@@ -947,6 +955,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return next;
     }
   };
+
+  // Content scripts i portalen får bara lämna tokens och säga var de står.
+  // Allt annat — inställningar, samtycke, inloggning, hämtningar — är
+  // förbehållet tilläggets egna sidor. Content scripts kan inte nås av
+  // portalens egna skript, men gränsen ska stå i koden, inte vara underförstådd.
+  const fromExtensionPage = sender?.id === chrome.runtime.id && (sender.url ?? "").startsWith(EXTENSION_ORIGIN);
+  if (!fromExtensionPage && !CONTENT_SCRIPT_MESSAGES.has(message?.type)) return false;
 
   const handler = handlers[message?.type];
   if (!handler) return false;

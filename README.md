@@ -51,7 +51,7 @@ On first install a tab opens explaining exactly how Inu+ gets its data, and
 offers three choices: borrow the portal's session, sign in with your
 organisation's own app registration, or try the demo first. **Until you allow
 it, Inu+ reads nothing from the portal** — no request headers, no storage. In
-sign-in mode it never reads the portal at all.
+sign-in mode it never reads the portal's tokens, request headers or storage.
 The choice can be changed in Settings, where revoking consent also discards any
 tokens held. See [PRIVACY.md](PRIVACY.md).
 
@@ -93,8 +93,10 @@ bar changes.
 The page is an ordinary extension page in a frame, not markup injected into the
 portal. That is deliberate: the extension's own origin applies there, so
 `chrome.tabs`, `chrome.storage` and module imports work exactly as in a tab of
-their own, and the portal's DOM is never touched by anything but the link and
-the frame. The content script that places them reads nothing from the portal.
+their own, and the portal's DOM is touched only by the link, the frame and —
+when you click a shared account or VPP token — typing that name into a list's
+search box (see [PRIVACY.md](PRIVACY.md)). The content script that places them
+reads only the address, theme colours and layout, never the portal's data.
 
 Inu+ behaves like one blade among the others, not like something on top of
 them: there is no close button. Clicking anything in the portal's left rail or
