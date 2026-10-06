@@ -4,6 +4,16 @@ Version scheme: `0.1`, `0.2`, `0.3` … One step per delivered batch of work.
 The version lives in `manifest.json` and must always match the top entry here.
 `1.0` when the extension is stable enough to use daily without reservations.
 
+## 0.24 — 2026-10-06
+
+Reports can be narrowed by OS version.
+
+### Reports
+
+- **OS version filter**, next to model and manufacturer. Versions are listed in
+  version order — 17.6.1, 17.7, 18.0 … 18.2 before 18.10 — not as text. The
+  selection is remembered with the other filters and follows into the export.
+
 ## 0.23 — 2026-10-01
 
 Connections shows Apple's enrollment program tokens again, with the status the
