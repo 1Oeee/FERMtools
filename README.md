@@ -235,9 +235,6 @@ Consequences:
   changes it. See `src/background/token.js` — switching to MSAL with an app
   registration of your own touches only that file.
 
-Run `spike/` first if you want to check that the borrowing works in your tenant
-before using the extension for real.
-
 ## Sign-in mode (own app registration)
 
 For organisations whose security policy does not accept an extension reading the
@@ -527,7 +524,6 @@ src/
   health/       the health check's rules (pure functions)
   score/        the Score tab's audits and weighting (pure functions)
 tests/          unit tests, run in the browser or in Node
-spike/          Step 0 — standalone test of the token borrowing
 ```
 
 The tree logic deliberately lives in the page and not in the service worker: it
