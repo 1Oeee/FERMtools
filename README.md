@@ -1,278 +1,363 @@
 # Inu+
 
-A browser extension (Edge/Chrome, Manifest V3) that adds **a page of its own to
-the Intune portal** — an entry in the left-hand rail, directly under **Home** —
-showing the nested structure of your Entra groups as a tree. Roughly the tree
-view from Intune for Education, which is missing from the main console, but
-placed in the console you actually work in.
+**A better view of your Intune tenant, inside the Intune portal.**
 
-Every row gets two markers:
+Inu+ is a browser extension for Microsoft Edge and Google Chrome. It adds a page
+to the Intune admin center, right under **Home** in the left rail, that shows
+your nested Entra groups as a tree with every app and configuration marked
+where it is assigned. Around that it adds a health check of your assignments, a
+tenant score, expiring connections, VPP licences, shared accounts and an
+exportable device report.
+
+It is built for people who run Intune for schools and municipalities, where
+devices sit in deep group hierarchies (school › iPads › cart 1) and the portal's
+flat lists make it hard to see what goes where.
+
+![The Group Tree: nested groups with markers for assigned apps and configurations, and the selected group's details](docs/images/group-tree.png)
+
+- **Read-only.** Inu+ only reads. It never creates, changes or deletes anything
+  in your tenant.
+- **No server.** Everything runs in your browser. The only requests go to
+  Microsoft.
+- **Your own permissions.** It sees exactly what your account can see, nothing
+  more.
+
+Current version: **0.25** — see the [changelog](CHANGELOG.md).
+
+## Contents
+
+- [What's in it](#whats-in-it)
+- [Getting started](#getting-started)
+- [The tabs](#the-tabs)
+- [Using the page](#using-the-page)
+- [How Inu+ reads your tenant](#how-inu-reads-your-tenant)
+- [Settings](#settings)
+- [Privacy and security](#privacy-and-security)
+- [Known limitations](#known-limitations)
+- [Development](#development)
+
+## What's in it
+
+| Tab | What it shows |
+| --- | --- |
+| [**Group Tree**](#group-tree) | Your groups as a nested tree, with markers for apps and configurations. Search for an app to see every group it reaches. |
+| [**Score**](#score) | How the tenant is set up compared with Microsoft's recommendations, graded 0–100 like a Lighthouse report. |
+| [**Connections**](#connections) | VPP tokens, Apple enrollment (ADE), Android enrollment and the APNS certificate, sorted by what expires first. |
+| [**Licenses**](#licenses) | VPP apps per token: licences total, used and free, and which groups get each app. |
+| [**Shared accounts**](#shared-accounts) | How many devices each shared account is signed in on, against Intune's device limit. |
+| [**Reports**](#reports) | Devices per municipality and client type, filtered your way and exported to a formatted Excel sheet. |
+| [**Health check**](#health-check) | 28 checks for mistakes in assignments and groups, with how to fix each one. |
+
+A **platform filter** at the top (All platforms, iOS/iPadOS, Windows, Android,
+macOS) applies to every tab.
+
+## Getting started
+
+### Install
+
+Inu+ needs no build step and no installed tools. You load the folder as it is.
+
+1. Get the extension:
+   - **A release:** download the zip from the latest
+     [release](https://github.com/1Oeee/FERMtools/releases) and unzip it, or
+   - **The newest development build:** see [Dev builds](#dev-builds), or
+   - **The source:** clone this repository.
+2. Open `edge://extensions` (or `chrome://extensions`) and turn on **Developer
+   mode**.
+3. Click **Load unpacked** and choose the folder that contains `manifest.json`.
+4. Open [intune.microsoft.com](https://intune.microsoft.com) and sign in.
+5. Click **Inu+** in the left rail, directly under **Home**.
+
+Installing opens nothing by itself: Inu+ waits in the portal's left rail until
+you click it. The extension's toolbar icon also takes you there — to your portal
+tab, or a new one. **⧉** at the top of the page opens Inu+ in a tab of its own,
+which is handy if you want it open while you work in the portal.
+
+Releases are also submitted to the Chrome Web Store, which Edge can install from
+as well.
+
+### First run
+
+The first time you open Inu+, it explains how it gets its data and lets you
+choose:
+
+- **Allow and use with my tenant** — borrow the access the portal already has
+  for you. Nothing to set up.
+- **Use my own app registration** — sign in through an app your organisation
+  registers in Entra. See [Sign-in mode](#sign-in-mode).
+- **Try the demo first** — a made-up tenant, nothing read from anywhere.
+
+Until you choose, Inu+ reads nothing from the portal. You can change your mind
+any time in [Settings](#settings). See
+[How Inu+ reads your tenant](#how-inu-reads-your-tenant) for the difference.
+
+### Try the demo
+
+Turn on **Demo mode** in Settings to explore Inu+ without a tenant. It shows
+Contoso, a made-up municipality with schools and around 250 groups, complete
+with assignments, VPP licences, connections and devices. No sign-in, and no
+request leaves the browser. The demo is messy on purpose: over twenty planted
+mistakes are waiting for the Health check, and the demo notice on the page has
+the answer key. Names in the demo are in Swedish, as in a Swedish school tenant.
+
+## The tabs
+
+### Group Tree
+
+Your Entra groups as a tree — roughly the tree view from Intune for Education,
+in the console you actually work in. Each row has markers:
 
 | Marker | Means |
 | --- | --- |
 | ● blue | configuration assigned directly to the group |
-| ○ blue | configuration assigned further down the branch |
+| ○ blue | configuration assigned somewhere further down the branch |
 | ● green | app assigned directly to the group |
-| ○ green | app assigned further down the branch |
+| ○ green | app assigned somewhere further down the branch |
+| ◆ red / yellow / grey | Health check error, warning, or something worth a look on the group |
+| ◇ red / yellow | Health check finding further down the branch |
 
-So you can see where in the structure something is actually being distributed,
-even when the branch is collapsed.
+So you can see where something is deployed even when a branch is collapsed.
 
-The extension is **read-only**. It only makes `GET` requests to Microsoft Graph
-and the Intune backend, and writes nothing to the tenant.
+- **Search** narrows the tree to matching groups and opens the branches down to
+  them.
+- **Click a group** to see its details: Health check findings, assigned
+  configurations and apps, subgroups, parent groups and members. **Open group**
+  takes the portal tab to that group.
+- A group with several parents is shown in each place, marked **↗**. A circular
+  membership is cut and marked **⟲**.
+- **Without hierarchy** at the bottom lists groups with neither parents nor
+  children.
 
-Current version: **0.25**. The version scheme is `0.1`, `0.2`, `0.3` … with one
-step per delivered batch of work, and `1.0` when the extension can be used
-daily without reservations. What changed when is in [CHANGELOG.md](CHANGELOG.md),
-and the version there must always match `manifest.json`.
+#### Where does an app go?
 
-## Install
+Type an app or configuration name in the search box — *Spotify*, a Wi-Fi
+profile — and matching items appear as chips under it. Click one (or press
+Enter when no group matches). The tree then shows every group the app reaches:
 
-No build step — the folder is loaded as it is.
+| Mark | Means |
+| --- | --- |
+| **Assigned · Required** | assigned directly to this group (or Available, Uninstall) |
+| **Inherits** | a nested group under an assigned one — Intune follows nesting, so its members get the app too |
+| **Excluded** | an exclusion stops it here, including everything under an excluded group |
 
-1. Open `edge://extensions` (or `chrome://extensions`).
-2. Turn on **Developer mode**.
-3. **Load unpacked** → point to this folder.
-4. Open `https://intune.microsoft.com`, sign in and go to **Groups → All
-   groups**.
-5. Click **Inu+** in the left rail, directly under Home — the page opens with
-   the tree filled in.
+A line above the tree counts them, and says so if the app is also assigned to
+All users or All devices. **Clear** brings back the whole tree.
 
-The extension's toolbar icon does the same thing: it takes you to the portal tab
-and opens the page there. If you have no portal tab open, one is started.
+![Searching for an app: every group it reaches, marked Assigned, Inherits or Excluded](docs/images/app-reach.png)
 
-Requires Node or npm to be installed: no. Requires an app registration in
-Entra: no — but you can use one if you prefer, see
-[Sign-in mode](#sign-in-mode-own-app-registration).
+### Health check
 
-### First run
+Reviews your assignments and groups against 28 rules and lists what breaks
+them, errors first. Each rule says how things should look; rules that passed
+are listed too, so you can see they ran. Among other things it finds:
 
-On first install a tab opens explaining exactly how Inu+ gets its data, and
-offers three choices: borrow the portal's session, sign in with your
-organisation's own app registration, or try the demo first. **Until you allow
-it, Inu+ reads nothing from the portal** — no request headers, no storage. In
-sign-in mode it never reads the portal at all.
-The choice can be changed in Settings, where revoking consent also discards any
-tokens held. See [PRIVACY.md](PRIVACY.md).
+- user licences sent to iPad carts, and device licences sent to student groups
+- "Available" assigned to device groups
+- more recipients than licences for a VPP app
+- apps and profiles assigned to the wrong platform
+- users excluded from device assignments, and install and uninstall on the same devices
+- empty and deleted groups, and licences locked up by disabled accounts
+- duplicate Wi-Fi profiles, overlapping update rings, kiosk mode on large groups
+- platforms without a compliance policy, and connections about to expire
 
-### Demo mode
+Click a finding to see what it means, how to fix it (with links to Microsoft
+Learn) and who changed the item recently. Findings also appear as diamonds in
+the Group Tree; the two link to each other.
 
-No tenant to try it against? Turn on **Demo mode** in the settings
-(`chrome://extensions` → Inu+ → Extension options). The page then shows a
-made-up municipality, Contoso, with six schools and around 270 groups —
-assignments, VPP licences and connections — without signing in and without any
-request leaving the browser. The toolbar icon opens the page in a tab of its
-own if no portal is open.
+To know what each group contains, the check reads the first page (999) of
+members of every group. In very large groups the counts are therefore minimums,
+and the texts say "at least". A rule whose data could not be read shows as
+unknown, never as passed. The fix texts are drafts based on Microsoft's
+documentation (`src/health/guidance.js`); check them against your own
+procedures.
 
-The tenant is messy on purpose. About twenty mistakes are planted — user
-licences to iPad carts, "available" to device groups, more recipients than
-licences, overlapping update rings and the like. The demo notice on the page
-has the answer key.
+![Health check: findings grouped by rule, with severity](docs/images/health-check.png)
 
-The demo only swaps out the Graph client. Fetching, parsing, cache and page are
-the same code as against a real tenant, so what works in the demo works in the
-chain. What is *not* exercised is the token borrowing and the entry in the
-portal's rail — they need the portal. The tenant lives in `src/demo/tenant.js`.
-Its group, app and profile names are deliberately in Swedish, as a Swedish
-school tenant would have them.
+### Score
 
-## Where the page lives
+A Lighthouse-style report for the tenant. Where the Health check finds mistakes,
+Score grades how the tenant is **set up**, against what Microsoft recommends for
+Intune.
 
-The entry in the left rail is inserted directly after the portal's **Home**, in
-the same kind of wrapper the portal itself uses, and therefore inherits the
-rail's dimensions, colours and theme. The portal redraws the rail when you
-switch blades and throws the entry away — it is put back by a check that runs at
-regular intervals.
+| Category | Audits |
+| --- | --- |
+| **Compliance** | Devices without a compliance policy count as not compliant · compliance status validity · share of compliant devices |
+| **Device security** | Disk encryption policy · share of encrypted Windows and macOS devices · antivirus · firewall · attack surface reduction · Windows LAPS · security baseline |
+| **Updates & sign-in** | Windows update rings · Windows Hello for Business · personally owned Windows enrollment (tip only) |
+| **Device hygiene** | Device cleanup rules · share of devices that checked in within 30 days |
 
-A click on the entry places Inu+ **over the portal's content area**, not over
-the whole window: the rail and the top bar are left alone, so you can still
-switch blades, search and sign out while the page is showing. The edges are
-measured rather than guessed — the rail can be collapsed, and the height of the
-bar changes.
+Each audit scores 0–1 (pass/fail, or a curve for fleet shares). A category is
+the weighted average, 0–100, and the tenant score is the average of the
+categories: ▲ 0–49, ■ 50–89, ● 90–100. Every audit cites Microsoft Learn, and a
+failed one says what was found and what it costs. Data that could not be read
+is shown as *Not checked*, never as a pass.
 
-The page is an ordinary extension page in a frame, not markup injected into the
-portal. That is deliberate: the extension's own origin applies there, so
-`chrome.tabs`, `chrome.storage` and module imports work exactly as in a tab of
-their own, and the portal's DOM is never touched by anything but the link and
-the frame. The content script that places them reads nothing from the portal.
+Score reads policy settings and a device inventory summary (OS, compliance,
+encryption and last check-in — no names, users or serial numbers). The audits
+and weights are in `src/score/audits.js`; they are our reading of Microsoft
+Learn, not a score Microsoft publishes.
 
-Inu+ behaves like one blade among the others, not like something on top of
-them: there is no close button. Clicking anything in the portal's left rail or
-top bar — All services, Devices, search, notifications — leaves Inu+ at once, and
-so does any change of the portal's address, however it happens (the portal
-navigates with `history.pushState`, which fires no event a content script can
-hear, so the address is also watched). The page also folds itself away when it
-sends the tab somewhere else — after a click on a permission button or on
-**Open group** it is the blade you want to see. Click **Inu+** in the rail to come
-back; the page keeps its state.
+![Score: the tenant score and a gauge per category](docs/images/score.png)
 
-### The theme
+### Connections
 
-The page follows the **portal's** theme, not the browser's. It matters: the
-portal's theme — Azure, Light, Dark, High contrast — lives in the portal's own
-settings and has nothing to do with `prefers-color-scheme`. If the page followed
-the operating system it would stand white in the middle of a dark Intune as soon
-as the two happened to disagree.
+Everything that expires and must be renewed, in three groups: **VPP** tokens,
+**Enrollment** (Apple ADE and Android enrollment profiles) and the **APNS**
+certificate. Whatever expires first comes first, and a banner at the top names
+it. ADE tokens show the same status as the portal; a bad status can be clicked
+for the likely cause and the fix. VPP tokens show licences total, used and free,
+and link to their apps in Licenses.
 
-The theme classes are undocumented and may be replaced, just like the blade
-names, so we do not read them. Instead the two colours the portal actually paints
-with are measured — the background a little way into the content area and the
-text colour — and the rest of the palette is computed from them: borders, cards,
-hover, muted text. That way the page follows along in any theme, even one we
-have never seen. See `src/page/theme.js`.
+![Connections: VPP tokens and enrollment, sorted by expiry](docs/images/connections.png)
 
-Both colours are taken from the **same** element, and only from one that is wide
-enough to be the page's own surface. This is not a detail: the portal's `body`
-carries a text colour that belongs with the shell's dark top bar, not with the
-white surface below, so a background from one place and text from another gives
-white text on a white background — everything drawn, nothing visible. A button
-or a selected row also has a background but says nothing about the theme, hence
-the width requirement. Beneath that is a safety net: if the measured text colour
-does not reach readable contrast against the background, it is discarded in
-favour of our own. The background has to be right; the text is only a
-suggestion. `console.debug` says what was actually read.
+### Licenses
 
-What cannot be computed is the signal colours — blue for configuration, green
-for app, red for errors. They must be visible and must not drift with the
-background, so they exist in two sets and the portal's lightness decides which
-applies. The same measurement sets `color-scheme`, so that scrollbars, dropdowns
-and the search field's cross are drawn in the right mode — the sort of thing
-that otherwise gives away at once that a page does not belong where it stands.
+VPP apps per token, with licences total, used and free. Click an app to see who
+gets it: which groups, as Required or Available, with device or user licensing,
+and which groups are excluded. It uses the data the Group Tree already fetched.
 
-The colours travel along in the frame's address and not just as a message
-afterwards, so that the palette is in place before the page has painted its
-first image. If you change theme while Inu+ is showing, it is re-measured
-immediately.
+### Shared accounts
 
-In a tab of its own there is no portal to measure, and `prefers-color-scheme`
-applies as usual.
+How many devices each shared account is signed in on — the same number Intune
+shows when you search for the account under Devices — and how many free places
+are left under the device limit (15 by default). Shared accounts are recognised
+by their name (`del`, `delad` by default: *del1*, *delad2* …), or you can list
+every account with more than one device. Names and limit are set in Settings.
 
-**⧉** opens the same page in a tab of its own. If you want Inu+ up while you
-work in the portal, a tab is better than switching back and forth.
+### Reports
 
-## How tokens work
+Devices per municipality and client type — the report an Excel sheet with
+Power Query would build — laid out like the portal's own report pages.
 
-There are two ways, and the user (or an admin, by policy) chooses:
+- **Filter** by municipality, manufacturer, model, OS version, compliance,
+  **installed app** (from Intune's *Discovered apps*), or search. Click
+  client-type tiles to show only those types. Everything below and the export
+  follow the selection.
+- **Choose the columns.** **Columns** on the device list adds or removes
+  information: enrolled date, management state, encryption, ownership,
+  enrollment profile, the user's display name — and where the device sits in
+  your group tree:
+  - **Device groups** — the groups the device is a direct member of
+  - **Place in tree** — the path down to its deepest group, e.g.
+    *Alla iPads › Norrskolan - iPads › Vagn 1*
+  - **User's groups** — the primary user's groups
+
+  The group columns read group members from Entra the first time one is turned
+  on; after that, search also finds devices by group name. Your choice is
+  remembered.
+- **Export** writes one formatted Excel sheet: the device list with
+  municipality in column I and a filter on every column, a summary per
+  municipality to the right, and the selection written at the top. Columns you
+  chose that are not part of the standard sheet are added after it.
+- **Municipality** comes from the primary user's email domain (`@tierp.se` →
+  Tierp). In Settings you can rename domains or place devices by name prefix.
+- **Source.** By default Reports reads Intune's live device list, with the same
+  permission as Shared accounts. It can instead read the **Data warehouse**
+  (Settings → Reports), which matches an existing Power BI or Excel report
+  exactly but needs a token the portal never has — so in practice only
+  [sign-in mode](#sign-in-mode). The group columns need the live device list.
+
+![Reports: the device list with the Device groups and Place in tree columns turned on](docs/images/reports-columns.png)
+
+## Using the page
+
+- **The permissions row** at the top shows what the current tab needs:
+
+  | Chip | Means |
+  | --- | --- |
+  | ● green | permission available |
+  | ● grey | no Graph permission, but the Intune backend may answer — uncertain |
+  | ○ yellow | missing |
+
+  Click a missing one and the portal tab goes to the page that provides it; Inu+
+  steps aside and fills in by itself as soon as the permission arrives.
+  **Tokens seen** in the same row lists every token and what it covers — the
+  first place to look when something does not appear.
+- **⟳** fetches the current tab again from your tenant.
+- **⚙** opens Settings inside Inu+, in place of the tab. **← Back**, Esc or any
+  tab returns.
+- **Loading is fast after the first time.** Each tab shows the data it fetched
+  last straight away and updates it in the background ("Showing data from
+  12 min ago — updating …"). The other tabs are prepared in the background
+  while you look at the first, so switching tabs is instant.
+- **Messages** can be hidden with ×. A message comes back if its text changes,
+  and hidden messages can be restored at the bottom of the message block.
+- **The details panel** in the Group Tree collapses with the chevron next to the
+  group name, giving the tree the full width.
+- **Leaving Inu+:** click anything in the portal's left rail or top bar. Click
+  **Inu+** to come back; the page keeps its state.
+- **Theme:** the page follows the portal's theme (Azure, Light, Dark, High
+  contrast), not the operating system's.
+
+## How Inu+ reads your tenant
+
+There are two ways. You choose, or an admin chooses for everyone by policy.
 
 | | Portal mode (default) | Sign-in mode |
 | --- | --- | --- |
-| Setup | None | An admin registers an app in Entra once and grants admin consent |
-| Where tokens come from | Borrowed from the Intune portal tab | Issued to your app registration via Microsoft sign-in (code flow + PKCE) |
-| Permissions | Whatever the portal's tokens happen to carry | Exactly what the admin granted the app |
-| Reads the portal | Request headers and storage, after consent | Nothing |
-| Shows in Entra logs as | The portal | Your app registration |
-| Depends on undocumented behaviour | Yes | No |
+| Setup | None | An admin registers an app in Entra once |
+| Where access comes from | Borrowed from your Intune portal tab | Microsoft sign-in to your organisation's app registration |
+| What it can read | What the portal's tokens carry | Exactly what the admin granted the app |
+| Reads from the portal | Request headers and storage, after consent | Nothing |
+| Shows in Entra sign-in logs as | The Intune portal | Your app registration |
+| Relies on undocumented portal behaviour | Yes | No |
 
-Both are read-only, and both run entirely in the browser — there is no server.
-The two sources share one interface, so everything above them (Graph client,
-fetching, cache, page) is the same code. Portal mode is `src/background/token.js`,
-sign-in mode is `src/background/msal.js`.
+Both are read-only and run entirely in the browser.
 
 ### Portal mode
 
-The extension registers no app of its own in Entra. Instead it borrows the
-tokens the Intune portal has already obtained for you.
+Inu+ borrows the access tokens the Intune portal already holds for you. The
+portal uses several tokens with different permissions — one for groups, one for
+apps, one for Intune's own backend — and Inu+ keeps all of them and uses the
+right one for each request.
 
-The portal does not use *one* token but several, and they have different
-permissions. The group list fetches a Graph token with directory permissions,
-the apps view another Graph token with DeviceManagement permissions, and some
-blades go outside Graph to Intune's own backend at `*.manage.microsoft.com`.
+- **The portal must be open and signed in.** Tokens are picked up from the
+  portal pages you visit. Visiting **Groups → All groups** and Intune's home
+  page is usually enough; if a permission is missing, the permissions row says
+  where to get it.
+- Tokens are read only from tabs on `intune.microsoft.com`, kept only in memory,
+  and never written to disk.
+- This depends on how the portal works today and could stop working if
+  Microsoft changes it. Sign-in mode does not have that risk.
 
-The extension therefore keeps a **pool** of all valid tokens it has seen, and
-for each request picks the one that covers that request. Holding a single token
-meant the one that could do apps threw away the one that could do groups, and
-vice versa — that is why the markers were missing in 0.2. See
-`src/background/token.js`.
+### Sign-in mode
 
-The extension therefore models **capabilities**, not tokens. A module says what
-it needs — `groups`, `apps`, `config`, `serviceConfig`, `devices` — and the
-panel can point to exactly the portal blade that provides it. The capabilities
-and their scopes are collected in `src/common/jwt.js`.
-
-Two routes to the assignments, in this order:
-
-1. **Graph**, when the pool has a token with `DeviceManagementApps.Read.All` or
-   `DeviceManagementConfiguration.Read.All`.
-2. **The Intune backend**, otherwise. Graph is in practice only a facade in
-   front of that service, and when it rejects us the error says exactly which
-   address Graph forwarded to. That address is called again with a backend token.
-   The addresses are never hard-coded; they are learned from the error response
-   or from the portal's own traffic and stored per tenant. See
-   `src/graph/endpoints.js`.
-
-Tokens are captured in two ways:
-
-1. **`webRequest`** reads the `Authorization` header from the portal's own
-   requests, against both Graph and the Intune backend — but **only from tabs
-   that are `intune.microsoft.com`**. The extension keeps a register of which
-   tabs those are. Without that limit, every tab that calls Graph, like Outlook
-   or Teams, would have its header read.
-2. **A content script** looks in the portal's `sessionStorage`/`localStorage` if
-   the portal has not made a request since the extension started. It runs only
-   on the portal, and the sender's tab is checked anyway.
-
-Consequences:
-
-- You see exactly what you already have permission to see — nothing more.
-- Raw tokens live only in the service worker's memory. They are never written to
-  `chrome.storage` and never reach disk.
-- **The portal must be open and signed in.** Since the page lives in the portal,
-  that condition is met as soon as you see Inu+ at all — but tokens are still
-  picked up from the blades you have visited. Standing on **All groups** is
-  enough; you do not need to open an individual group. If a token is missing the
-  page shows a button that takes the tab there in one click, folds itself away so
-  the blade is visible, and fills itself in as soon as the token has turned up.
-- If you are already on the group list when you open the page, the tree has
-  usually already been fetched: the extension prefetches when it notices you are
-  there.
-- **The markers need an Intune token.** It is captured as soon as the portal has
-  talked to `*.manage.microsoft.com`, which happens on Intune's home page and
-  most Intune blades. If it is missing the tree stays without markers, and the
-  page says which page to look at to capture it.
-- This is undocumented portal behaviour and may stop working if Microsoft
-  changes it. See `src/background/token.js` — switching to MSAL with an app
-  registration of your own touches only that file.
-
-Run `spike/` first if you want to check that the borrowing works in your tenant
-before using the extension for real.
-
-## Sign-in mode (own app registration)
-
-For organisations whose security policy does not accept an extension reading the
-portal's tokens. The access is then a named application in Entra, with
-permissions an admin chose, visible and revocable under **Enterprise
-applications**, and logged under its own name in the sign-in logs.
+For organisations whose policy does not accept an extension borrowing the
+portal's tokens. Access is then a named application in Entra, with permissions
+an admin chose, visible and revocable under **Enterprise applications**, and
+logged under its own name.
 
 **Admin, once per tenant:**
 
-1. Entra admin center → **App registrations** → **New registration**. Name it
-   e.g. *Inu+*. Single tenant is fine.
-2. **Authentication** → **Add a platform** → **Single-page application**. Redirect
-   URI: `https://<extension-id>.chromiumapp.org/` — Settings shows the exact
-   value for your installation. The store version and an unpacked copy have
-   different IDs; add both if both are used.
-3. **API permissions** → Microsoft Graph → **Delegated**:
-   - `Group.Read.All` — the tree (required)
-   - `DeviceManagementApps.Read.All` — app assignments and VPP
-   - `DeviceManagementConfiguration.Read.All` — profiles, compliance, Android enrollment
-   - `DeviceManagementServiceConfig.Read.All` — APNS, Apple enrollment, and
-     Score's enrollment and cleanup settings
-   - `DeviceManagementManagedDevices.Read.All` — Score's device inventory
-     (optional)
-   - Microsoft Intune API → `get_data_warehouse` — Reports (optional;
-     under **APIs my organization uses**)
+1. Entra admin center → **App registrations** → **New registration**. Name it,
+   for example, *Inu+*. Single tenant is fine.
+2. **Authentication** → **Add a platform** → **Single-page application**. Use
+   the redirect URI shown in Inu+'s Settings
+   (`https://<extension-id>.chromiumapp.org/`). A store install and an unpacked
+   copy have different IDs; add both if both are used.
+3. **API permissions** → **Microsoft Graph** → **Delegated**, then **Grant admin
+   consent**. All are read-only; leave out what you don't want Inu+ to see, and
+   that part of the page stays grey.
 
-   Then **Grant admin consent**. Only read permissions; leave out what you don't
-   want Inu+ to see and that part of the page simply stays grey.
+   | Permission | Used for |
+   | --- | --- |
+   | `Group.Read.All` | the Group Tree — **required** |
+   | `DeviceManagementApps.Read.All` | app assignments, VPP and licences |
+   | `DeviceManagementConfiguration.Read.All` | profiles, compliance, Android enrollment |
+   | `DeviceManagementServiceConfig.Read.All` | APNS, Apple enrollment, Score's enrollment and cleanup settings |
+   | `DeviceManagementManagedDevices.Read.All` | Shared accounts, Reports and Score's device summary |
+   | `AuditLog.Read.All` | "who changed it" in the Health check (optional) |
+   | Microsoft Intune API → `get_data_warehouse` | Reports from the Data warehouse (optional) |
+
 4. Copy the **Application (client) ID** and the **Directory (tenant) ID**.
 
-**User:** Settings → *Sign in with my organisation's app registration* → paste the
-client ID and tenant → **Sign in**.
+**Each user:** Settings → **Sign in with my organisation's app registration** →
+paste the client ID and tenant → **Sign in**.
 
-**Or push it by policy.** Inu+ reads `authMode`, `msalClientId` and `msalTenant`
-from managed storage (`managed_schema.json`), and a policy value locks the field
-in Settings. With Intune, set it with a script or a custom profile under the
-browser's extension policy key, e.g. for Edge:
+**Or set it for everyone by policy.** Inu+ reads `authMode`, `msalClientId` and
+`msalTenant` from the browser's extension policy (`managed_schema.json`); a
+value set by policy is locked in Settings. For Edge, for example with an Intune
+script or custom profile:
 
 ```
 HKLM\Software\Policies\Microsoft\Edge\3rdparty\extensions\<extension-id>\policy
@@ -281,480 +366,157 @@ HKLM\Software\Policies\Microsoft\Edge\3rdparty\extensions\<extension-id>\policy
   msalTenant    = "<tenant id>"
 ```
 
-(Chrome: `...\Policies\Google\Chrome\3rdparty\extensions\<extension-id>\policy`.)
-
-**How it works.** MSAL.js cannot run in an MV3 service worker (no window, no DOM),
-so the protocol is done by hand in `src/background/msal.js`: authorization code
-with PKCE, public client, no secret, through `chrome.identity.launchWebAuthFlow`.
-It asks for `https://graph.microsoft.com/.default`, so the token carries exactly
-what the app was granted. Access and refresh token live in
-`chrome.storage.session` — memory-only, gone when the browser closes, not
-reachable by content scripts — so they survive the service worker going to
-sleep. A refresh token for a single-page app lives 24 hours; after that Inu+
-tries a silent sign-in (`prompt=none`) against the browser's existing Microsoft
-session, and only if that fails does the page show **Sign in**.
-
-## Modules
-
-The page is divided into tabs. The active tab is remembered between visits.
-
-| Tab | Needs | Status |
-| --- | --- | --- |
-| **Group Tree** | Groups, Apps, Configuration | Built. Group structure, markers, search, filter, details panel. |
-| **Score** | Configuration, Connections, Devices | Built. How the tenant is set up, graded like a Lighthouse report against Microsoft's recommendations — see below. |
-| **Connections** | Apps, Configuration, Connections | Built. VPP tokens, Apple ADE/DEP, Android enrollment and APNS in three subtrees, sorted by what expires first. Licences per VPP token: total, used and free, filterable and searchable. |
-| **Reports** | Devices | Built. Devices per organisation and device type, the report a Power Query Excel sheet builds — from the live device list, or optionally the Data warehouse — see below. |
-| **Health check** | Groups, Apps, Configuration | Built, turned on in the settings. 27 rules for what is right and wrong in the assignments — see below. |
-| _Reports (hidden)_ | Groups, Apps, Devices | Not built. Excel export per group with devices, serial numbers, users, inventory and apps. A custom xlsx writer with no dependencies. |
-
-Tree and details sit side by side, and wide views like report tables and VPP
-lists get the room they need. It was the width of the side panel that once forced
-the details down under the rows — on a whole page that is not needed.
-
-### Score
-
-A Lighthouse report for the tenant. Where Lighthouse grades a web page against
-what Chrome considers good practice, Score grades how the tenant is **set up**
-against what Microsoft recommends for Intune. It is separate from the Health
-check: the health check finds mistakes in assignments and groups, Score grades
-configuration and the state of the fleet. They share no rules.
-
-| Category | Audits (weight) |
-| --- | --- |
-| **Compliance** | Devices without a compliance policy count as not compliant (10) · compliance status expires within 30 days (3) · share of compliant devices (10, curve 70–95 %) |
-| **Device security** | Disk encryption policy (10) · share of encrypted Windows/macOS devices (10, curve 60–95 %) · antivirus policy (10) · firewall policy (3) · attack surface reduction (3) · Windows LAPS (3) · security baseline (3) |
-| **Updates & sign-in** | Windows update rings (10) · tenant-wide Windows Hello for Business (3) · personally owned Windows enrollment (tip, not scored) |
-| **Device hygiene** | Device cleanup rules (3) · share of devices that checked in within 30 days (10, curve 70–95 %) |
-
-- **Scoring as in Lighthouse.** Each audit scores 0–1: pass/fail, or on a curve
-  for the fleet shares. A category is the weighted mean, 0–100; the tenant score
-  is the mean of the categories. Bands ▲ 0–49, ■ 50–89, ● 90–100. An audit
-  passes from 0.9.
-- **Missing data is not a pass.** An audit whose data could not be read is
-  listed as *Not checked* and left out. One that does not apply — antivirus
-  with no Windows or Mac devices, say — is *Not applicable*.
-- **Every audit cites Microsoft Learn**, and failed ones say what they cost, what
-  was found, and how Microsoft wants it.
-- **What it reads** (only when the tab is opened, read-only): the compliance
-  policy settings, enrollment configurations, device cleanup rules, older
-  endpoint security policies and their templates, and a device inventory
-  summary — OS, compliance state, encryption and last check-in only, no names,
-  users or serial numbers. Policy types come from the configuration the tree
-  already fetched. See `src/graph/posture.js`.
-
-The audits and weights are in `src/score/audits.js`. It is our reading of
-Microsoft Learn, not a score Microsoft publishes. The demo tenant is half-way
-there on purpose: antivirus, BitLocker, ASR, LAPS and update rings are in place;
-firewall, baseline, Windows Hello and cleanup rules are not.
-
-### Reports
-
-The devices per municipality and client type — the report a Power Query Excel
-sheet builds — laid out like the portal's own report blades: a command bar with
-**Export**, filter pills, client-type tiles, an overview per municipality and
-the device and primary-user lists, 50 rows per page.
-
-- **Select what you want, then export it.** Filter by municipality (the pill, or
-  click a name in the overview), click one or more **client-type tiles** to show
-  only those (Total resets), and narrow by **model** (iPad (5th generation), (6th)
-  … in order), **OS version** (18.2 before 18.10), manufacturer, **installed app** and **compliance** (compliant / not
-  compliant — the latter includes grace period, conflict and error), or search.
-  Everything below the tiles and the export follows the selection. Only managed
-  devices are counted.
-- **Installed app** reads Intune's app inventory (*Discovered apps*,
-  `/deviceManagement/detectedApps`) when the menu is first opened, with every
-  version of an app under one name. Picking apps keeps the devices that have any
-  of them installed. On iOS/iPadOS the inventory covers company-owned devices;
-  personally owned ones only report managed apps. Each app shows how it is
-  assigned in Intune — Required, Available, Available without enrollment,
-  Uninstall, or Not assigned — and chips at the top narrow the list to one of
-  them. The intents come from the assignments the Group Tree already fetched,
-  matched on the app's name (the inventory does not say which Intune app an
-  installed app came from); exclusions do not count.
-- **Rows per page**: 1–50, 1–100, 1–200 or All, top right of the device list.
-  The choice is kept between visits.
-- **Columns**: next to it, choose what the device list shows — device details
-  (enrolled date, management state, encryption, ownership, enrollment profile,
-  the user's display name) and the device's place in the group tree:
-  **Device groups** (the groups the device is a direct member of), **Place in
-  tree** (the path down to the deepest of them, e.g. *Alla iPads › Norrskolan -
-  iPads › Vagn 1*) and **User's groups** (the primary user's groups). The group
-  columns read the tree groups' members from Entra the first time one is turned
-  on — one batched request per group, like the Health check — and then the
-  search box finds devices by group name too. The choice is kept between visits,
-  and the export adds the chosen columns after its fixed ones.
-- **The device list** has the primary user's email right after the device name.
-  Both are links: the device and the user open in the Intune console.
-- **Export** writes one formatted sheet: the device list with the
-  **municipality in column I** and an autofilter, and a **summary per
-  municipality** to the right — devices, users (unique primary users) and each
-  client type, with a total. The summary sits above the list's header row, so
-  filtering the list never hides it. The selection is written at the top.
-- **Municipality** comes from the primary user's email domain: `@tierp.se` and
-  `@edu.tierp.se` → Tierp. Settings → Reports can rename (`alvkarleby.se =
-  Älvkarleby`) or place devices by name prefix (`K = Knivsta` for `K-…`).
-- **What it reads** (only when the tab is opened, read-only): by default
-  Intune's live device list from Graph (`/beta/deviceManagement/managedDevices`)
-  — name, last check-in, OS version, serial number, manufacturer, model, device
-  type, management state and primary user — with the same Devices permission as
-  Shared accounts, so nothing to set up. Values are spelled as in the Data
-  warehouse (`IPad`, `Managed` …), so a report built on either matches. By
-  default only devices whose management state is *Managed* count.
-- **Data warehouse as source** (Settings → Reports → Source): four
-  tables of the feed — `devices`, `users`, `deviceTypes` and `managementStates` —
-  joined like the Power Query query, deleted devices left out. It gives the
-  exact numbers of the Excel report, but needs a token with `get_data_warehouse`,
-  which the portal never obtains — so in practice only sign-in mode.
-- **The feed address** (Data warehouse only) is tenant-specific
-  (`fef.<region>.manage.microsoft.com`) and worked out automatically: from the
-  portal's traffic, Intune's service lookup, or the address Graph names when it
-  forwards a request to Intune. The Settings field is a last resort.
-- **The token** (Data warehouse only) is an Intune API token, not Graph. In
-  sign-in mode the same sign-in is exchanged for one; the app registration needs
-  the Microsoft Intune API permission `get_data_warehouse` (delegated, admin
-  consent). The portal's own Intune token is not accepted by the warehouse.
-
-The fetch and all counting are pure functions in `src/graph/warehouse.js`.
-
-### Health check
-
-Turned on with **Health check** in the settings. The tab reviews the tenant's
-assignments against rules in `src/health/checks.js`. Each rule says how things
-should look and lists what deviates. Errors come first, sorted by severity;
-rules that passed are listed under **Passed**, so you can see they were run.
-
-In addition to the tree's data the check needs to know what each group contains
-— users or devices, which platforms, disabled accounts — and whether unknown
-group ids in the assignments have been deleted. That is fetched with one
-`$batch` request per 20 groups. Only the first page (999) of members per group is
-read, so counts in large groups are floors, and the texts say "at least". If the
-input is missing, the affected rules show as unknown, never as green.
-
-Among other things this catches: user licences to iPad carts, "available" to
-device groups, device licences to student groups, more recipients than
-licences, apps and profiles to the wrong platform, users excluded from device
-assignments, install and uninstall on the same devices, empty and deleted
-groups, licences locked up with disabled accounts, duplicate Wi-Fi profiles,
-circular memberships, kiosk mode on large groups, overlapping update rings,
-platforms without a compliance policy and connections that expire within 30
-days.
-
-Every check has a fix under **How to fix it**, with links to Microsoft Learn. The
-texts are drafts built on Microsoft's documentation and are collected in
-`src/health/guidance.js` — go through them against your own procedures.
-
-The errors are also visible in **Group Tree**. Every group gets a diamond next to the
-dots:
-
-| Diamond | Means |
-| --- | --- |
-| ◆ red | error on the group |
-| ◆ yellow | warning on the group |
-| ◆ grey | something worth a look |
-| ◇ red/yellow | error or warning further down the branch |
-
-Click the group and the findings come first in the details panel, in brief.
-**Show in Health check →** takes you to the finding in the tab, where it flashes
-yellow three times. In the other direction, the group names in Health check are
-links: a click expands the tree down to the group, selects it and flashes the
-row.
-
-## On the page
-
-- **The permissions row** at the top shows what *the active tab* needs — not
-  everything the extension might ever need. In Connections it is APNS you want to
-  see, not group permissions.
-
-  | Dot | Means |
-  | --- | --- |
-  | ● green | We have a Graph token with the right permission |
-  | ● grey | No Graph permission, but the Intune backend *may* be reachable. Uncertain. |
-  | ○ yellow | Missing |
-
-  Click a button and the portal tab goes to the page that obtains that
-  permission, and the row spells out where in the portal's menu it is. The
-  blades' deep links are undocumented, so the first click may land on the home
-  page — but as soon as a token has been captured from a blade, that blade is
-  saved as the right address for that capability and that tenant. See
-  `src/background/paths.js`.
-
-  If something is missing, **Tokens seen** can be expanded in the same row, with
-  the audience and which capabilities each token covers. It is the first place to
-  look when something fails to appear — no console needed.
-
-  The colours of the markers in the tree: blue = configuration, green = app.
-  Filled = assigned on the group, hollow ring = assigned further down the branch.
-- **Where does an app go?** Type an app or configuration name in the tree's
-  search box (*Search group or app …*) — matching apps appear as chips under the
-  toolbar; click one, or press Enter when no group name matches. The dropdown
-  next to the search lists the same apps and configurations. The tree then shows
-  every group the app reaches, each row marked:
-  **Assigned · Required** (or Available, Uninstall) on the groups it is
-  assigned to, **Inherits** on the nested groups below them — Intune follows
-  nested membership, so their members get it too — and **Excluded** where an
-  exclusion stops it, including everything under an excluded group (exclusion
-  wins, as in Intune). The line above the tree counts them, and says so if the
-  app is also assigned to All users or All devices. **Clear** shows the whole
-  tree again.
-- **Messages** can be hidden with the cross once you have read them. They come
-  back if the text changes, so a new problem is not silenced by an old one that
-  was clicked away. Hidden messages stay for the browser session and can be
-  brought back with the button at the bottom of the notice block.
-- **The details panel** collapses with the chevron to the right of the group
-  name. The whole height then becomes tree. The state is kept until you change
-  it. In the panel, **Open group** switches the blade in the portal tab you are
-  already in, and folds Inu+ away so the blade is visible.
-- **Without hierarchy** at the bottom of the tree is also collapsible, and keeps
-  its state both when you select groups in it and between visits.
-- **Loading** shows each tab's shape in grey — the tree's rows, the report's
-  tiles and lists, the score's gauges — instead of an empty page, so nothing
-  jumps when the data arrives (`src/page/skeleton.js`). The shimmer is off for
-  anyone who has chosen reduced motion.
+For Chrome, use `HKLM\Software\Policies\Google\Chrome\3rdparty\extensions\<extension-id>\policy`.
 
 ## Settings
 
-Reached via the cogwheel at the top right of the page.
+Open Settings with **⚙** at the top right of the page. They open inside Inu+;
+they are also under the extension's **Options** on the extensions page.
 
-- **Name prefix** — which groups are included, e.g. `Intune - `. An empty field
-  fetches the whole tenant, which works but gets slow.
-- **Show groups without hierarchy** — groups with neither parents nor children
-  are collected in a list of their own at the bottom.
-- **Show only branches with assignments** — hides everything that has no apps or
-  configurations and has nothing beneath it that does.
-- **How Inu+ reads your tenant** — portal mode (with its consent toggle) or
-  sign-in mode (client ID, tenant, the redirect URI to register, Sign in / Sign
-  out). Fields set by policy are locked.
-- **Demo mode** — shows a made-up school instead of your tenant.
+| Setting | What it does |
+| --- | --- |
+| **Show groups whose name starts with** | Which groups are included, e.g. `Intune - `. Empty fetches the whole tenant, which works but is slower. |
+| **Show groups without hierarchy** | Lists groups with neither parents nor children at the bottom of the tree. |
+| **Show only branches with assignments** | Hides groups that have no apps or configurations, and nothing below them that does. |
+| **Tree row size** | Larger rows are easier to hit. |
+| **Shared accounts are named** · **Device limit per account** | How Shared accounts recognises shared accounts, and the limit free places are counted against. |
+| **Reports** | The source (live device list or Data warehouse), what the rows are called ("Municipality"), and municipality names by domain or device-name prefix. |
+| **How Inu+ reads your tenant** | Portal mode (with consent) or sign-in mode (client ID, tenant, Sign in / Sign out). |
+| **Demo mode** | Shows the made-up tenant instead of yours. |
 
-## Structure
+Settings that only change how things look take effect at once; settings that
+change what is fetched fetch again.
 
-```
-manifest.json
-src/
-  background/   token sources (token.js = portal, msal.js = sign-in), cache,
-                orchestration
-  graph/        Graph client, groups, assignments, learned Intune addresses
-  tree/         forest building and marker rollup (pure functions)
-  page/         UI — the page, its tabs and embed.js which talks to the portal
-  content/      portal-nav.js (the rail entry + the frame), token-scan.js (fallback
-                for token capture)
-  options/      settings
-  demo/         made-up tenant and a Graph client without a network
-  health/       the health check's rules (pure functions)
-  score/        the Score tab's audits and weighting (pure functions)
-tests/          unit tests, run in the browser or in Node
-spike/          Step 0 — standalone test of the token borrowing
-```
+## Privacy and security
 
-The tree logic deliberately lives in the page and not in the service worker: it
-is then pure functions without dependencies, and can be tested on its own.
+The full policy is in [PRIVACY.md](PRIVACY.md). In short:
 
-## Tests
-
-No dependencies and no tenant needed.
-
-Open the settings → **Run the unit tests**, or go directly to
-`chrome-extension://<extension-id>/tests/tests.html`. The same tests run in Node
-with `node tests/run.mjs`, and GitHub Actions runs them before every package
-build.
-
-`node tests/consent.mjs` and `node tests/signin.mjs` load the extension in
-Playwright's Chromium and check the consent gate and sign-in mode: that no
-header listener exists until the user consents, that sign-in mode never starts
-one, and that the page asks for the right thing in each mode. Microsoft's
-sign-in itself is covered by unit tests with a faked `chrome.identity` and
-token endpoint (`tests/msal.test.js`), not against a real tenant.
-
-The demo tests run the real fetch chain against the demo tenant. If a data
-source is added without the demo following, they fail.
-
-`node tests/e2e.mjs` is a click test in a real browser: it loads the extension
-in a headless Edge with demo mode and the health check turned on and switches
-between the tabs in every direction. Requires Microsoft Edge — Chrome no longer
-accepts `--load-extension` — and is therefore not run in GitHub Actions.
-
-The tests cover the tree building and the marker rollup, including the cases that
-are easy to get wrong: groups with several parents, circular memberships, edges
-to groups outside the selection and sorting on Swedish characters.
-
-They also cover the palette: that a dark theme counts as dark, that the turning
-point lies at mid-grey, that an incomprehensible background leaves the page in
-its initial state instead of halfway into a theme we did not understand, that a
-text colour that cannot be read against the background is discarded — that is how
-the whole page once became white on white — and that the muted text keeps
-readable contrast in both directions. There is also a test that ties `theme.js`
-to `page.css`: feed in the initial palette's own background and text and the
-formulas should give back roughly its grey scale. If someone changes one place
-and forgets the other, the page changes appearance when it moves between the
-portal and a tab of its own — and then that test fails.
-
-## Publishing
-
-`.github/workflows/release.yml` builds the store package — `manifest.json`,
-`managed_schema.json`, `src/`, `tests/` and `icons/` — on every push to `main`,
-and checks that the version in `manifest.json` matches the top entry in
-`CHANGELOG.md`.
-
-The build artifact holds those files directly, not a zip: GitHub zips every
-artifact when you download it, so the download *is* the package — unzip it and
-**Load unpacked**, or hand it to the store as it is. Only the publish job zips
-(once) for the Chrome Web Store and the GitHub release. Build zips are not
-committed; `*.zip` is in `.gitignore`.
-
-There are two release channels:
-
-| Channel | When | Where |
+| Data | Where it is kept | For how long |
 | --- | --- | --- |
-| **Release** (`Inu+ 0.24`) | Push to `main` with a new version | Chrome Web Store + GitHub release `v<version>`, marked Latest |
-| **Dev** | Every push to any other branch | A download under **Actions → Dev build** — never on the Releases page |
+| Access tokens, portal mode | Service worker memory only | Until the service worker sleeps or the browser closes; never on disk |
+| Access and refresh tokens, sign-in mode | `chrome.storage.session` (memory) | Until the browser closes or you sign out; never on disk |
+| Groups, assignments, devices and other tenant data | `chrome.storage.session` (memory) | Until the browser closes; never on disk |
+| Settings and view choices | `chrome.storage.local` (disk) | Until the extension is removed |
+| Your tenant's Intune service addresses, and which portal pages gave which permission | `chrome.storage.local` (disk) | Until the extension is removed |
 
-A new version goes out like this:
+- **What is sent:** only read requests to `graph.microsoft.com` and
+  `*.manage.microsoft.com`, and in sign-in mode the sign-in itself to
+  `login.microsoftonline.com`. No server of ours, no analytics, no third party.
+  Inu+ never writes to your tenant; the only `POST` is Graph's `$batch`, which
+  carries only reads.
+- **No extra access:** Inu+ inherits your roles in Intune and Entra. A group
+  you cannot see in the portal does not appear in Inu+ either.
+- **No code from tenant data:** the page is built with DOM calls only, never
+  `innerHTML`, so a group or app name cannot inject markup.
+- **Kept apart from the portal:** the page runs in a frame on the extension's
+  own origin. The portal's scripts cannot reach it, and the script Inu+ places in
+  the portal only adds the rail entry and the frame.
 
-1. Raise `version` in `manifest.json` and write the entry in `CHANGELOG.md`.
-2. Merge to `main`.
-
-If there is no tag `v<version>` yet, the package is uploaded to the Chrome Web
-Store and submitted for review; once that succeeds, the workflow creates the
-tag and the GitHub release with the zip file.
-
-### Dev builds
-
-`.github/workflows/dev.yml` runs the tests and packages the newest work on
-every push to a branch other than `main`. It is **not** a release: open
-**Actions → Dev build → the latest run**. The top of the run page lists every
-commit since the last real release and the top `CHANGELOG.md` entry; the
-package, `inuplus-dev`, is under **Artifacts** at the bottom — download,
-unzip, **Load unpacked**. Older dev packages are deleted, so only the newest
-is kept. The packaged manifest gets a `version_name` such as
-`0.25 dev (a1b2c3d)`, so `edge://extensions` shows which build is loaded. Dev
-builds never touch the Chrome Web Store or the Releases page.
-
-The first version is uploaded by hand in the Developer Dashboard — the API can
-only update an extension that already exists. The workflow then needs:
-
-| Name | Type | Contents |
-| --- | --- | --- |
-| `CWS_SERVICE_ACCOUNT_JSON` | secret | Key JSON for a service account with the Chrome Web Store API turned on, added under **Account** in the Developer Dashboard |
-| `CWS_PUBLISHER_ID` | variable | Publisher ID from the Developer Dashboard |
-| `CWS_EXTENSION_ID` | variable | The extension's ID |
-
-Publishing runs in the `chrome-web-store` environment. Put an approval
-requirement there if a tag alone should not be enough to send out a version.
-
-## Security
-
-### What is stored, where, and for how long
-
-| Data | Where | Lifetime |
-| --- | --- | --- |
-| Raw access tokens (portal mode) | Only in the service worker's memory | Disappear when the service worker sleeps, at the latest when the browser closes. Never reach disk. |
-| Access and refresh token (sign-in mode) | `chrome.storage.session` | Memory-based, cleared when the browser closes or on **Sign out**. Not reachable by content scripts. Never reach disk. |
-| Groups, memberships, assignments | `chrome.storage.session` | Memory-based, cleared when the browser closes. Cache TTL 15 min. Not written to disk. |
-| Settings (prefix, UI state) | `chrome.storage.local` | Stays on disk until the extension is uninstalled. |
-| The tenant's Intune backend addresses | `chrome.storage.local` | Stays on disk. Contains region host, service name, api version and, for settings catalog, a tenant GUID. |
-| Portal pages that gave us a token | `chrome.storage.local` | Stays on disk. A URL on intune.microsoft.com. |
-
-What stays on disk is therefore settings and the tenant's service addresses —
-**no tokens, no group names, no members**. `chrome.storage.local` is unencrypted
-LevelDB in the browser profile and can be read by anyone who can reach the
-profile folder. Judge the contents accordingly: it is topology, not secrets.
-
-### What is sent, and where
-
-Only read requests to `graph.microsoft.com` and `*.manage.microsoft.com`, and in
-sign-in mode the sign-in and token requests to `login.microsoftonline.com`. No
-server of its own, no telemetry, no third party.
-
-The only `POST` made is to Graph's `$batch` endpoint, and it contains only `GET`
-sub-requests — so if you look at the traffic there is a `POST`, but nothing is
-written to the tenant. Addresses that come from responses we did not write
-ourselves — `@odata.nextLink` and the fallback route's address from Graph's error
-message — are checked against that host list before they are called, since every
-request carries a bearer token. The guard is in `src/graph/client.js` and
-`src/graph/endpoints.js`.
-
-The extension never writes anything to the tenant.
-
-### Permissions the extension requests
+**Extension permissions:**
 
 | Permission | Why |
 | --- | --- |
-| `webRequest` + the hosts below | Read the `Authorization` header from the portal's own requests |
-| `https://intune.microsoft.com/*` | Two content scripts: one that places the rail entry and the frame the page lives in, one that looks for tokens in the portal's storage |
-| `https://graph.microsoft.com/*` | Fetch groups and assignments |
-| `https://*.manage.microsoft.com/*` | The fallback route for assignments |
-| `storage` | Cache and settings, and reading policy (managed storage) |
-| `identity` | Sign-in mode: `launchWebAuthFlow` opens Microsoft's sign-in and catches the redirect. Unused in portal mode. |
+| `webRequest` and the hosts below | Portal mode: read the `Authorization` header of the portal's own requests |
+| `https://intune.microsoft.com/*` | Add the rail entry and the frame; look for tokens in the portal's storage (portal mode) |
+| `https://graph.microsoft.com/*` | Read groups, assignments, devices and settings |
+| `https://*.manage.microsoft.com/*` | Intune's backend, the fallback route in portal mode, and the Data warehouse |
+| `storage` | Cache, settings, and reading policy |
+| `identity` | Sign-in mode: open Microsoft's sign-in |
 
-`web_accessible_resources` lists **a single file** — `src/page/page.html` — and
-only for `https://intune.microsoft.com/*`. That is the page the frame shows. No
-other website can therefore reach anything of the extension's content, and the
-portal cannot reach more than that address either.
-
-### What a security team will object to
-
-Better to be honest about this than to be caught out: **the extension reads
-bearer tokens that another application (the portal) obtained.** They are the
-user's own tokens and give no more access than the person already has, but it is
-undocumented behaviour and the technique itself is the one used by token-stealing
-malware. Many security teams say no on principle, and that is a reasonable
-position.
-
-If it is to be used by more than one person internally it should be raised
-beforehand, not afterwards. That is what [sign-in mode](#sign-in-mode-own-app-registration)
-is for: an app registration of your own in Entra with delegated read
-permissions, so the access is logged as a named application and the technique
-is the documented one. An admin can enforce it for everyone by policy.
-
-### What is *not* a problem
-
-- **Every installation is self-contained.** No shared storage, no server,
-  nothing one user saves can be reached by another.
-- **No privilege escalation.** The extension inherits your RBAC in Intune and
-  Entra. If you do not see a group in the portal, it does not show in the tree
-  either.
-- **No code injection from tenant data.** The page builds everything with DOM
-  calls; `innerHTML` and the like are not used anywhere, so a group name cannot
-  carry markup. That also applies to the entry in the portal's rail.
-- **The portal and the page are kept apart.** The page lives in a frame on the
-  extension's own origin, so the portal's scripts cannot reach its DOM and it
-  cannot reach the portal's. The two messages that cross the boundary — *close*
-  and *you are visible again* — carry no data, and both sides check the sender's
-  origin.
-- **The content script in the portal reads nothing from the portal.** It places a
-  link and a frame, measures where the rail and the top bar end, and that is all.
-  Token capture is a separate script of its own.
-- **Read-only.** No `POST`, `PATCH` or `DELETE` against the tenant.
+**What a security team will ask about.** In portal mode the extension reads
+bearer tokens that another application — the portal — obtained. They are your
+own tokens and give no more access than you already have, but it is
+undocumented behaviour, and the technique is the same one token-stealing
+malware uses. Many security teams say no to that on principle, which is
+reasonable. If Inu+ is to be used by more than one person, raise it beforehand,
+and consider [sign-in mode](#sign-in-mode): a named app registration with
+read-only permissions, using the documented sign-in flow, which an admin can
+enforce for everyone by policy.
 
 ## Known limitations
 
-- **Sign-in mode has no Intune backend fallback.** An app registration cannot get
-  the portal's Intune backend token, so everything goes through Graph. With the
-  DeviceManagement permissions granted that covers the same data; without them,
-  assignments stay grey.
-- **Sign-in mode has not yet been tried against a live tenant from this repo's
-  tests.** The protocol is unit-tested with a faked token endpoint. The token
-  request relies on Entra's CORS support for single-page-app redirect URIs,
-  which is why the redirect URI must be registered as *Single-page application*
-  and not *Mobile and desktop*.
+- **Portal mode depends on the portal.** Token borrowing, the Intune backend
+  fallback and the rail entry all rely on undocumented portal behaviour. If the
+  rail entry disappears, the toolbar icon and **⧉** still open the page.
+- **Groups outside the name prefix** are not in the tree, not even as parents, so
+  a narrow prefix can cut branches.
+- **Assignments to All users or All devices** reach everyone, so they get no
+  marker in the tree; a message on the page counts them instead.
+- **The tree draws at most 3,000 rows** at a time. Search or filter to narrow
+  down.
+- **Health check counts are minimums** for groups with more than 999 members.
+- **The installed-app filter** depends on Intune's app inventory: on iOS/iPadOS
+  it covers company-owned devices; personal devices report only managed apps.
+- **Sign-in mode cannot use the Intune backend**, so everything goes through
+  Graph; parts whose permissions were not granted stay grey.
 
-- **Assignments in practice go via the Intune backend**, not via Graph, because
-  the portal's Graph token lacks the DeviceManagement permissions. That is
-  undocumented and may stop working. The page's bottom row shows how many sources
-  went that way. If Microsoft changes the api version the extension relearns it
-  by itself, but if they change the response format it does not.
-- **The entry in the left rail depends on the portal's own markup.** It is
-  inserted after `a.fxs-sidebar-home` and inherits its classes. If Microsoft
-  renames them the entry is missing — but the page can still be reached with the
-  extension's toolbar icon and with **⧉** in a tab of its own. The frame's edges
-  are measured against `.fxs-sidebar` and the portal's top bar; if they are not
-  found the page is placed from the window's top-left corner.
-- **Settings catalog** is fetched from `/beta` and the DCV2 service respectively.
-  If that fails only that data source degrades, and the page says so.
-- **Assignments to "all users"/"all devices"** give no marker, since they hit
-  everything. They are reported as a notice instead.
-- **Groups outside the name prefix** are not in the tree, not even as parents. A
-  prefix that is too narrow can therefore cut branches.
-- The tree draws at most 3000 rows at a time. Search to narrow down.
-- Group-in-group membership is a DAG, not a tree: a group with several parents is
-  drawn in several places and marked with `↗`.
+## Development
+
+How the code is organised, how the page lives inside the portal, how tokens and
+caching work: see **[docs/architecture.md](docs/architecture.md)**.
+
+### Tests
+
+No dependencies and no tenant needed.
+
+```sh
+node tests/run.mjs        # the unit tests, in Node
+```
+
+The same tests run in the browser from Settings → **Run the unit tests**. They
+cover the tree building and marker rollup (several parents, circular
+memberships, Swedish sorting), app reach, the Health check rules, Score, the
+Reports counting and Excel export, the theme palette, sign-in mode against a
+faked token endpoint, and the whole fetch chain against the demo tenant.
+
+Browser scripts that load the extension in a real browser:
+
+| Script | Checks |
+| --- | --- |
+| `node tests/e2e.mjs` | switching between all tabs, Reports, and the links between Health check and the tree (demo mode) |
+| `node tests/consent.mjs` | nothing opens on install, and no token is read before consent |
+| `node tests/signin.mjs` | sign-in mode never reads the portal, and Settings opens inside the page |
+
+`consent.mjs` and `signin.mjs` need `playwright-core`. `e2e.mjs` uses Microsoft
+Edge by default; point `EDGE=` at another Chromium-based browser that accepts
+`--load-extension`.
+
+### Releases
+
+The version follows `0.1`, `0.2`, `0.3` …, one step per delivered batch of work,
+and becomes `1.0` when Inu+ can be used daily without reservations. The version
+in `manifest.json` must match the top entry in [CHANGELOG.md](CHANGELOG.md); the
+build checks it.
+
+| Channel | When | Where |
+| --- | --- | --- |
+| **Release** | A push to `main` with a new version | Chrome Web Store, and a GitHub release `v<version>` with the zip |
+| **Dev build** | Every push to any other branch | A download under Actions — never on the Releases page |
+
+**To release:** raise `version` in `manifest.json`, add the entry to
+`CHANGELOG.md`, and merge to `main`. `.github/workflows/release.yml` runs the
+tests, builds the package, uploads it to the Chrome Web Store and submits it for
+review, then tags the commit and creates the GitHub release.
+
+The store upload needs these under **Settings → Secrets and variables →
+Actions**, and runs in the `chrome-web-store` environment (add a required
+approval there if you want one):
+
+| Name | Type | Contents |
+| --- | --- | --- |
+| `CWS_SERVICE_ACCOUNT_JSON` | secret | Key JSON for a service account with the Chrome Web Store API, added under **Account** in the Developer Dashboard |
+| `CWS_PUBLISHER_ID` | variable | Publisher ID from the Developer Dashboard |
+| `CWS_EXTENSION_ID` | variable | The extension's ID |
+
+The first version has to be uploaded by hand in the Developer Dashboard; the API
+can only update an existing item. `STORE_LISTING.md` has the store texts.
+
+#### Dev builds
+
+Every push to a branch other than `main` runs `.github/workflows/dev.yml`: the
+tests, then a package. Open **Actions → Dev build → the latest run**. The top of
+the page lists every change since the last release; the package,
+**inuplus-dev**, is under **Artifacts** — download, unzip, **Load unpacked**.
+Only the newest dev package is kept. Its version shows as, for example,
+`0.25 dev (a1b2c3d)` on the extensions page, so you can tell which build is
+loaded.
