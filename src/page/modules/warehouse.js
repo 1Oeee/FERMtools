@@ -39,6 +39,7 @@ import {
   INTENTS,
   NOT_ASSIGNED
 } from "../../graph/warehouse.js";
+import { loadFresh, updatingText, updateFailedText } from "../swr.js";
 
 const VIEW_KEY = "warehouseView";
 /** Rader per sida i enhetslistan. "all" = alla på en sida. */
@@ -737,16 +738,23 @@ async function loadCatalogue(menu = null) {
   if (ui.catalogue || ui.catalogueError === "loading") return;
   ui.catalogueError = "loading";
   if (menu) fillAppMenu(menu);
-  const response = await ctx.send({ type: "detected-apps" });
-  ctx.setStatus(null);
-  if (response?.ok) {
-    ui.catalogue = response.data.apps;
-    ui.catalogueError = null;
-  } else {
-    ui.catalogueError = response?.error ?? "The service worker did not respond.";
-  }
-  const current = host.querySelector('.wh-pill-menu[data-key="apps"] .wh-menu');
-  if (current) fillAppMenu(current);
+  const scope = appScope;
+  // Den sparade inventeringen visas direkt; en nyare byter ut den i menyn.
+  await loadFresh(ctx.send, { type: "detected-apps" }, (response, { revalidated }) => {
+    if (scope !== appScope) return false;
+    // Framstegsraden ("apps 3000") ska inte bli stående — om inte enheterna
+    // just nu säger att de uppdateras.
+    if (!updating) ctx.setStatus(null);
+    if (response?.ok) {
+      ui.catalogue = response.data.apps;
+      ui.catalogueError = null;
+    } else if (!revalidated) {
+      ui.catalogueError = response?.error ?? "The service worker did not respond.";
+    }
+    const current = host.querySelector('.wh-pill-menu[data-key="apps"] .wh-menu');
+    // Står man och skriver i menyns sökruta ska den inte ritas om under fingrarna.
+    if (current && !(revalidated && current.contains(document.activeElement))) fillAppMenu(current);
+  });
 }
 
 /** Menyns innehåll: sökruta och de apper som matchar, flest enheter först. */
@@ -1066,30 +1074,53 @@ function draw() {
   }
 }
 
+/** Löpnummer: bara den senaste hämtningens svar ritas. */
+let loadSeq = 0;
+/** Enheterna hämtas om ovanpå det sparade — statusraden tillhör den hämtningen. */
+let updating = false;
+
 async function load({ force = false } = {}) {
-  state.loading = true;
+  const seq = ++loadSeq;
   state.error = null;
+  // Finns det redan enheter att visa står de kvar medan de nya hämtas.
+  state.loading = !state.data;
   draw();
 
-  const response = await ctx.send({ type: "warehouse", force });
+  const apply = (response, { revalidated, previous }) => {
+    if (seq !== loadSeq) return false;
+    state.loading = false;
+    updating = false;
+    // Framstegsraden ("Reports: reading devices (3000) …") ska inte bli stående.
+    ctx.setStatus(null);
+    if (response?.ok) {
+      state.data = response.data;
+      state.errorCode = null;
+      scopeApps(response.data);
+    } else if (revalidated) {
+      // Omhämtningen misslyckades: det sparade står kvar, med besked om det.
+      ctx.setStatus(updateFailedText(previous, response?.error));
+    } else {
+      state.error = response?.error ?? "The service worker did not respond.";
+      state.errorCode = response?.code ?? null;
+    }
+    draw();
+    if (response?.ok) {
+      // Valda appar från en annan tenant ska räknas om mot den här.
+      if (state.apps && !ui.appDevices && !ui.appLoading) loadAppDevices();
+      loadCatalogue().catch(() => {});
+    }
+  };
 
-  state.loading = false;
-  // Framstegsraden ("Reports: reading devices (3000) …") ska inte bli stående.
-  ctx.setStatus(null);
-  if (!response?.ok) {
-    state.error = response?.error ?? "The service worker did not respond.";
-    state.errorCode = response?.code ?? null;
-  } else {
-    state.data = response.data;
-    state.errorCode = null;
-    scopeApps(response.data);
+  if (force) {
+    apply(await ctx.send({ type: "warehouse", force: true }), { revalidated: Boolean(state.data), previous: state.data });
+    return;
   }
-  draw();
-  if (response?.ok) {
-    // Valda appar från en annan tenant ska räknas om mot den här.
-    if (state.apps && !ui.appDevices && !ui.appLoading) loadAppDevices();
-    loadCatalogue().catch(() => {});
-  }
+  await loadFresh(ctx.send, { type: "warehouse" }, apply, {
+    onUpdating: (previous) => {
+      updating = true;
+      ctx.setStatus(updatingText(previous));
+    }
+  });
 }
 
 export const warehouseModule = {

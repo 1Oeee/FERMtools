@@ -10,6 +10,7 @@ import { connectionButton, openInNewTab } from "../portal.js";
 import { headerRow, sortRows } from "../sort.js";
 import { matchesPlatform, platformLabel } from "../../common/platforms.js";
 import { PROGRAMS, describeStatus, guidanceFor, hasGuidance } from "../../graph/token-status.js";
+import { loadFresh, updatingText, updateFailedText } from "../swr.js";
 
 const GROUPS = [
   { kind: "vpp", label: "VPP" },
@@ -338,21 +339,35 @@ function draw() {
   body.scrollTop = scrolled;
 }
 
+/** Löpnummer: bara den senaste hämtningens svar ritas. */
+let loadSeq = 0;
+
 async function load({ force = false } = {}) {
-  state.loading = true;
+  const seq = ++loadSeq;
   state.error = null;
+  // Finns det redan något att visa står det kvar medan det nya hämtas.
+  state.loading = !state.data;
   draw();
 
-  const response = await ctx.send({ type: "connections", force });
+  const apply = (response, { revalidated, previous }) => {
+    if (seq !== loadSeq) return false;
+    state.loading = false;
+    if (response?.ok) {
+      state.data = response.data;
+      ctx.setStatus(null);
+    } else if (revalidated) {
+      // Omhämtningen misslyckades: det sparade står kvar, med besked om det.
+      ctx.setStatus(updateFailedText(previous, response?.error));
+    } else {
+      state.error = response?.error ?? "The service worker did not respond.";
+    }
+    draw();
+  };
 
-  state.loading = false;
-  if (!response?.ok) {
-    state.error = response?.error ?? "The service worker did not respond.";
-  } else {
-    state.data = response.data;
-  }
-
-  draw();
+  if (force) return apply(await ctx.send({ type: "connections", force: true }), { revalidated: Boolean(state.data), previous: state.data });
+  await loadFresh(ctx.send, { type: "connections" }, apply, {
+    onUpdating: (previous) => ctx.setStatus(updatingText(previous))
+  });
 }
 
 export const connectionsModule = {

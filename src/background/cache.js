@@ -4,12 +4,16 @@
 
 const TTL_MS = 15 * 60 * 1000;
 
-export async function readCache(key) {
+/**
+ * `stale` lämnar ut posten hur gammal den än är: sidan visar den direkt och
+ * hämtar om ovanpå (stale-while-revalidate). Utan den gäller kvarten.
+ */
+export async function readCache(key, { stale = false } = {}) {
   try {
     const stored = await chrome.storage.session.get(key);
     const entry = stored?.[key];
     if (!entry) return null;
-    if (Date.now() - entry.savedAt > TTL_MS) return null;
+    if (!stale && Date.now() - entry.savedAt > TTL_MS) return null;
     return entry;
   } catch {
     return null;

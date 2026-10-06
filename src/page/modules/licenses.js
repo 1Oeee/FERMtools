@@ -11,6 +11,7 @@ import { headerRow, sortRows } from "../sort.js";
 import { vppLicences, licenceTotals, licencesForToken, withTokens } from "../../graph/connections.js";
 import { itemLinkButton, groupPortalButton, connectionButton } from "../portal.js";
 import { matchesPlatform, platformLabel } from "../../common/platforms.js";
+import { loadFresh } from "../swr.js";
 
 const INTENT = {
   required: "Required",
@@ -323,12 +324,14 @@ function draw() {
 }
 
 async function loadTokens() {
-  const response = await ctx.send({ type: "connections" });
-  if (response?.ok) {
-    state.tokens = (response.data?.items ?? []).filter((item) => item.kind === "vpp");
-  }
-  state.tokensLoaded = Boolean(response?.ok);
-  draw();
+  // Det sparade visas direkt; ett nyare svar byter ut det, ett misslyckat gör det inte.
+  await loadFresh(ctx.send, { type: "connections" }, (response) => {
+    if (response?.ok) {
+      state.tokens = (response.data?.items ?? []).filter((item) => item.kind === "vpp");
+      state.tokensLoaded = true;
+    }
+    draw();
+  });
 }
 
 export const licensesModule = {

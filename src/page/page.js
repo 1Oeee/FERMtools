@@ -15,6 +15,7 @@ import { warehouseModule } from "./modules/warehouse.js";
 import { analyse, findingsByGroup, forPlatform } from "../health/checks.js";
 import { PLATFORMS } from "../common/platforms.js";
 import { buildForest } from "../tree/build.js";
+import { loadFresh, isStale, updatingText, updateFailedText } from "./swr.js";
 
 // reportsModule is not listed until the Excel export is built.
 const MODULES = [treeModule, scoreModule, connectionsModule, licensesModule, accountsModule, warehouseModule, healthModule];
@@ -39,6 +40,8 @@ const state = {
   settings: null,
   data: null,
   loading: false,
+  /** Det sparade trädet visas och ett nytt hämtas ovanpå. */
+  revalidating: false,
   error: null,
   needsPortal: false,
   tokenStatus: null,
@@ -324,10 +327,15 @@ async function prefetchModules() {
   }
 }
 
-/** Rita om fliken som är framme, om den redan är uppsatt. */
-function refreshActive() {
+/**
+ * Rita om fliken som är framme, om den redan är uppsatt. `orMounting` ritar
+ * också om den fliken medan den sätts upp — dess mount väntar på hämtningen,
+ * och det sparade svaret ska synas utan att vänta på det nya.
+ */
+function refreshActive({ orMounting = null } = {}) {
   const module = activeModule();
-  if (state.mounted.has(module.id)) module.update?.(moduleContext(module));
+  const ready = state.mounted.has(module.id) || (module.id === orMounting && mounting.has(module.id));
+  if (ready) module.update?.(moduleContext(module));
 }
 
 /** Från ett fynd i trädet till samma fynd i Hälsokontroll-fliken. */
@@ -373,48 +381,82 @@ function computeHealth() {
   state.health.index = findingsByGroup(state.health.analysis, parentsOf);
 }
 
+/** Löpnummer per hämtning: bara den senaste får skriva sitt svar. */
+let healthSeq = 0;
+let scoreSeq = 0;
+
+/** Statusraden för en flik som hämtar om ovanpå det sparade — bara när den är framme. */
+function statusFor(moduleId, text) {
+  if (!state.loading && !state.revalidating && activeModule().id === moduleId) renderStatus(text);
+}
+
 /**
  * Underlaget för hälsokontrollen hämtas efter trädet och blockerar det inte —
  * trädet syns direkt, markeringarna fylls i när de är klara.
+ *
+ * Det sparade visas först och hämtas om ovanpå (se swr.js). `savedOnly` tar
+ * bara det sparade: omhämtningen görs då efter trädets, som den bygger på.
  */
-async function loadHealth({ force = false } = {}) {
+async function loadHealth({ force = false, savedOnly = false } = {}) {
   if (!state.data) return;
+  const seq = ++healthSeq;
+  const health = state.health;
 
-  state.health.loading = true;
-  state.health.error = null;
+  health.error = null;
+  // Finns ett underlag står det kvar — och markeringarna med det — tills det nya kommit.
+  health.loading = !health.payload;
   refreshActive();
 
-  const response = await send({ type: "health", force });
-  // Trädet byttes ut medan vi väntade — svaret hör till det förra.
-  if (response?.ok && response.data?.tenant !== state.data?.tenant) return;
+  const apply = (response, { revalidated, previous }) => {
+    // En nyare hämtning, eller ett träd från en annan tenant — svaret hör till det förra.
+    if (seq !== healthSeq || health !== state.health) return false;
+    if (response?.ok && response.data?.tenant !== state.data?.tenant) return false;
+    health.loading = false;
+    if (response?.ok) health.payload = response.data;
+    else if (!revalidated) health.error = response?.error ?? "The service worker did not respond.";
+    computeHealth();
+    // Framstegsraden ("analyzing …") ska inte bli stående när underlaget är klart.
+    statusFor("health", response?.ok || !revalidated ? null : updateFailedText(previous, response?.error));
+    refreshActive({ orMounting: "health" });
+  };
 
-  state.health.loading = false;
-  if (!response?.ok) state.health.error = response?.error ?? "The service worker did not respond.";
-  else state.health.payload = response.data;
-
-  computeHealth();
-  // Framstegsraden ("analyzing …") ska inte bli stående när underlaget är klart.
-  if (!state.loading && activeModule().id === "health") renderStatus(null);
-  refreshActive();
+  if (force || savedOnly) {
+    const response = await send({ type: "health", force, stale: savedOnly });
+    apply(response, { revalidated: force && Boolean(health.payload), previous: health.payload });
+    return;
+  }
+  await loadFresh(send, { type: "health" }, apply, {
+    onUpdating: (previous) => statusFor("health", updatingText(previous))
+  });
 }
 
-/** Hämtas först när Poäng-fliken visas — ingen annan flik behöver det. */
+/** Hämtas först när Poäng-fliken visas (eller förladdas) — ingen annan flik behöver det. */
 async function loadScore({ force = false } = {}) {
-  if (!state.data || state.score.loading) return;
+  if (!state.data) return;
+  const seq = ++scoreSeq;
+  const score = state.score;
 
-  state.score.loading = true;
-  state.score.error = null;
+  score.error = null;
+  score.loading = !score.payload;
   refreshActive();
 
-  const response = await send({ type: "score", force });
-  if (response?.ok && response.data?.tenant !== state.data?.tenant) return;
+  const apply = (response, { revalidated, previous }) => {
+    if (seq !== scoreSeq || score !== state.score) return false;
+    if (response?.ok && response.data?.tenant !== state.data?.tenant) return false;
+    score.loading = false;
+    if (response?.ok) score.payload = response.data;
+    else if (!revalidated) score.error = response?.error ?? "The service worker did not respond.";
+    statusFor("score", response?.ok || !revalidated ? null : updateFailedText(previous, response?.error));
+    refreshActive({ orMounting: "score" });
+  };
 
-  state.score.loading = false;
-  if (!response?.ok) state.score.error = response?.error ?? "The service worker did not respond.";
-  else state.score.payload = response.data;
-
-  if (!state.loading && activeModule().id === "score") renderStatus(null);
-  refreshActive();
+  if (force) {
+    apply(await send({ type: "score", force: true }), { revalidated: Boolean(score.payload), previous: score.payload });
+    return;
+  }
+  await loadFresh(send, { type: "score" }, apply, {
+    onUpdating: (previous) => statusFor("score", updatingText(previous))
+  });
 }
 
 /** En modul som inte är framme ska ritas om nästa gång den visas. */
@@ -765,6 +807,8 @@ async function load({ force = false } = {}) {
   if (needsConsent()) return;
   const seq = ++loadSeq;
   state.loading = true;
+  // En pågående omhämtning av trädet gäller inte längre.
+  state.revalidating = false;
   state.error = null;
   renderStatus("Fetching groups …");
   ui.refresh.disabled = true;
@@ -775,7 +819,9 @@ async function load({ force = false } = {}) {
     await showModule(state.activeId);
   }
 
-  const response = await send({ type: "tree", force });
+  // Utan ⟳ räcker det sparade trädet, hur gammalt det än är: det visas direkt
+  // och ett nytt hämtas ovanpå (revalidateTree).
+  const response = await send({ type: "tree", force, stale: !force });
 
   // En nyare hämtning startade medan den här pågick — efter ett byte av
   // tenant, demoläge eller prefix. Dess svar gäller, inte det här.
@@ -808,8 +854,57 @@ async function load({ force = false } = {}) {
   await loadDemoMistakes();
   renderNotices();
   await showModule(state.activeId);
+
+  if (!force && isStale(response.data)) {
+    // Det sparade trädet visas; hälsokontrollens sparade underlag likaså.
+    // Båda hämtas om — trädet först, eftersom underlaget bygger på det.
+    loadHealth({ savedOnly: true });
+    prefetchModules();
+    revalidateTree(seq, response.data);
+    return;
+  }
   loadHealth({ force });
   prefetchModules();
+}
+
+/**
+ * Hämta trädet på nytt ovanpå det sparade som redan visas. Flikarna sätts
+ * inte upp från början — de ritas om med det nya trädet, och behåller det
+ * som är utfällt, valt och sökt. Misslyckas hämtningen står det sparade kvar.
+ */
+async function revalidateTree(seq, previous) {
+  state.revalidating = true;
+  renderStatus(updatingText(previous));
+
+  const response = await send({ type: "tree", force: true });
+  if (seq !== loadSeq) return;
+  state.revalidating = false;
+
+  if (!response?.ok || response.data?.tenant !== state.data?.tenant) {
+    renderStatus(response?.ok ? null : updateFailedText(previous, response?.error));
+    // Underlaget kan ändå hämtas om mot det sparade trädet.
+    revalidateHealth();
+    return;
+  }
+
+  state.data = response.data;
+  computeHealth();
+  renderNotices();
+  renderStatus(null);
+  // Den som är framme ritas om nu, övriga när de visas (showModule → update).
+  refreshActive();
+  revalidateHealth();
+}
+
+/**
+ * Hälsokontrollens underlag efter trädets omhämtning — om det som visas är
+ * sparat. Fanns inget sparat hämtades det nyss i sin helhet; en hämtning som
+ * fortfarande pågår delas i servicearbetaren i stället för att göras om.
+ */
+function revalidateHealth() {
+  const payload = state.health.payload;
+  if (payload && !isStale(payload)) return;
+  loadHealth({ force: true });
 }
 
 // --- Meddelanden från servicearbetaren -----------------------------------
@@ -892,7 +987,7 @@ chrome.runtime.onMessage.addListener((message) => {
   const ownStage = { connections: ["connections"], health: ["health"], score: ["score"], devices: ["accounts"], warehouse: ["warehouse"] }[message?.stage];
   if (
     message?.type === "progress" &&
-    (state.loading || (ownStage && ownStage.includes(activeModule().id)))
+    (state.loading || (state.revalidating && !ownStage) || (ownStage && ownStage.includes(activeModule().id)))
   ) {
     const labels = {
       groups: "Fetching groups",
@@ -906,7 +1001,9 @@ chrome.runtime.onMessage.addListener((message) => {
     };
     const detail = message.detail;
     const n = typeof detail === "number" || typeof detail === "string" ? ` (${detail})` : "";
-    renderStatus(`${labels[message.stage] ?? "Fetching"}${n} …`);
+    // Under en omhämtning står det sparade kvar — säg att det här sker i bakgrunden.
+    const prefix = state.revalidating && !state.loading && !ownStage ? "Updating · " : "";
+    renderStatus(`${prefix}${labels[message.stage] ?? "Fetching"}${n} …`);
   }
 });
 

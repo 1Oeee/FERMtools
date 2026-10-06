@@ -6,10 +6,18 @@ The version lives in `manifest.json` and must always match the top entry here.
 
 ## 0.25 — 2026-10-06
 
-Snappier: tabs are ready before you click them, and answers already fetched
-are reused instead of asked for again.
+Snappier: tabs are ready before you click them, saved data shows at once
+while fresh data loads on top, and answers already fetched are reused
+instead of asked for again.
 
 ### All tabs
+
+- **Saved data first, fresh data on top.** Every tab shows the last data it
+  fetched straight away — however old — and fetches again in the background.
+  The status row says "Showing data from 12 min ago — updating …", and the
+  new data replaces the old when it arrives. The tree keeps what is expanded,
+  selected and searched. If the update fails, the saved data stays with a note
+  saying so. Data fetched within the last minute is not fetched again.
 
 - **Every tab loads in the background.** Once the tab you opened is ready, the
   others are set up one at a time while the browser is idle — Connections,

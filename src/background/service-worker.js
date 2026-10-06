@@ -251,8 +251,8 @@ async function tenantFor(settings) {
  * nyckeln visades den förra tenantens träd i upp till en kvart efter ett
  * katalogbyte i portalen.
  */
-async function cachedFor(key, settings, tenant, sameSettings = () => true) {
-  const cached = await readCache(key);
+async function cachedFor(key, settings, tenant, sameSettings = () => true, stale = false) {
+  const cached = await readCache(key, { stale });
   if (!cached || cached.demo !== settings.demo || !sameSettings(cached)) return null;
   return tenant && cached.tenant === tenant ? cached : null;
 }
@@ -361,12 +361,12 @@ async function ensureTokens() {
   ]);
 }
 
-async function loadTree({ force = false } = {}) {
+async function loadTree({ force = false, stale = false } = {}) {
   const settings = await readSettings();
   const tenant = await tenantFor(settings);
 
   if (!force) {
-    const cached = await cachedFor(CACHE_KEY, settings, tenant, (c) => c.prefix === settings.prefix);
+    const cached = await cachedFor(CACHE_KEY, settings, tenant, (c) => c.prefix === settings.prefix, stale);
     if (cached) return cached;
   }
 
@@ -427,12 +427,12 @@ async function loadTree({ force = false } = {}) {
   });
 }
 
-async function loadConnections({ force = false } = {}) {
+async function loadConnections({ force = false, stale = false } = {}) {
   const settings = await readSettings();
   const tenant = await tenantFor(settings);
 
   if (!force) {
-    const cached = await cachedFor(CONNECTIONS_KEY, settings, tenant);
+    const cached = await cachedFor(CONNECTIONS_KEY, settings, tenant, undefined, stale);
     if (cached) return cached;
   }
 
@@ -468,12 +468,12 @@ const HEALTH_KEY = "health-data";
  * vilka okända grupp-id som är borttagna, och anslutningarna. Själva reglerna
  * körs i sidan — här hämtas bara underlaget.
  */
-async function loadHealth({ force = false } = {}) {
+async function loadHealth({ force = false, stale = false } = {}) {
   const settings = await readSettings();
   const tenant = await tenantFor(settings);
 
   if (!force) {
-    const cached = await cachedFor(HEALTH_KEY, settings, tenant, (c) => c.prefix === settings.prefix);
+    const cached = await cachedFor(HEALTH_KEY, settings, tenant, (c) => c.prefix === settings.prefix, stale);
     if (cached) return cached;
   }
 
@@ -534,12 +534,12 @@ const DEVICES_KEY = "devices-data";
  * Alla hanterade enheter, för Shared accounts. Hämtas först när fliken
  * öppnas — i en skolkommun är det tusentals enheter, och trädet behöver dem inte.
  */
-async function loadDevices({ force = false } = {}) {
+async function loadDevices({ force = false, stale = false } = {}) {
   const settings = await readSettings();
   const tenant = await tenantFor(settings);
 
   if (!force) {
-    const cached = await cachedFor(DEVICES_KEY, settings, tenant);
+    const cached = await cachedFor(DEVICES_KEY, settings, tenant, undefined, stale);
     if (cached) return cached;
   }
 
@@ -563,11 +563,11 @@ const APPS_KEY = "detected-apps";
 const appsFlight = singleFlight();
 
 /** Appinventeringen, en gång per kvart och tenant — den är stor och ändras sällan. */
-async function loadDetectedApps({ force = false } = {}) {
+async function loadDetectedApps({ force = false, stale = false } = {}) {
   const settings = await readSettings();
   const tenant = await tenantFor(settings);
   if (!force) {
-    const cached = await cachedFor(APPS_KEY, settings, tenant);
+    const cached = await cachedFor(APPS_KEY, settings, tenant, undefined, stale);
     if (cached) return cached;
   }
   return appsFlight(modeKey(settings, tenant), async () => {
@@ -618,13 +618,13 @@ const DEMO_FEED = { root: "https://fef.demo.manage.microsoft.com/ReportingServic
  * get_data_warehouse, som portalen aldrig hämtar — i praktiken inloggningsläget
  * med en egen app-registrering.
  */
-async function loadWarehouse({ force = false } = {}) {
+async function loadWarehouse({ force = false, stale = false } = {}) {
   const settings = await readSettings();
   const tenant = await tenantFor(settings);
   const source = settings.summarySource === "warehouse" ? "warehouse" : "graph";
 
   if (!force) {
-    const cached = await cachedFor(WAREHOUSE_KEY, settings, tenant, (c) => c.source === source);
+    const cached = await cachedFor(WAREHOUSE_KEY, settings, tenant, (c) => c.source === source, stale);
     if (cached) return cached;
   }
 
@@ -770,12 +770,12 @@ const SCORE_KEY = "score-data";
  * Poängens underlag: tenantens inställningar och enhetsinventariet, plus
  * policyerna som trädet redan hämtat. Själva granskningarna körs i sidan.
  */
-async function loadScore({ force = false } = {}) {
+async function loadScore({ force = false, stale = false } = {}) {
   const settings = await readSettings();
   const tenant = await tenantFor(settings);
 
   if (!force) {
-    const cached = await cachedFor(SCORE_KEY, settings, tenant);
+    const cached = await cachedFor(SCORE_KEY, settings, tenant, undefined, stale);
     if (cached) return cached;
   }
 
@@ -844,7 +844,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     tree: async () => {
       try {
-        return { ok: true, data: await loadTree({ force: Boolean(message.force) }) };
+        return { ok: true, data: await loadTree({ force: Boolean(message.force), stale: Boolean(message.stale) }) };
       } catch (e) {
         return { ok: false, error: e.message ?? String(e), status: e.status ?? 0 };
       }
@@ -852,7 +852,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     connections: async () => {
       try {
-        return { ok: true, data: await loadConnections({ force: Boolean(message.force) }) };
+        return { ok: true, data: await loadConnections({ force: Boolean(message.force), stale: Boolean(message.stale) }) };
       } catch (e) {
         return { ok: false, error: e.message ?? String(e) };
       }
@@ -860,7 +860,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     devices: async () => {
       try {
-        return { ok: true, data: await loadDevices({ force: Boolean(message.force) }) };
+        return { ok: true, data: await loadDevices({ force: Boolean(message.force), stale: Boolean(message.stale) }) };
       } catch (e) {
         return { ok: false, error: e.message ?? String(e) };
       }
@@ -869,7 +869,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // Reports: appinventeringen (Discovered apps), och enheterna som har vissa appar.
     "detected-apps": async () => {
       try {
-        return { ok: true, data: await loadDetectedApps({ force: Boolean(message.force) }) };
+        return { ok: true, data: await loadDetectedApps({ force: Boolean(message.force), stale: Boolean(message.stale) }) };
       } catch (e) {
         return { ok: false, error: readable(e) };
       }
@@ -898,7 +898,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     warehouse: async () => {
       try {
-        return { ok: true, data: await loadWarehouse({ force: Boolean(message.force) }) };
+        return { ok: true, data: await loadWarehouse({ force: Boolean(message.force), stale: Boolean(message.stale) }) };
       } catch (e) {
         return { ok: false, error: e.message ?? String(e), code: e.code ?? null, portalPage: PORTAL_PAGE };
       }
@@ -906,7 +906,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     health: async () => {
       try {
-        return { ok: true, data: await loadHealth({ force: Boolean(message.force) }) };
+        return { ok: true, data: await loadHealth({ force: Boolean(message.force), stale: Boolean(message.stale) }) };
       } catch (e) {
         return { ok: false, error: e.message ?? String(e) };
       }
@@ -914,7 +914,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     score: async () => {
       try {
-        return { ok: true, data: await loadScore({ force: Boolean(message.force) }) };
+        return { ok: true, data: await loadScore({ force: Boolean(message.force), stale: Boolean(message.stale) }) };
       } catch (e) {
         return { ok: false, error: e.message ?? String(e) };
       }
