@@ -4,6 +4,30 @@ Version scheme: `0.1`, `0.2`, `0.3` … One step per delivered batch of work.
 The version lives in `manifest.json` and must always match the top entry here.
 `1.0` when the extension is stable enough to use daily without reservations.
 
+## 0.25 — 2026-10-06
+
+Snappier: tabs are ready before you click them, and answers already fetched
+are reused instead of asked for again.
+
+### All tabs
+
+- **Every tab loads in the background.** Once the tab you opened is ready, the
+  others are set up one at a time while the browser is idle — Connections,
+  Score, Licenses, Shared accounts, Reports, Health check — so switching tabs
+  shows the finished view instead of starting a fetch. A tab is only preloaded
+  when its permissions are already there; one that failed in the background
+  tries again when you open it.
+
+### Reports
+
+- **The installed-app filter remembers what it fetched.** Each app's devices
+  are kept per app, so unticking and ticking Spotify again, or adding a second
+  app, is instant and only asks for what is new. ⟳ fetches them fresh.
+- **App versions are queried in parallel** (four at a time) instead of one
+  after another, so an app with many versions comes back much faster.
+- **The app inventory is read in the background** as soon as the devices are
+  in, so the Installed app menu opens already filled in.
+
 ## 0.24 — 2026-10-06
 
 Reports can be narrowed by OS version.

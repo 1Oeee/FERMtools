@@ -631,6 +631,10 @@ export const healthModule = {
     draw();
   },
 
+  failed() {
+    return Boolean(ctx?.health?.error);
+  },
+
   refresh(context) {
     ctx = context;
     state.audit.clear();

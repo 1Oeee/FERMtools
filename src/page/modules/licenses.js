@@ -348,6 +348,11 @@ export const licensesModule = {
     draw();
   },
 
+  /** Fliken laddades i bakgrunden men fick fel — hämta på nytt när den visas. */
+  failed() {
+    return !state.tokensLoaded;
+  },
+
   /** Från en VPP-token i Connections: visa bara den tokens appar. */
   focus(tokenId) {
     state.vppToken = tokenId ?? "";

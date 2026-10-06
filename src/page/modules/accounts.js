@@ -423,6 +423,11 @@ export const accountsModule = {
     draw();
   },
 
+  /** Fliken laddades i bakgrunden men fick fel — hämta på nytt när den visas. */
+  failed() {
+    return Boolean(state.error);
+  },
+
   refresh(context) {
     ctx = context;
     return load({ force: true });

@@ -426,18 +426,29 @@ export async function fetchDetectedApps(graphClient, intuneClient, onPage = null
  */
 export async function fetchAppDevices(graphClient, intuneClient, ids) {
   const devices = new Set();
-  for (const id of ids) {
-    const source = {
-      key: "detectedAppDevices",
-      label: "Devices with the app",
-      url: `/beta/deviceManagement/detectedApps/${encodeURIComponent(id)}/managedDevices?$select=id&$top=999`,
-      params: { $select: "id", $top: "999" }
-    };
-    const { items } = await fetchSource(source, graphClient, intuneClient);
-    for (const device of items) if (device?.id) devices.add(String(device.id));
-  }
+  // En app har ofta många versioner, och varje version är ett eget anrop.
+  // Några åt gången i stället för ett i taget — men inte alla på en gång,
+  // så att portalens throttling-budget räcker.
+  const queue = [...ids];
+  const worker = async () => {
+    while (queue.length) {
+      const id = queue.shift();
+      const source = {
+        key: "detectedAppDevices",
+        label: "Devices with the app",
+        url: `/beta/deviceManagement/detectedApps/${encodeURIComponent(id)}/managedDevices?$select=id&$top=999`,
+        params: { $select: "id", $top: "999" }
+      };
+      const { items } = await fetchSource(source, graphClient, intuneClient);
+      for (const device of items) if (device?.id) devices.add(String(device.id));
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(APP_DEVICE_CONCURRENCY, queue.length) }, worker));
   return [...devices];
 }
+
+/** Hur många appversioner som frågas samtidigt. */
+const APP_DEVICE_CONCURRENCY = 4;
 
 // --- Organisation ---------------------------------------------------------
 

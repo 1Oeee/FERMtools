@@ -674,28 +674,69 @@ function multiPill(key, label, all) {
 
 let appSeq = 0;
 
-/** Enheterna som har de valda apparna. Bara det senaste urvalets svar gäller. */
-async function loadAppDevices() {
-  const seq = ++appSeq;
-  ui.appDevices = null;
-  ui.appError = null;
-  ui.appLoading = Boolean(state.apps);
-  changed();
-  if (!state.apps) return;
+/**
+ * Enheterna per app som redan frågats, så länge sidan står öppen. Att bocka
+ * ur och i en app, eller lägga till en till, frågar bara efter det som saknas.
+ * Töms när ⟳ trycks eller appinventeringen hämtas om.
+ */
+const appDeviceCache = new Map();
+/** Vilken tenant (eller demot) cachen och appinventeringen hör till. */
+let appScope = null;
 
-  const response = await ctx.send({ type: "app-devices", names: state.apps });
+/** Ny tenant eller demoläge: det som frågats om apparna hör till den förra. */
+function scopeApps(data) {
+  const scope = `${data?.demo ? "demo" : data?.tenant ?? ""}`;
+  if (scope === appScope) return;
+  appScope = scope;
+  appDeviceCache.clear();
+  ui.catalogue = null;
+  ui.catalogueError = null;
+  ui.appDevices = null;
+}
+
+/** Unionen av de valda apparnas enheter, om alla redan finns i minnet. */
+function cachedAppDevices(names) {
+  if (!names.every((name) => appDeviceCache.has(name))) return null;
+  const devices = new Set();
+  for (const name of names) for (const id of appDeviceCache.get(name)) devices.add(id);
+  return devices;
+}
+
+/** Enheterna som har de valda apparna. Bara det senaste urvalets svar gäller. */
+async function loadAppDevices({ force = false } = {}) {
+  const seq = ++appSeq;
+  ui.appError = null;
+  const names = state.apps ?? [];
+  const cached = state.apps ? cachedAppDevices(names) : null;
+  ui.appDevices = cached;
+  ui.appLoading = Boolean(state.apps) && !cached;
+  changed();
+  if (!state.apps || cached) return;
+
+  const missing = names.filter((name) => !appDeviceCache.has(name));
+  const scope = appScope;
+  const response = await ctx.send({ type: "app-devices", names: missing, force });
+  // Svaret hör till tenanten frågan ställdes i — sparas inte om den bytts.
+  if (response?.ok && scope === appScope) {
+    // Appar utan träff i inventeringen har inga enheter — spara det också.
+    for (const name of missing) appDeviceCache.set(name, new Set((response.byName?.[name] ?? []).map(String)));
+  }
   if (seq !== appSeq) return;
   ui.appLoading = false;
-  if (response?.ok) ui.appDevices = new Set(response.deviceIds.map(String));
+  if (response?.ok) ui.appDevices = cachedAppDevices(state.apps ?? []) ?? new Set();
   else ui.appError = response?.error ?? "The service worker did not respond.";
   changed();
 }
 
-/** Appinventeringen hämtas först när menyn öppnas — den kan vara tusentals rader. */
-async function loadCatalogue(menu) {
+/**
+ * Appinventeringen. Hämtas i bakgrunden när enheterna är klara, så att menyn
+ * öppnas ifylld — eller när menyn öppnas, om den hinner före. `menu` saknas
+ * vid förhämtningen.
+ */
+async function loadCatalogue(menu = null) {
   if (ui.catalogue || ui.catalogueError === "loading") return;
   ui.catalogueError = "loading";
-  fillAppMenu(menu);
+  if (menu) fillAppMenu(menu);
   const response = await ctx.send({ type: "detected-apps" });
   ctx.setStatus(null);
   if (response?.ok) {
@@ -1041,8 +1082,14 @@ async function load({ force = false } = {}) {
   } else {
     state.data = response.data;
     state.errorCode = null;
+    scopeApps(response.data);
   }
   draw();
+  if (response?.ok) {
+    // Valda appar från en annan tenant ska räknas om mot den här.
+    if (state.apps && !ui.appDevices && !ui.appLoading) loadAppDevices();
+    loadCatalogue().catch(() => {});
+  }
 }
 
 export const warehouseModule = {
@@ -1085,8 +1132,17 @@ export const warehouseModule = {
     draw();
   },
 
+  /** Fliken laddades i bakgrunden men fick fel — hämta på nytt när den visas. */
+  failed() {
+    return Boolean(state.error);
+  },
+
   refresh(context) {
     ctx = context;
-    return load({ force: true });
+    // ⟳ ska ge färska svar på appfiltret också, inte bara på enheterna.
+    appDeviceCache.clear();
+    return load({ force: true }).then(() => {
+      if (state.apps) loadAppDevices({ force: true });
+    });
   }
 };

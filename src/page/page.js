@@ -46,6 +46,8 @@ const state = {
   /** Plattformsfiltret. Gäller alla flikar, sparas mellan besöken. */
   platform: "",
   mounted: new Set(),
+  /** Flikar som satts upp i bakgrunden och inte visats än. */
+  prefetched: new Set(),
   // Lästa notiser. Nyckeln innehåller texten, så ett meddelande som ändrar
   // sig dyker upp igen i stället för att tystas.
   dismissed: new Set(),
@@ -190,6 +192,8 @@ function paneFor(module) {
   if (!pane) {
     pane = el("div", "module-pane");
     pane.dataset.module = module.id;
+    // Flikar som förladdas får sin yta innan de visas — den ska inte synas än.
+    pane.hidden = module.id !== state.activeId;
     panes.set(module.id, pane);
     ui.module.append(pane);
   }
@@ -225,11 +229,21 @@ async function showModule(id) {
     return;
   }
 
+  // Uppsatt i bakgrunden men fick fel (oftast en behörighet som saknades då):
+  // sätt upp den på nytt nu när den faktiskt visas.
+  if (state.prefetched.has(module.id) && module.failed?.()) state.mounted.delete(module.id);
+  state.prefetched.delete(module.id);
+
   if (state.mounted.has(module.id)) {
     module.update?.(moduleContext(module));
+  } else if (mounting.has(module.id)) {
+    // Bakgrundsladdningen pågår redan — den ritar i samma yta. Vänta inte på
+    // den, men låt fliken ritas om med skalets läge när den är klar.
+    mounting.get(module.id).then(() => {
+      if (activeModule() === module && state.mounted.has(module.id)) module.update?.(moduleContext(module));
+    });
   } else {
-    await module.mount(pane, moduleContext(module));
-    state.mounted.add(module.id);
+    await ensureMounted(module);
   }
 
   if (state.pendingFocus?.module === module.id && module.focus) {
@@ -242,6 +256,71 @@ async function showModule(id) {
     await chrome.storage.local.set({ activeModule: id });
   } catch {
     /* strunt samma */
+  }
+}
+
+// --- Förladdning -----------------------------------------------------------
+
+/** Flikar vars mount pågår, och vilken omgång de hör till. */
+const mounting = new Map();
+/** Räknas upp när uppsatta flikar blir inaktuella (nytt träd, ny tenant). */
+let mountGeneration = 0;
+
+/**
+ * Sätt upp en flik, en gång. Pågår en uppsättning från en tidigare omgång
+ * väntar den nya in den, så att två inte ritar i samma yta samtidigt.
+ */
+function ensureMounted(module) {
+  if (state.mounted.has(module.id)) return Promise.resolve();
+  const running = mounting.get(module.id);
+  if (running?.generation === mountGeneration) return running;
+
+  const generation = mountGeneration;
+  const promise = (running ?? Promise.resolve())
+    .catch(() => {})
+    .then(() => module.mount(paneFor(module), moduleContext(module)))
+    .then(() => {
+      if (generation === mountGeneration) state.mounted.add(module.id);
+    })
+    .finally(() => {
+      if (mounting.get(module.id) === promise) mounting.delete(module.id);
+    });
+  promise.generation = generation;
+  mounting.set(module.id, promise);
+  return promise;
+}
+
+/** Vänta tills webbläsaren har tid över, så förladdningen inte hackar i fliken som visas. */
+const idle = () =>
+  new Promise((resolve) =>
+    typeof requestIdleCallback === "function" ? requestIdleCallback(() => resolve(), { timeout: 1500 }) : setTimeout(resolve, 50)
+  );
+
+/** Har tokenraden allt fliken behöver? Annars får den vänta tills den visas. */
+const canPrefetch = (module) =>
+  Boolean(state.tokenStatus?.demo) ||
+  (module.needs ?? []).every((name) => state.tokenStatus?.capabilities?.[name]?.have);
+
+/**
+ * Förbered alla flikar i bakgrunden när den som visas är klar: varje flik
+ * hämtar sitt och ritar i sin dolda yta, så att ett flikbyte är omedelbart.
+ * En i taget, så att portalens throttling-budget inte går åt på en gång.
+ * Avbryts om trädet hämtas om — nästa hämtning startar en ny omgång.
+ */
+async function prefetchModules() {
+  const seq = loadSeq;
+  for (const module of availableModules()) {
+    if (seq !== loadSeq || orphaned || !state.data) return;
+    if (module.id === state.activeId || state.mounted.has(module.id) || mounting.has(module.id)) continue;
+    if (!canPrefetch(module)) continue;
+    await idle();
+    if (seq !== loadSeq || module.id === state.activeId) continue;
+    state.prefetched.add(module.id);
+    try {
+      await ensureMounted(module);
+    } catch {
+      /* fliken visar felet när den öppnas */
+    }
   }
 }
 
@@ -341,6 +420,8 @@ async function loadScore({ force = false } = {}) {
 /** En modul som inte är framme ska ritas om nästa gång den visas. */
 function invalidateModules() {
   state.mounted.clear();
+  state.prefetched.clear();
+  mountGeneration++;
 }
 
 // --- Plattformsfilter ----------------------------------------------------
@@ -728,6 +809,7 @@ async function load({ force = false } = {}) {
   renderNotices();
   await showModule(state.activeId);
   loadHealth({ force });
+  prefetchModules();
 }
 
 // --- Meddelanden från servicearbetaren -----------------------------------
@@ -784,7 +866,7 @@ chrome.runtime.onMessage.addListener((message) => {
       renderTabs();
       renderTokens();
       invalidateModules();
-      showModule(state.activeId);
+      showModule(state.activeId).then(prefetchModules);
       return;
     }
 

@@ -277,7 +277,10 @@ async function sameTenantAfter(settings, tenant) {
 const DATA_SETTINGS = ["prefix", "demo", "consent", "authMode", "msalClientId", "msalTenant", "warehouseUrl", "summarySource"];
 
 const CACHE_KEYS = () => [CACHE_KEY, CONNECTIONS_KEY, HEALTH_KEY, SCORE_KEY, DEVICES_KEY, WAREHOUSE_KEY, APPS_KEY];
-const clearAllCaches = () => Promise.all(CACHE_KEYS().map(clearCache));
+const clearAllCaches = () => {
+  appDevicesCache.clear();
+  return Promise.all(CACHE_KEYS().map(clearCache));
+};
 
 function broadcast(message) {
   chrome.runtime.sendMessage(message, () => void chrome.runtime.lastError);
@@ -580,6 +583,28 @@ async function loadDetectedApps({ force = false } = {}) {
   });
 }
 
+/**
+ * Enheterna per app i appfiltret, i minnet så länge servicearbetaren lever.
+ * Samma app frågas annars om varje gång den bockas i. Nyckeln innehåller
+ * läget och appens versioner, så en ny inventering ger nya frågor.
+ */
+const appDevicesCache = new Map();
+const APP_DEVICES_TTL_MS = 15 * 60 * 1000;
+
+async function appDevicesFor(settings, tenant, app, clients, force) {
+  const key = `${modeKey(settings, tenant)}|${app.ids.join(",")}`;
+  const hit = appDevicesCache.get(key);
+  if (!force && hit && Date.now() - hit.at < APP_DEVICES_TTL_MS) return hit.promise;
+  const promise = fetchAppDevices(clients.apps, clients.backend, app.ids);
+  const entry = { at: Date.now(), promise };
+  appDevicesCache.set(key, entry);
+  // Ett misslyckat svar sparas inte — nästa försök frågar om.
+  promise.catch(() => {
+    if (appDevicesCache.get(key) === entry) appDevicesCache.delete(key);
+  });
+  return promise;
+}
+
 /** Demots flöde. Demoklienten svarar på sökvägen, värden spelar ingen roll. */
 const DEMO_FEED = { root: "https://fef.demo.manage.microsoft.com/ReportingService/DataWarehouseFEService", apiVersion: "v1.0", from: "demo" };
 
@@ -850,15 +875,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
     },
 
+    // Svaret är per app, så att sidan kan spara varje app för sig och slå
+    // ihop urvalet själv — att bocka ur och i en app kostar då inget anrop.
     "app-devices": async () => {
       try {
         const settings = await readSettings();
         if (!settings.demo) await ensureTokens();
+        const tenant = await tenantFor(settings);
         const { apps } = await loadDetectedApps();
-        const wanted = new Set((message.names ?? []).map((n) => String(n).toLocaleLowerCase("sv")));
-        const ids = apps.filter((a) => wanted.has(a.name.toLocaleLowerCase("sv"))).flatMap((a) => a.ids);
         const clients = clientsFor(settings);
-        return { ok: true, deviceIds: await fetchAppDevices(clients.apps, clients.backend, ids) };
+        const wanted = new Set((message.names ?? []).map((n) => String(n).toLocaleLowerCase("sv")));
+        const chosen = apps.filter((a) => wanted.has(a.name.toLocaleLowerCase("sv")));
+        const lists = await Promise.all(
+          chosen.map((app) => appDevicesFor(settings, tenant, app, clients, Boolean(message.force)))
+        );
+        const byName = Object.fromEntries(chosen.map((app, i) => [app.name, lists[i]]));
+        return { ok: true, byName, deviceIds: [...new Set(lists.flat())] };
       } catch (e) {
         return { ok: false, error: readable(e) };
       }
