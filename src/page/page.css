@@ -2564,3 +2564,41 @@ button.wh-jump:disabled {
 .wh-path {
   white-space: nowrap;
 }
+
+/* --- Installningar inne i Inu+ --- */
+
+#module[hidden],
+.settings-view[hidden] {
+  display: none;
+}
+
+.settings-view {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.settings-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.settings-bar h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.settings-view iframe {
+  flex: 1;
+  width: 100%;
+  border: 0;
+  background: var(--bg);
+}
+
+.icon.active {
+  background: var(--selected);
+}

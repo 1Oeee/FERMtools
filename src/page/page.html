@@ -30,6 +30,16 @@
 
     <main id="module"></main>
 
+    <!-- Settings, inside Inu+ instead of a tab of its own. Shown in the
+         module's place; the frame is filled the first time it is opened. -->
+    <section id="settings-view" class="settings-view" hidden>
+      <div class="settings-bar">
+        <button id="settings-back" type="button" class="secondary small">← Back</button>
+        <h2>Settings</h2>
+      </div>
+      <iframe id="settings-frame" title="Inu+ settings"></iframe>
+    </section>
+
     <footer id="footer"></footer>
 
     <script type="module" src="page.js"></script>

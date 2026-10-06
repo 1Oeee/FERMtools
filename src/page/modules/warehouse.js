@@ -1212,7 +1212,7 @@ function renderError(body) {
 
   const settings = el("button", "secondary small", "Open Settings");
   settings.type = "button";
-  settings.addEventListener("click", () => chrome.runtime.openOptionsPage());
+  settings.addEventListener("click", () => ctx.openSettings());
   actions.append(settings);
   body.append(actions);
 

@@ -26,6 +26,14 @@ instead of asked for again.
   when its permissions are already there; one that failed in the background
   tries again when you open it.
 
+### Page
+
+- **Settings open inside Inu+.** ⚙ shows Settings in place of the tab, with
+  **← Back** (or Esc, or any tab) to return — no separate browser tab to find
+  your way back from. They follow the portal's theme like the rest of the page.
+- **Nothing pops up on install.** Inu+ waits in the portal's left rail until
+  you open it; the first-run choice is shown then, on the page.
+
 ### Group Tree
 
 - **Search for an app and see where it goes.** Type an app or configuration

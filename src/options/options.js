@@ -1,3 +1,7 @@
+// Öppnad inne i Inu+ (sidans ⚙) i stället för i en egen flik: sidan visar
+// rubriken själv, och färgerna kommer från portalens tema via sidan.
+if (new URLSearchParams(location.search).has("embedded")) document.documentElement.classList.add("embedded");
+
 const fields = {
   prefix: document.getElementById("prefix"),
   showLoose: document.getElementById("showLoose"),

@@ -33,7 +33,10 @@ const ui = {
   settings: document.getElementById("settings"),
   module: document.getElementById("module"),
   footer: document.getElementById("footer"),
-  platform: document.getElementById("platform")
+  platform: document.getElementById("platform"),
+  settingsView: document.getElementById("settings-view"),
+  settingsFrame: document.getElementById("settings-frame"),
+  settingsBack: document.getElementById("settings-back")
 };
 
 const state = {
@@ -94,8 +97,11 @@ async function loadDemoMistakes() {
 ui.detach.hidden = !embedded;
 
 // Portalen målar om sig när man byter tema i dess inställningar. Sidan ska
-// följa med i samma ögonblick, inte vid nästa omladdning.
-onTheme(applyPortalTheme);
+// följa med i samma ögonblick, inte vid nästa omladdning — inställningarna med.
+onTheme((portal) => {
+  applyPortalTheme(portal);
+  shareTheme();
+});
 
 const ROW_SCALES = [1, 1.1, 1.2, 1.3];
 
@@ -174,6 +180,7 @@ function moduleContext(module) {
     openFinding,
     openGroup,
     openLicences,
+    openSettings,
     setStatus: (text) => {
       if (isActive()) renderStatus(text);
     },
@@ -505,6 +512,8 @@ function renderTabs() {
       tab.setAttribute("role", "tab");
       tab.setAttribute("aria-selected", String(module.id === state.activeId));
       tab.addEventListener("click", () => {
+        // En flik ur menyn tar en ur inställningarna också — även den som redan är vald.
+        closeSettings();
         if (module.id !== state.activeId) showModule(module.id);
       });
       return tab;
@@ -1021,7 +1030,49 @@ ui.refresh.addEventListener("click", async () => {
   }
   load({ force: true });
 });
-ui.settings.addEventListener("click", () => chrome.runtime.openOptionsPage());
+ui.settings.addEventListener("click", () => (ui.settingsView.hidden ? openSettings() : closeSettings()));
+ui.settingsBack.addEventListener("click", closeSettings);
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !ui.settingsView.hidden) closeSettings();
+});
+
+// --- Inställningar -------------------------------------------------------
+
+/**
+ * Inställningarna öppnas i Inu+, i flikens ställe — inte i en egen flik i
+ * webbläsaren, som man sedan måste hitta tillbaka från. Samma sida som
+ * tilläggets alternativ (src/options), i en ram på samma ursprung.
+ */
+function openSettings() {
+  if (!ui.settingsFrame.src) {
+    ui.settingsFrame.addEventListener("load", shareTheme);
+    ui.settingsFrame.src = chrome.runtime.getURL("src/options/options.html?embedded=1");
+  }
+  ui.module.hidden = true;
+  ui.settingsView.hidden = false;
+  ui.settings.classList.add("active");
+  ui.settings.setAttribute("aria-pressed", "true");
+  ui.settingsBack.focus();
+}
+
+function closeSettings() {
+  ui.settingsView.hidden = true;
+  ui.module.hidden = false;
+  ui.settings.classList.remove("active");
+  ui.settings.setAttribute("aria-pressed", "false");
+}
+
+/** Portalens färger, som sidan mätt upp, gäller inställningarna också. */
+function shareTheme() {
+  const target = ui.settingsFrame.contentDocument?.documentElement;
+  if (!target) return;
+  const source = document.documentElement.style;
+  for (let i = 0; i < source.length; i++) {
+    const name = source[i];
+    if (name.startsWith("--")) target.style.setProperty(name, source.getPropertyValue(name));
+  }
+  if (source.colorScheme) target.style.colorScheme = source.colorScheme;
+}
 
 
 ui.detach.addEventListener("click", () => {
@@ -1058,7 +1109,7 @@ const signInMode = () => !state.tokenStatus?.demo && state.tokenStatus?.authMode
 /** Sign-in mode: open Microsoft's sign-in, or Settings if there is no client ID yet. */
 async function signIn() {
   if (!state.tokenStatus?.configured) {
-    chrome.runtime.openOptionsPage();
+    openSettings();
     return;
   }
   renderStatus("Waiting for sign-in …");
@@ -1156,7 +1207,7 @@ function renderConsent() {
   own.addEventListener("click", async () => {
     const next = await send({ type: "save-settings", patch: { authMode: "msal", demo: false } });
     // Utan klient-ID går det inte att logga in — det fylls i under Settings.
-    if (!next?.msalClientId) chrome.runtime.openOptionsPage();
+    if (!next?.msalClientId) openSettings();
   });
   const demo = el("button", "secondary", "Try the demo first");
   demo.type = "button";

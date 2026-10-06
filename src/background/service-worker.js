@@ -169,9 +169,8 @@ chrome.storage.onChanged.addListener(async (changes, area) => {
 
 // Första starten: öppna en välkomstflik med förklaringen. Där väljer
 // användaren mellan att godkänna och att prova demot först.
-chrome.runtime.onInstalled.addListener(({ reason }) => {
-  if (reason === "install") chrome.tabs.create({ url: chrome.runtime.getURL("src/page/page.html") });
-});
+// Ingen flik öppnas vid installationen. Inu+ väntar som ett blad i portalens
+// meny tills någon klickar på det; samtyckesfrågan visas då, där.
 
 // Tre klienter, tre behov. Portalen har olika Graph-tokens för katalog och
 // för device management, och en helt egen token mot Intunes backend.
