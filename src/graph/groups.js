@@ -157,6 +157,56 @@ export async function fetchComposition(client, groupIds, onProgress = null) {
 }
 
 /**
+ * Vilka grupper varje enhet och användare ligger direkt i. Underlag för
+ * Reports kolumner "Device groups", "Place in tree" och "User's groups".
+ *
+ * Till skillnad från fetchComposition läses alla sidor: en elevgrupp med
+ * tusen medlemmar ska inte tappa hälften.
+ *
+ * @returns {Promise<{ devices: [string, string[]][], users: [string, string[]][], failed: string[] }>}
+ *   enheter per Entra-enhets-id (gemener), användare per objekt-id
+ */
+export async function fetchMemberIndex(client, groupIds, onProgress = null) {
+  const requests = groupIds.map((id) => ({
+    id,
+    url: `/groups/${id}/members?$select=id,deviceId&$top=${MEMBER_PAGE}`
+  }));
+  const results = await client.batchGet(requests, { onProgress });
+
+  const devices = new Map();
+  const users = new Map();
+  const failed = [];
+  const add = (map, key, groupId) => {
+    const list = map.get(key);
+    if (list) list.push(groupId);
+    else map.set(key, [groupId]);
+  };
+
+  for (const [groupId, result] of results) {
+    if (!result.ok) {
+      failed.push(groupId);
+      continue;
+    }
+    let members = Array.isArray(result.body?.value) ? result.body.value : [];
+    const next = result.body?.["@odata.nextLink"];
+    if (next) {
+      try {
+        members = members.concat(await client.getAll(next));
+      } catch {
+        failed.push(groupId);
+      }
+    }
+    for (const member of members) {
+      const type = String(member["@odata.type"] ?? "");
+      if (type.endsWith(".device") && member.deviceId) add(devices, String(member.deviceId).toLowerCase(), groupId);
+      else if (type.endsWith(".user") && member.id) add(users, member.id, groupId);
+    }
+  }
+
+  return { devices: [...devices], users: [...users], failed };
+}
+
+/**
  * Grupper som tilldelningar pekar på men som inte finns i trädet. Antingen
  * ligger de utanför prefixet, eller så är de borttagna — bara ett uppslag
  * säger vilket.

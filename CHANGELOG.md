@@ -26,8 +26,24 @@ instead of asked for again.
   when its permissions are already there; one that failed in the background
   tries again when you open it.
 
+### Group Tree
+
+- **Search for an app and see where it goes.** Type an app or configuration
+  (Spotify, a Wi-Fi profile …) in the search box and pick it from the chips
+  under the toolbar. The tree shows every group it reaches: **Assigned ·
+  Required** where it is assigned, **Inherits** on the nested groups below —
+  their members get it too — and **Excluded** where an exclusion stops it,
+  including below an excluded group. A line above the tree counts them.
+
 ### Reports
 
+- **Choose the device list's columns.** A **Columns** menu on the device list
+  adds or removes information: enrolled date, management state, encryption,
+  ownership, enrollment profile, display name — and where the device sits in
+  the group tree: **Device groups**, **Place in tree** (the path down to its
+  group) and **User's groups**. The groups are read from Entra the first time
+  such a column is turned on; then search finds devices by group name too. The
+  choice is remembered and follows into the export.
 - **The installed-app filter remembers what it fetched.** Each app's devices
   are kept per app, so unticking and ticking Spotify again, or adding a second
   app, is instant and only asks for what is new. ⟳ fetches them fresh.

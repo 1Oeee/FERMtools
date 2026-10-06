@@ -18,6 +18,7 @@ import {
   fetchChildEdges,
   fetchMembers,
   fetchComposition,
+  fetchMemberIndex,
   lookupGroups
 } from "../graph/groups.js";
 import { fetchAssignments } from "../graph/assignments.js";
@@ -276,7 +277,7 @@ async function sameTenantAfter(settings, tenant) {
  */
 const DATA_SETTINGS = ["prefix", "demo", "consent", "authMode", "msalClientId", "msalTenant", "warehouseUrl", "summarySource"];
 
-const CACHE_KEYS = () => [CACHE_KEY, CONNECTIONS_KEY, HEALTH_KEY, SCORE_KEY, DEVICES_KEY, WAREHOUSE_KEY, APPS_KEY];
+const CACHE_KEYS = () => [CACHE_KEY, CONNECTIONS_KEY, HEALTH_KEY, SCORE_KEY, DEVICES_KEY, WAREHOUSE_KEY, APPS_KEY, MEMBERS_KEY];
 const clearAllCaches = () => {
   appDevicesCache.clear();
   return Promise.all(CACHE_KEYS().map(clearCache));
@@ -529,6 +530,40 @@ async function loadHealth({ force = false, stale = false } = {}) {
 }
 
 const DEVICES_KEY = "devices-data";
+const MEMBERS_KEY = "member-index";
+const membersFlight = singleFlight();
+
+/**
+ * Vilka av trädets grupper varje enhet och användare ligger i — för Reports
+ * gruppkolumner. Hämtas först när en sådan kolumn slås på: ett anrop per
+ * grupp, i klump, som hälsokontrollens medlemsläsning.
+ */
+async function loadMemberIndex({ force = false, stale = false } = {}) {
+  const settings = await readSettings();
+  const tenant = await tenantFor(settings);
+
+  if (!force) {
+    const cached = await cachedFor(MEMBERS_KEY, settings, tenant, (c) => c.prefix === settings.prefix, stale);
+    if (cached) return cached;
+  }
+
+  return membersFlight(modeKey(settings, tenant), async () => {
+    const tree = await loadTree();
+    const clients = clientsFor(settings);
+    if (!settings.demo) await ensureTokens();
+
+    const index = await fetchMemberIndex(
+      clients.groups,
+      tree.groups.map((g) => g.id),
+      (done, total) => broadcast({ type: "progress", stage: "warehouse", detail: `groups ${done}/${total}` })
+    );
+    await sameTenantAfter(settings, tenant);
+
+    const payload = { ...index, prefix: settings.prefix, demo: settings.demo, tenant, fetchedAt: Date.now() };
+    await writeCache(MEMBERS_KEY, payload);
+    return payload;
+  });
+}
 
 /**
  * Alla hanterade enheter, för Shared accounts. Hämtas först när fliken
@@ -891,6 +926,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         );
         const byName = Object.fromEntries(chosen.map((app, i) => [app.name, lists[i]]));
         return { ok: true, byName, deviceIds: [...new Set(lists.flat())] };
+      } catch (e) {
+        return { ok: false, error: readable(e) };
+      }
+    },
+
+    "member-index": async () => {
+      try {
+        return { ok: true, data: await loadMemberIndex({ force: Boolean(message.force), stale: Boolean(message.stale) }) };
       } catch (e) {
         return { ok: false, error: readable(e) };
       }

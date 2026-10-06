@@ -318,8 +318,13 @@ export function membersOf(groupId, cap = MEMBER_CAP) {
   const m = meta.get(groupId);
   if (!m) return null;
 
-  const users = [];
-  for (let n = 0; n < Math.min(m.users, cap); n++) {
+  // De hanterade enheterna och deras användare ligger i riktiga grupper, så
+  // att Reports gruppkolumner har något att visa. De tar de första platserna;
+  // antalet medlemmar blir detsamma som förut.
+  const real = realMembers().get(groupId) ?? { users: [], devices: [] };
+
+  const users = real.users.slice(0, Math.min(m.users, cap));
+  for (let n = users.length; n < Math.min(m.users, cap); n++) {
     const first = FIRST[(m.index * 7 + n * 3) % FIRST.length];
     const last = LAST[(m.index * 5 + n * 7) % LAST.length];
     users.push({
@@ -330,16 +335,70 @@ export function membersOf(groupId, cap = MEMBER_CAP) {
     });
   }
 
-  const devices = [];
-  for (let n = 0; n < Math.min(m.devices, cap); n++) {
+  const devices = real.devices.slice(0, Math.min(m.devices, cap));
+  for (let n = devices.length; n < Math.min(m.devices, cap); n++) {
     devices.push({
       id: `20000000-0000-4000-8000-${String(m.index * 1000 + n).padStart(12, "0")}`,
       displayName: `${m.tag}-${String(n + 1).padStart(3, "0")}`,
-      operatingSystem: m.os
+      operatingSystem: m.os,
+      deviceId: `22000000-0000-4000-8000-${String(m.index * 1000 + n).padStart(12, "0")}`
     });
   }
 
   return { users, devices };
+}
+
+let realMembersCache = null;
+
+/**
+ * Var de hanterade enheterna och deras primära användare ligger: iPads i
+ * vagnarnas grupper, datorer i Windows-grupperna, användarna i lärar- och
+ * IT-grupperna. Fördelas i tur och ordning, så utfallet är detsamma varje gång.
+ */
+function realMembers() {
+  if (realMembersCache) return realMembersCache;
+  const byGroup = new Map();
+  const slot = (groupId) => {
+    let entry = byGroup.get(groupId);
+    if (!entry) byGroup.set(groupId, (entry = { users: [], devices: [] }));
+    return entry;
+  };
+  const withRoom = (test) => groups.filter((g) => test(g, meta.get(g.id)));
+  const pools = {
+    iOS: withRoom((g, m) => m.os === "IPad" && m.devices > 0),
+    Windows: withRoom((g, m) => m.os === "Windows" && m.devices > 0 && / - Windows - /.test(g.displayName))
+  };
+  const userGroups = withRoom((g, m) => m.users > 0 && /- Lärare$|IT-avdelningen/.test(g.displayName));
+  const used = { iOS: 0, Windows: 0 };
+
+  managedDevices.forEach((device) => {
+    const pool = /ipad/i.test(device.model) ? "iOS" : device.operatingSystem === "Windows" ? "Windows" : null;
+    if (!pool || !pools[pool].length) return; // telefonerna ligger inte i någon enhetsgrupp
+    // En vagn i taget: iPads fyller en grupp innan nästa tar vid.
+    const group = pools[pool][Math.floor(used[pool]++ / 15) % pools[pool].length];
+    slot(group.id).devices.push({
+      id: device.id.replace(/^30/, "21"),
+      displayName: device.deviceName,
+      operatingSystem: device.operatingSystem,
+      deviceId: device.azureADDeviceId
+    });
+  });
+
+  const seen = new Set();
+  managedDevices.forEach((device) => {
+    if (!device.userId || seen.has(device.userId) || !userGroups.length) return;
+    const group = userGroups[seen.size % userGroups.length];
+    seen.add(device.userId);
+    slot(group.id).users.push({
+      id: device.userId,
+      displayName: device.userDisplayName,
+      userPrincipalName: device.userPrincipalName,
+      accountEnabled: true
+    });
+  });
+
+  realMembersCache = byGroup;
+  return byGroup;
 }
 
 /**
@@ -991,6 +1050,9 @@ function managedDevice(upn, displayName, kind, { lastSyncDays = -0.5 } = {}) {
   }[ipad || iphone || android ? kind : "pc"];
   return {
     id: `30000000-0000-4000-8000-${String(n).padStart(12, "0")}`,
+    // Samma enhet i Entra — gruppernas medlemslistor använder det här id:t.
+    azureADDeviceId: `50000000-0000-4000-8000-${String(n).padStart(12, "0")}`,
+    enrollmentProfileName: ipad ? "Skolans iPads (ADE)" : null,
     deviceName: look.name,
     userId: upn ? `40000000-0000-4000-8000-${String(upn.length * 97 + upn.charCodeAt(0)).padStart(12, "0")}` : "",
     userPrincipalName: upn ?? "",

@@ -373,6 +373,16 @@ the device and primary-user lists, 50 rows per page.
   installed app came from); exclusions do not count.
 - **Rows per page**: 1–50, 1–100, 1–200 or All, top right of the device list.
   The choice is kept between visits.
+- **Columns**: next to it, choose what the device list shows — device details
+  (enrolled date, management state, encryption, ownership, enrollment profile,
+  the user's display name) and the device's place in the group tree:
+  **Device groups** (the groups the device is a direct member of), **Place in
+  tree** (the path down to the deepest of them, e.g. *Alla iPads › Norrskolan -
+  iPads › Vagn 1*) and **User's groups** (the primary user's groups). The group
+  columns read the tree groups' members from Entra the first time one is turned
+  on — one batched request per group, like the Health check — and then the
+  search box finds devices by group name too. The choice is kept between visits,
+  and the export adds the chosen columns after its fixed ones.
 - **The device list** has the primary user's email right after the device name.
   Both are links: the device and the user open in the Intune console.
 - **Export** writes one formatted sheet: the device list with the
@@ -474,10 +484,18 @@ row.
 
   The colours of the markers in the tree: blue = configuration, green = app.
   Filled = assigned on the group, hollow ring = assigned further down the branch.
-- **The filter** in the tree's toolbar lists every app and configuration that is
-  assigned somewhere in the selection, with the number of groups it hits. Pick
-  one and only the branches that have it are shown. The status row says how many
-  groups that turned out to be.
+- **Where does an app go?** Type an app or configuration name in the tree's
+  search box (*Search group or app …*) — matching apps appear as chips under the
+  toolbar; click one, or press Enter when no group name matches. The dropdown
+  next to the search lists the same apps and configurations. The tree then shows
+  every group the app reaches, each row marked:
+  **Assigned · Required** (or Available, Uninstall) on the groups it is
+  assigned to, **Inherits** on the nested groups below them — Intune follows
+  nested membership, so their members get it too — and **Excluded** where an
+  exclusion stops it, including everything under an excluded group (exclusion
+  wins, as in Intune). The line above the tree counts them, and says so if the
+  app is also assigned to All users or All devices. **Clear** shows the whole
+  tree again.
 - **Messages** can be hidden with the cross once you have read them. They come
   back if the text changes, so a new problem is not silenced by an old one that
   was clicked away. Hidden messages stay for the browser session and can be

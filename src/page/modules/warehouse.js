@@ -19,6 +19,7 @@ import { skeletonFor, skeletonLines, skeletonTable } from "../skeleton.js";
 import { URLS, portalLinkButton } from "../portal.js";
 import { platformLabel } from "../../common/platforms.js";
 import { buildXlsx } from "../../common/xlsx.js";
+import { buildForest, pathToNode } from "../../tree/build.js";
 import {
   DIMENSIONS,
   OTHER,
@@ -61,6 +62,8 @@ const state = {
   compliance: "",
   /** Rader per sida: 50, 100, 200 eller "all". Sparas mellan besöken. */
   pageSize: 50,
+  /** Enhetslistans kolumner, i nycklar. null = standardkolumnerna. Sparas mellan besöken. */
+  columns: null,
   /** Installerade appar (namn ur appinventeringen). null = inget appfilter. Sparas inte — enheterna hämtas på nytt. */
   apps: null,
   query: "",
@@ -86,7 +89,13 @@ const ui = {
   /** Enheterna som har någon av de valda apparna. null = inte hämtat. */
   appDevices: null,
   appLoading: false,
-  appError: null
+  appError: null,
+  /** Grupperna enheter och användare ligger i. null tills en gruppkolumn slagits på. */
+  members: null,
+  membersLoading: false,
+  membersError: null,
+  /** Kolumnmenyn står öppen — den ska stå kvar när listan ritas om. */
+  columnsOpen: false
 };
 
 /** Datalagret som källa? Bara när det valts i Settings — annars Graph. */
@@ -103,6 +112,7 @@ async function loadView() {
     const stored = (await chrome.storage.local.get(VIEW_KEY))?.[VIEW_KEY] ?? {};
     if (["", "compliant", "noncompliant"].includes(stored.compliance)) state.compliance = stored.compliance;
     if (PAGE_SIZES.includes(stored.pageSize)) state.pageSize = stored.pageSize;
+    if (Array.isArray(stored.columns)) state.columns = stored.columns.filter((key) => typeof key === "string");
     for (const key of ["manufacturers", "models", "osVersions", "orgs", "types"]) {
       if (Array.isArray(stored[key])) state[key] = stored[key];
     }
@@ -112,8 +122,8 @@ async function loadView() {
 }
 
 function saveView() {
-  const { manufacturers, models, osVersions, orgs, types, compliance, pageSize } = state;
-  chrome.storage.local.set({ [VIEW_KEY]: { manufacturers, models, osVersions, orgs, types, compliance, pageSize } }).catch(() => {});
+  const { manufacturers, models, osVersions, orgs, types, compliance, pageSize, columns } = state;
+  chrome.storage.local.set({ [VIEW_KEY]: { manufacturers, models, osVersions, orgs, types, compliance, pageSize, columns } }).catch(() => {});
 }
 
 // --- Underlaget -----------------------------------------------------------
@@ -206,16 +216,34 @@ function selectionText() {
 
 // --- Listornas kolumner ---------------------------------------------------
 
+/** En lista med namn i en cell: de två första, och "+3" för resten. Alla står i verktygstipset. */
+function namesCell(names, { loading = false } = {}) {
+  if (loading) return el("span", "hint", "Loading …");
+  if (!names?.length) return el("span", "hint", "—");
+  const node = el("span", null, names.slice(0, 2).join(", "));
+  if (names.length > 2) node.append(el("span", "hint", ` +${names.length - 2}`));
+  node.title = names.join("\n");
+  return node;
+}
+
+const yesNo = (value) => (value === true ? "Yes" : value === false ? "No" : null);
+
 /**
- * Enhetslistans kolumner. Enhetsnamnet och den primära användaren är länkar
- * in i portalen: enheten öppnar enhetens sida, användaren användarens.
- * `value` sorterar, `render` ritar cellen när den är mer än text.
+ * Enhetslistans kolumner — alla som går att välja, i den ordning de står.
+ * Enhetsnamnet och den primära användaren är länkar in i portalen.
+ * `value` sorterar, `render` ritar cellen när den är mer än text. `on` är
+ * standardvalet; `category` grupperar dem i kolumnmenyn. `groups` kräver
+ * gruppernas medlemmar, som hämtas först när en sådan kolumn slås på.
  */
 function deviceColumns() {
+  const loading = () => !ui.members && !ui.membersError;
   return [
     {
       key: "name",
       label: "Device name",
+      category: "Device",
+      on: true,
+      fixed: true,
       type: "text",
       value: (d) => d.name,
       render: (d) => portalLinkButton(d.name, d.id ? URLS.device(d.id) : null, "Open the device in Intune")
@@ -223,6 +251,8 @@ function deviceColumns() {
     {
       key: "user",
       label: "Primary user",
+      category: "User",
+      on: true,
       type: "text",
       value: (d) => d.userEmail,
       // Bara e-postadressen, som länk till användaren.
@@ -231,14 +261,18 @@ function deviceColumns() {
           ? portalLinkButton(d.userEmail, d.userId ? URLS.user(d.userId) : null, "Open the user in Intune")
           : el("span", "hint", "—")
     },
-    { key: "sync", label: "Last check-in", type: "date", value: (d) => (d.lastSync ? new Date(d.lastSync) : null), text: (d) => formatDate(d.lastSync) },
-    { key: "os", label: "OS version", type: "text", value: (d) => d.osVersion },
-    { key: "serial", label: "Serial number", type: "text", value: (d) => d.serial, td: "mono" },
-    { key: "maker", label: "Manufacturer", type: "text", value: (d) => d.manufacturer },
-    { key: "model", label: "Model", type: "text", value: (d) => d.model },
+    { key: "userName", label: "Display name", category: "User", type: "text", value: (d) => d.userName },
+    { key: "sync", label: "Last check-in", category: "Device", on: true, type: "date", value: (d) => (d.lastSync ? new Date(d.lastSync) : null), text: (d) => formatDate(d.lastSync) },
+    { key: "enrolled", label: "Enrolled", category: "Device", type: "date", value: (d) => (d.enrolled ? new Date(d.enrolled) : null), text: (d) => formatDate(d.enrolled) },
+    { key: "os", label: "OS version", category: "Device", on: true, type: "text", value: (d) => d.osVersion },
+    { key: "serial", label: "Serial number", category: "Device", on: true, type: "text", value: (d) => d.serial, td: "mono" },
+    { key: "maker", label: "Manufacturer", category: "Device", on: true, type: "text", value: (d) => d.manufacturer },
+    { key: "model", label: "Model", category: "Device", on: true, type: "text", value: (d) => d.model },
     {
       key: "compliance",
       label: "Compliance",
+      category: "Status",
+      on: true,
       type: "text",
       value: (d) => complianceLabel(d.compliance),
       // Status med ikon och ord, aldrig bara färg.
@@ -249,10 +283,58 @@ function deviceColumns() {
         return node;
       }
     },
-    { key: "org", label: orgLabel(), type: "text", value: (d) => d.org },
-    { key: "type", label: TYPE.label, type: "text", value: (d) => d.type }
+    { key: "state", label: "Management state", category: "Status", type: "text", value: (d) => d.state },
+    { key: "encrypted", label: "Encrypted", category: "Status", type: "text", value: (d) => yesNo(d.encrypted) },
+    { key: "ownership", label: "Ownership", category: "Status", type: "text", value: (d) => d.ownership },
+    { key: "profile", label: "Enrollment profile", category: "Status", type: "text", value: (d) => d.enrollmentProfile },
+    { key: "org", label: orgLabel(), category: "Organisation", on: true, type: "text", value: (d) => d.org },
+    { key: "type", label: TYPE.label, category: "Device", on: true, type: "text", value: (d) => d.type },
+    {
+      key: "groups",
+      label: "Device groups",
+      category: "Groups",
+      groups: true,
+      type: "text",
+      value: (d) => d.deviceGroups?.join(", ") || null,
+      render: (d) => namesCell(d.deviceGroups, { loading: loading() })
+    },
+    {
+      key: "path",
+      label: "Place in tree",
+      category: "Groups",
+      groups: true,
+      type: "text",
+      value: (d) => d.treePath || null,
+      render: (d) => {
+        if (loading()) return el("span", "hint", "Loading …");
+        if (!d.treePath) return el("span", "hint", "—");
+        const node = el("span", "wh-path", d.treePath);
+        node.title = d.treePathFull;
+        return node;
+      }
+    },
+    {
+      key: "userGroups",
+      label: "User's groups",
+      category: "Groups",
+      groups: true,
+      type: "text",
+      value: (d) => d.userGroups?.join(", ") || null,
+      render: (d) => namesCell(d.userGroups, { loading: loading() })
+    }
   ];
 }
+
+const DEFAULT_COLUMNS = () => deviceColumns().filter((c) => c.on).map((c) => c.key);
+
+/** Kolumnerna som visas, i listans ordning. Enhetsnamnet står alltid först. */
+function visibleColumns() {
+  const chosen = new Set(state.columns ?? DEFAULT_COLUMNS());
+  return deviceColumns().filter((c) => c.fixed || chosen.has(c.key));
+}
+
+/** Behöver listan veta vilka grupper enheterna ligger i? */
+const needsGroups = () => visibleColumns().some((c) => c.groups);
 
 function cell(column, row) {
   const td = el("td", column.td ?? null);
@@ -440,7 +522,7 @@ function renderList(id, title, columns, rows) {
     return card;
   }
 
-  const redraw = () => card.replaceWith(renderList(id, title, columns, rows));
+  const redraw = () => card.replaceWith(renderList(id, title, visibleColumns(), rows));
 
   const grid = el("table", "grid wh-table");
   grid.append(
@@ -466,7 +548,7 @@ function renderList(id, title, columns, rows) {
     saveView();
     redraw();
   });
-  card.querySelector(".wh-card-head").append(size);
+  card.querySelector(".wh-card-head").append(columnsPill(), size);
 
   const sorted = sortRows(rows, columns, state.sort[id]);
   const perPage = state.pageSize === "all" ? Math.max(sorted.length, 1) : state.pageSize;
@@ -522,18 +604,176 @@ function pager(total, first, last, page, pages, go) {
   return bar;
 }
 
+// --- Kolumnvalet ----------------------------------------------------------
+
+/**
+ * "Columns: 10 of 19" uppe till höger i listans kort: kryssa i och ur vad
+ * listan (och exporten) visar, i grupper. Valet sparas mellan besöken.
+ */
+function columnsPill() {
+  const all = deviceColumns();
+  const shown = visibleColumns();
+  const box = el("details", "wh-pill wh-pill-menu wh-columns");
+  box.dataset.key = "columns";
+  const summary = el("summary", null, `Columns: ${shown.length} of ${all.length}`);
+  summary.title = "Choose which information the device list and the export show";
+  box.append(summary);
+  box.open = ui.columnsOpen;
+  box.addEventListener("toggle", () => {
+    ui.columnsOpen = box.open;
+  });
+
+  const menu = el("div", "wh-menu wh-menu-right");
+  const chosen = new Set(shown.map((c) => c.key));
+  const set = (key, on) => {
+    const next = new Set(chosen);
+    if (on) next.add(key);
+    else next.delete(key);
+    // I listans ordning, inte i klickordning.
+    state.columns = all.filter((c) => next.has(c.key)).map((c) => c.key);
+    changed();
+  };
+
+  for (const category of [...new Set(all.map((c) => c.category))]) {
+    menu.append(el("div", "wh-menu-head", category));
+    for (const column of all.filter((c) => c.category === category)) {
+      const row = el("label", "wh-menu-item");
+      const input = el("input");
+      input.type = "checkbox";
+      input.checked = chosen.has(column.key);
+      input.disabled = Boolean(column.fixed);
+      input.addEventListener("change", () => set(column.key, input.checked));
+      row.append(input, column.label);
+      if (column.groups) row.append(el("span", "hint", " · read from Entra"));
+      menu.append(row);
+    }
+  }
+
+  const reset = el("button", "wh-jump wh-menu-reset", "Default columns");
+  reset.type = "button";
+  reset.disabled = !state.columns;
+  reset.addEventListener("click", () => {
+    state.columns = null;
+    changed();
+  });
+  menu.append(reset);
+  box.append(menu);
+  return box;
+}
+
+// --- Grupperna ------------------------------------------------------------
+
+/**
+ * Vilka grupper enheterna och deras användare ligger i, ur Entra. Hämtas
+ * första gången en gruppkolumn visas — sparat svar först, färskt ovanpå.
+ */
+async function loadMembers({ force = false } = {}) {
+  if (ui.membersLoading) return;
+  ui.membersLoading = true;
+  ui.membersError = null;
+  const apply = (response, { revalidated }) => {
+    if (response?.ok) {
+      ui.members = {
+        devices: new Map(response.data.devices),
+        users: new Map(response.data.users),
+        fetchedAt: response.data.fetchedAt ?? response.data.savedAt ?? 0
+      };
+    } else if (!revalidated || !ui.members) {
+      ui.membersError = response?.error ?? "The service worker did not respond.";
+    }
+    groupInfo.clear();
+    // Framstegsraden ("groups 252/252") ska inte bli stående — om inte enheterna uppdateras.
+    if (!updating) ctx.setStatus(null);
+    draw();
+  };
+  try {
+    if (force) apply(await ctx.send({ type: "member-index", force: true }), { revalidated: Boolean(ui.members) });
+    else await loadFresh(ctx.send, { type: "member-index" }, apply);
+  } finally {
+    ui.membersLoading = false;
+  }
+}
+
+/** Gruppens namn och plats i trädet, per grupp-id. Töms när trädet eller medlemmarna byts. */
+const groupInfo = new Map();
+let groupInfoStamp = null;
+
+/** "Intune - Norrskolan - iPads - Vagn 1" under "Intune - Norrskolan - iPads" → "Vagn 1". */
+function shortName(name, parentName, prefix) {
+  if (parentName && name.startsWith(`${parentName} - `)) return name.slice(parentName.length + 3);
+  if (prefix && name.startsWith(prefix)) return name.slice(prefix.length);
+  return name;
+}
+
+function infoFor(groupId) {
+  const tree = ctx.data;
+  const stamp = `${tree?.fetchedAt}|${ui.members?.fetchedAt}`;
+  if (groupInfoStamp !== stamp) {
+    groupInfo.clear();
+    groupInfoStamp = stamp;
+    groupInfo.forest = tree ? buildForest(tree.groups, new Map(tree.edges)) : null;
+  }
+  let info = groupInfo.get(groupId);
+  if (info) return info;
+
+  const forest = groupInfo.forest;
+  const name = forest?.nodeById.get(groupId)?.displayName ?? null;
+  const path = forest && name ? pathToNode(forest, groupId) ?? [groupId] : [];
+  const names = path.map((id) => forest.nodeById.get(id)?.displayName ?? id);
+  const prefix = ctx.settings?.prefix ?? "";
+  info = {
+    name,
+    depth: path.length,
+    path: names.map((n, i) => shortName(n, names[i - 1], prefix)).join(" › "),
+    pathFull: names.join(" › ")
+  };
+  groupInfo.set(groupId, info);
+  return info;
+}
+
+/**
+ * Enheterna med sina grupper ifyllda: enhetens egna, platsen i trädet (den
+ * djupaste av dem) och användarens. Sökrutan söker i dem också.
+ */
+function withGroups(devices) {
+  if (!ui.members) return devices;
+  const names = (ids) => (ids ?? []).map(infoFor).filter((i) => i.name);
+  return devices.map((device) => {
+    const own = names(device.entraDeviceId ? ui.members.devices.get(device.entraDeviceId) : null);
+    const users = names(device.userId ? ui.members.users.get(device.userId) : null);
+    const deepest = own.reduce((best, info) => (!best || info.depth > best.depth ? info : best), null);
+    const deviceGroups = own.map((i) => i.name).sort((a, b) => a.localeCompare(b, "sv"));
+    const userGroups = users.map((i) => i.name).sort((a, b) => a.localeCompare(b, "sv"));
+    return {
+      ...device,
+      deviceGroups,
+      userGroups,
+      treePath: deepest?.path ?? null,
+      treePathFull: deepest?.pathFull ?? null,
+      groupText: [...deviceGroups, ...userGroups].join(" ")
+    };
+  });
+}
+
 // --- Export ---------------------------------------------------------------
+
+/** Kolumnerna som rapportens fasta del redan har (REPORT_COLUMNS). */
+const REPORT_KEYS = new Set(["name", "user", "userName", "type", "model", "maker", "serial", "os", "org", "sync"]);
 
 /** Urvalet som ett färdigformaterat Excel-blad. */
 function exportXlsx() {
   const rows = sortRows(ui.rows, deviceColumns(), state.sort.devices);
+  // Valda kolumner som inte redan står i rapportens fasta del kommer efter den.
+  const extra = visibleColumns()
+    .filter((c) => !REPORT_KEYS.has(c.key))
+    .map((c) => ({ header: c.label, width: c.groups ? 36 : 18, value: c.value }));
   const types = overviewTable(rows).cols;
   const stamp = new Date();
   const note =
     `Generated ${stamp.toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })} · ` +
     `${number(rows.length)} devices · ${selectionText()}`;
 
-  const bytes = buildXlsx([reportSheet(rows, { orgLabel: orgLabel(), types, typeOf, note })]);
+  const bytes = buildXlsx([reportSheet(rows, { orgLabel: orgLabel(), types, typeOf, note, extra })]);
   const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   const url = URL.createObjectURL(blob);
   const link = el("a");
@@ -693,6 +933,9 @@ function scopeApps(data) {
   ui.catalogue = null;
   ui.catalogueError = null;
   ui.appDevices = null;
+  // Grupperna hör också till den förra tenanten.
+  ui.members = null;
+  ui.membersError = null;
 }
 
 /** Unionen av de valda apparnas enheter, om alla redan finns i minnet. */
@@ -1004,7 +1247,9 @@ function draw() {
 
   // Färgerna räknas på allt hämtat, så att ett urval inte målar om något.
   ui.series = seriesFor(state.data.devices, TYPE.of);
-  const all = withOrgs(state.data.devices);
+  // Gruppkolumnerna: medlemmarna hämtas första gången en sådan visas.
+  if (needsGroups() && !ui.members && !ui.membersLoading && !ui.membersError) loadMembers();
+  const all = withGroups(withOrgs(state.data.devices));
   const facets = facetsOf(all);
   const { base, rows } = select(all);
   ui.base = base;
@@ -1031,7 +1276,7 @@ function draw() {
     content.append(renderTiles(base));
     if (!rows.length) content.append(el("div", "d-empty", "No devices of the chosen client types."));
     else {
-      content.append(renderOverview(table, allOrgs), renderList("devices", "Devices", deviceColumns(), rows));
+      content.append(renderOverview(table, allOrgs), renderList("devices", "Devices", visibleColumns(), rows));
     }
   }
 
@@ -1174,6 +1419,7 @@ export const warehouseModule = {
     appDeviceCache.clear();
     return load({ force: true }).then(() => {
       if (state.apps) loadAppDevices({ force: true });
+      if (needsGroups()) loadMembers({ force: true });
     });
   }
 };
