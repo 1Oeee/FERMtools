@@ -32,16 +32,20 @@ if (!sw) sw = await ctx.waitForEvent("serviceworker", { timeout: 15000 });
 const id = new URL(sw.url()).host;
 const listening = () => sw.evaluate(() => chrome.webRequest.onBeforeSendHeaders.hasListeners());
 
-let welcome = ctx.pages().find((p) => p.url().includes("/src/page/page.html"));
-if (!welcome) welcome = await ctx.waitForEvent("page", { timeout: 10000 });
+// Nothing opens on install; the page is opened the way a user would.
+await sleep(1500);
+check(!ctx.pages().some((p) => p.url().startsWith(`chrome-extension://${id}/`)), "no tab opens on install");
+const welcome = ctx.pages()[0] ?? (await ctx.newPage());
+await welcome.goto(`chrome-extension://${id}/src/page/page.html`);
 await welcome.waitForSelector("#consent", { timeout: 10000 });
 check(await welcome.getByRole("button", { name: "Use my own app registration" }).isVisible(), "welcome offers sign-in mode");
 
-// Choosing it without a client ID opens Settings.
-const optionsOpened = ctx.waitForEvent("page", { timeout: 10000 });
+// Choosing it without a client ID opens Settings — inside the page, not in a new tab.
+const tabsBefore = ctx.pages().length;
 await welcome.getByRole("button", { name: "Use my own app registration" }).click();
-const settings = await optionsOpened;
-await settings.waitForSelector("#modeMsal");
+const settings = welcome.frameLocator("#settings-frame");
+await settings.locator("#modeMsal").waitFor({ timeout: 10000 });
+check(ctx.pages().length === tabsBefore, "settings opens inside Inu+, not in a new tab");
 await sleep(500);
 check(await settings.locator("#modeMsal").isChecked(), "settings opens with sign-in mode selected");
 check(!(await listening()), "no header listeners in sign-in mode");
@@ -51,8 +55,11 @@ const redirect = await settings.locator("#redirectUri").textContent();
 check(redirect === `https://${id}.chromiumapp.org/`, `redirect URI shown (${redirect})`);
 
 // The page asks to open Settings while no client ID is set.
+await welcome.locator("#settings-back").click();
 await welcome.waitForSelector(".notice", { timeout: 15000 });
 check(await welcome.getByRole("button", { name: "Open Settings" }).isVisible(), "page points to Settings without a client ID");
+await welcome.getByRole("button", { name: "Open Settings" }).click();
+await settings.locator("#msalClientId").waitFor({ timeout: 10000 });
 
 // With a client ID, the page asks for sign-in instead.
 await settings.locator("#msalClientId").fill("11111111-2222-3333-4444-555555555555");

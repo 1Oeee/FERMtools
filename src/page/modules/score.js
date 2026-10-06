@@ -272,6 +272,10 @@ export const scoreModule = {
     if (ctx.data && !ctx.score?.payload && !ctx.score?.loading && !ctx.score?.error) ctx.reloadScore();
   },
 
+  failed() {
+    return Boolean(ctx?.score?.error);
+  },
+
   refresh(context) {
     ctx = context;
     return ctx.reloadScore({ force: true });

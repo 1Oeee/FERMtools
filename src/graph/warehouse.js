@@ -257,7 +257,12 @@ const GRAPH_SELECT = [
   "emailAddress",
   "userId",
   "userPrincipalName",
-  "userDisplayName"
+  "userDisplayName",
+  // Valbara kolumner i Reports, och kopplingen till Entra-grupperna.
+  "azureADDeviceId",
+  "managedDeviceOwnerType",
+  "isEncrypted",
+  "enrollmentProfileName"
 ].join(",");
 
 // deviceType och managementState finns bara i beta. Nyckeln är densamma som
@@ -312,10 +317,17 @@ export function fromGraph(device) {
     model: device.model || null,
     userEmail: device.emailAddress || device.userPrincipalName || null,
     userName: device.userDisplayName || null,
-    // För länken till användaren i portalen.
-    userId: device.userId || null
+    // För länken till användaren i portalen, och användarens grupper.
+    userId: device.userId || null,
+    // Enhetens id i Entra — det gruppernas medlemslistor använder.
+    entraDeviceId: device.azureADDeviceId && !/^0{8}-/.test(device.azureADDeviceId) ? String(device.azureADDeviceId).toLowerCase() : null,
+    ownership: OWNERSHIP[device.managedDeviceOwnerType] ?? null,
+    encrypted: typeof device.isEncrypted === "boolean" ? device.isEncrypted : null,
+    enrollmentProfile: device.enrollmentProfileName || null
   };
 }
+
+const OWNERSHIP = { company: "Corporate", personal: "Personal" };
 
 /**
  * Hela enhetslistan via Graph, med reservvägen till Intunes backend som
@@ -426,18 +438,29 @@ export async function fetchDetectedApps(graphClient, intuneClient, onPage = null
  */
 export async function fetchAppDevices(graphClient, intuneClient, ids) {
   const devices = new Set();
-  for (const id of ids) {
-    const source = {
-      key: "detectedAppDevices",
-      label: "Devices with the app",
-      url: `/beta/deviceManagement/detectedApps/${encodeURIComponent(id)}/managedDevices?$select=id&$top=999`,
-      params: { $select: "id", $top: "999" }
-    };
-    const { items } = await fetchSource(source, graphClient, intuneClient);
-    for (const device of items) if (device?.id) devices.add(String(device.id));
-  }
+  // En app har ofta många versioner, och varje version är ett eget anrop.
+  // Några åt gången i stället för ett i taget — men inte alla på en gång,
+  // så att portalens throttling-budget räcker.
+  const queue = [...ids];
+  const worker = async () => {
+    while (queue.length) {
+      const id = queue.shift();
+      const source = {
+        key: "detectedAppDevices",
+        label: "Devices with the app",
+        url: `/beta/deviceManagement/detectedApps/${encodeURIComponent(id)}/managedDevices?$select=id&$top=999`,
+        params: { $select: "id", $top: "999" }
+      };
+      const { items } = await fetchSource(source, graphClient, intuneClient);
+      for (const device of items) if (device?.id) devices.add(String(device.id));
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(APP_DEVICE_CONCURRENCY, queue.length) }, worker));
   return [...devices];
 }
+
+/** Hur många appversioner som frågas samtidigt. */
+const APP_DEVICE_CONCURRENCY = 4;
 
 // --- Organisation ---------------------------------------------------------
 
@@ -607,7 +630,8 @@ export function filterDevices(
       if (own && own !== platform) return false;
     }
     if (!needle) return true;
-    return [device.name, device.serial, device.userEmail, device.userName, device.model].some((value) =>
+    // groupText: enhetens och användarens grupper, när Reports har läst dem.
+    return [device.name, device.serial, device.userEmail, device.userName, device.model, device.groupText].some((value) =>
       String(value ?? "").toLocaleLowerCase("sv").includes(needle)
     );
   });
@@ -733,9 +757,6 @@ export const REPORT_COLUMNS = [
   { header: "Last check-in", width: 18, value: (d) => (d.lastSync ? new Date(d.lastSync) : null) }
 ];
 
-/** Sammanfattningen börjar i kolumn L, med K som luft mellan. */
-const SUMMARY_COLUMN = REPORT_COLUMNS.length + 1;
-
 /**
  * Rapporten som ett Excel-blad: rubrik och urval överst till vänster,
  * sammanfattningen per kommun till höger, och enhetslistan under med
@@ -749,7 +770,10 @@ const SUMMARY_COLUMN = REPORT_COLUMNS.length + 1;
  * @param {{ orgLabel: string, types: string[], typeOf: (d) => string, note: string, title?: string }} options
  * @returns {{ name: string, grid: any[][], widths: number[], autoFilter: string, freezeRow: number }}
  */
-export function reportSheet(rows, { orgLabel, types, typeOf, note, title = "Intune device report" }) {
+export function reportSheet(rows, { orgLabel, types, typeOf, note, title = "Intune device report", extra = [] }) {
+  // Valda kolumner utöver de fasta läggs efter dem; kommunen står kvar i I.
+  const columns = [...REPORT_COLUMNS, ...extra];
+  const summaryColumn = columns.length + 1;
   const summary = municipalitySummary(rows, typeOf);
   const grid = [];
   const put = (r, c, cell) => {
@@ -761,7 +785,7 @@ export function reportSheet(rows, { orgLabel, types, typeOf, note, title = "Intu
   put(1, 0, { value: note, style: "muted" });
 
   // Sammanfattningen, till höger.
-  const s = SUMMARY_COLUMN;
+  const s = summaryColumn;
   put(0, s, { value: `Summary per ${orgLabel.toLowerCase()}`, style: "title" });
   [orgLabel, "Devices", "Users", ...types].forEach((header, i) => put(1, s + i, { value: header, style: "header" }));
   summary.rows.forEach((entry, i) => {
@@ -778,14 +802,14 @@ export function reportSheet(rows, { orgLabel, types, typeOf, note, title = "Intu
 
   // Enhetslistan, under sammanfattningen.
   const headerRow = Math.max(3, totalRow + 2);
-  REPORT_COLUMNS.forEach((column, c) => put(headerRow, c, { value: column.header ?? orgLabel, style: "header" }));
-  rows.forEach((device, i) => REPORT_COLUMNS.forEach((column, c) => put(headerRow + 1 + i, c, column.value(device) ?? null)));
+  columns.forEach((column, c) => put(headerRow, c, { value: column.header ?? orgLabel, style: "header" }));
+  rows.forEach((device, i) => columns.forEach((column, c) => put(headerRow + 1 + i, c, column.value(device) ?? null)));
 
-  const lastColumn = columnName(REPORT_COLUMNS.length - 1);
+  const lastColumn = columnName(columns.length - 1);
   return {
     name: "Report",
     grid,
-    widths: [...REPORT_COLUMNS.map((c) => c.width), 3, 22, 10, 10, ...types.map(() => 14)],
+    widths: [...columns.map((c) => c.width), 3, 22, 10, 10, ...types.map(() => 14)],
     autoFilter: `A${headerRow + 1}:${lastColumn}${headerRow + 1 + Math.max(rows.length, 1)}`,
     // Lås rubrikraden bara när det ovanför är lagom högt — annars äter den skärmen.
     freezeRow: headerRow + 1 <= 16 ? headerRow + 2 : 0

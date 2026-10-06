@@ -30,11 +30,14 @@ if (!sw) sw = await ctx.waitForEvent("serviceworker", { timeout: 15000 });
 const id = new URL(sw.url()).host;
 const listening = () => sw.evaluate(() => chrome.webRequest.onBeforeSendHeaders.hasListeners());
 
-// First run
-let welcome = ctx.pages().find((p) => p.url().includes("/src/page/page.html"));
-if (!welcome) welcome = await ctx.waitForEvent("page", { timeout: 10000 });
+// First run: nothing opens by itself. The consent panel is what the page shows
+// the first time it is opened.
+await sleep(1500);
+check(!ctx.pages().some((p) => p.url().startsWith(`chrome-extension://${id}/`)), "no tab opens on install");
+const welcome = ctx.pages()[0] ?? (await ctx.newPage());
+await welcome.goto(`chrome-extension://${id}/src/page/page.html`);
 await welcome.waitForSelector("#consent", { timeout: 10000 });
-check(true, "welcome tab opens on install with the consent panel");
+check(true, "the page opens with the consent panel");
 check(!(await listening()), "no header listeners before consent");
 check((await welcome.locator(".tab").count()) === 0, "no tabs or data shown before a choice");
 
@@ -45,7 +48,9 @@ check(true, "demo mode loads without consent");
 check(!(await listening()), "still no header listeners in demo mode");
 await welcome.screenshot({ path: process.env.SHOT_DEMO ?? "/dev/null" }).catch(() => {});
 
-// Back to the consent panel
+// Back to the consent panel. Choosing the demo from a tab of its own moves
+// to the demo portal, with Inu+ in a frame — open the page directly again.
+await welcome.goto(`chrome-extension://${id}/src/page/page.html`);
 await welcome.getByRole("button", { name: "Use my own tenant" }).click();
 await welcome.waitForSelector("#consent", { timeout: 10000 });
 check(true, "'Use my own tenant' returns to the consent panel");

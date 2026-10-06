@@ -8,8 +8,9 @@ import {
   searchVisibility,
   assignedVisibility,
   assignableItems,
-  itemVisibility
+  itemKey
 } from "../tree-view.js";
+import { itemReach, matchingItems } from "../../tree/reach.js";
 import { renderDetails } from "../details.js";
 import { el } from "../dom.js";
 import { matchesPlatform, platformLabel } from "../../common/platforms.js";
@@ -115,7 +116,8 @@ function buildToolbar() {
 
   ui.search = el("input");
   ui.search.type = "search";
-  ui.search.placeholder = "Search group …";
+  ui.search.placeholder = "Search group or app …";
+  ui.search.title = "Type a group name, or an app or configuration to see every group it reaches";
   ui.search.autocomplete = "off";
   ui.search.spellcheck = false;
   ui.search.value = state.query;
@@ -128,6 +130,22 @@ function buildToolbar() {
       draw();
     }, 150);
   });
+  // Enter när sökningen bara träffar appar: visa den första appens grupper.
+  ui.search.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    clearTimeout(timer);
+    state.query = ui.search.value;
+    const built = ctx.data ? build(ctx.data) : null;
+    if (!built) return;
+    const groupHits = searchVisibility(built.forest, state.query).matches.size;
+    const { shown } = matchingItems(built.items, state.query);
+    if (shown.length && !groupHits) {
+      event.preventDefault();
+      pickItem(shown[0].key);
+    } else {
+      draw();
+    }
+  });
 
   ui.filter = el("select", "item-filter");
   ui.filter.title = "Show only groups that have a given app or configuration";
@@ -138,7 +156,91 @@ function buildToolbar() {
   });
 
   bar.append(ui.search, ui.filter);
-  return bar;
+
+  // Under raden: appar som matchar sökningen, och vad som visas när en är vald.
+  ui.reach = el("div", "tree-reach");
+  ui.reach.hidden = true;
+
+  const box = el("div", "tree-top");
+  box.append(bar, ui.reach);
+  return box;
+}
+
+/** Visa var en app eller konfiguration når — sökningen töms, den har gjort sitt. */
+function pickItem(key) {
+  state.filterKey = key;
+  state.query = "";
+  if (ui.search) ui.search.value = "";
+  draw();
+  ui.rows.scrollTop = 0;
+}
+
+/** Appen eller konfigurationen som är vald i filtret, med sin avsikt per grupp. */
+function chosenItem(built) {
+  const item = built.items.find((i) => i.key === state.filterKey);
+  if (!item) return null;
+  const intents = new Map();
+  for (const detail of ctx.data?.assignmentDetails ?? []) {
+    if (detail.itemId === item.id && detail.groupId && detail.intent && detail.target !== "exclude") {
+      intents.set(detail.groupId, detail.intent);
+    }
+  }
+  const global = (ctx.data?.global ?? []).filter((g) => g.id === item.id).map((g) => g.scope);
+  return { ...item, intents, global };
+}
+
+const KIND_LABEL = { app: "App", config: "Configuration" };
+/**
+ * Raden under verktygsraden. Med en söktext: apparna och konfigurationerna
+ * som matchar, att klicka på. Med en vald: vart den når, i siffror.
+ */
+function drawReach(built, result) {
+  const box = ui.reach;
+  box.replaceChildren();
+
+  const chosen = state.filterKey ? chosenItem(built) : null;
+  if (chosen && result) {
+    const { direct, inherited, excluded } = result.counts;
+    const line = el("div", "reach-line");
+    line.append(
+      el("span", `reach-kind ${chosen.kind}`, KIND_LABEL[chosen.kind] ?? chosen.kind),
+      el("strong", null, chosen.name),
+      el("span", "reach-count", `assigned to ${direct} group(s)`),
+      el("span", "reach-count inherited", `${inherited} more inherit it`)
+    );
+    if (excluded) line.append(el("span", "reach-count excluded", `excluded in ${excluded}`));
+    if (chosen.global.length) {
+      line.append(el("span", "reach-count global", `also assigned to ${chosen.global.join(" and ")} — reaches everyone`));
+    }
+    const clear = el("button", "secondary small", "Clear");
+    clear.type = "button";
+    clear.title = "Show the whole tree again";
+    clear.addEventListener("click", () => {
+      state.filterKey = "";
+      draw();
+    });
+    line.append(clear);
+    box.append(line);
+  }
+
+  const { shown, total } = matchingItems(built.items, state.query);
+  const offered = shown.filter((item) => item.key !== state.filterKey);
+  if (offered.length) {
+    const line = el("div", "reach-line reach-suggest");
+    line.append(el("span", "hint", "Apps and configurations:"));
+    for (const item of offered) {
+      const chip = el("button", `reach-chip ${item.kind}`);
+      chip.type = "button";
+      chip.title = `Show every group ${item.name} reaches — assigned, inherited and excluded`;
+      chip.append(el("span", "reach-dot"), item.name, el("span", "hint", ` · ${item.groups} group(s)`));
+      chip.addEventListener("click", () => pickItem(item.key));
+      line.append(chip);
+    }
+    if (total > shown.length) line.append(el("span", "hint", `+${total - shown.length} more — keep typing`));
+    box.append(line);
+  }
+
+  box.hidden = !box.childElementCount;
 }
 
 function fillFilter(items) {
@@ -181,11 +283,13 @@ function visibility(built) {
     include = include ? new Set([...include].filter((id) => set.has(id))) : new Set(set);
   };
 
+  // Vart en app når: tilldelade grupper, de som ärver under dem, och undantagna.
+  let reach = null;
   if (state.filterKey) {
-    const byItem = itemVisibility(built.forest, built.assignments, state.filterKey);
-    narrow(byItem.include);
-    autoExpand = new Set([...(autoExpand ?? []), ...byItem.autoExpand]);
-    matches = state.query ? matches : byItem.matches;
+    reach = itemReach(built.forest, built.assignments, (item) => itemKey(item) === state.filterKey);
+    narrow(reach.include);
+    autoExpand = new Set([...(autoExpand ?? []), ...reach.autoExpand]);
+    matches = state.query ? matches : new Set(reach.reach.keys());
   }
 
   if (ctx.settings?.onlyWithAssignments) {
@@ -193,11 +297,18 @@ function visibility(built) {
     if (assigned) narrow(assigned);
   }
 
-  return { include, autoExpand, matches };
+  return { include, autoExpand, matches, reach };
 }
 
 function drawTree(built) {
-  const { include, autoExpand, matches } = visibility(built);
+  const { include, autoExpand, matches, reach } = visibility(built);
+  drawReach(built, reach);
+  const chosen = reach ? chosenItem(built) : null;
+  const reachMarks = reach && {
+    byGroup: reach.reach,
+    intents: chosen?.intents ?? new Map(),
+    nameOf: (id) => built.forest.nodeById.get(id)?.displayName ?? id
+  };
   const { rows, truncated } = flatten(built.forest, {
     expanded: state.expanded,
     include,
@@ -225,7 +336,8 @@ function drawTree(built) {
     flags: built.flags,
     selectedId: state.selectedId,
     query: state.query,
-    health: healthIndex()
+    health: healthIndex(),
+    reach: reachMarks
   });
   ui.rows.append(host);
 
@@ -233,11 +345,11 @@ function drawTree(built) {
     ui.rows.append(el("div", "d-empty", "Showing the first 3000 rows. Search to narrow down."));
   }
 
-  drawLoose(built, include);
+  drawLoose(built, include, reachMarks);
 
-  if (state.filterKey) {
-    const item = built.items.find((i) => i.key === state.filterKey);
-    ctx.setStatus(`${matches.size} group(s) have ${item?.name ?? "the selection"}.`);
+  if (state.filterKey && !state.query) {
+    // Siffrorna står på raden under verktygsraden.
+    ctx.setStatus(null);
   } else if (state.query) {
     ctx.setStatus(`${matches.size} match(es).`);
   } else {
@@ -245,7 +357,7 @@ function drawTree(built) {
   }
 }
 
-function drawLoose(built, include) {
+function drawLoose(built, include, reach = null) {
   const loose = (built.forest.loose ?? []).filter((id) => !include || include.has(id));
   if (!loose.length || !ctx.settings?.showLoose) return;
 
@@ -279,7 +391,8 @@ function drawLoose(built, include) {
       flags: built.flags,
       selectedId: state.selectedId,
       query: state.query,
-      health: healthIndex()
+      health: healthIndex(),
+      reach
     }
   );
 

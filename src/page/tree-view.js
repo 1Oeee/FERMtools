@@ -142,45 +142,6 @@ export function assignableItems(assignments) {
   );
 }
 
-/**
- * Vilka grupper har en viss app eller konfiguration, och vilka förfäder
- * behövs för att nå dem i trädet?
- *
- * Det här är svaret på "vilka grupper ger den här appen?" — frågan man
- * faktiskt har framför sig i ett ärende.
- *
- * @returns {{ include: Set<string>, matches: Set<string>, autoExpand: Set<string> }}
- */
-export function itemVisibility(forest, assignments, filterKey) {
-  const matches = new Set();
-
-  for (const [groupId, bucket] of assignments) {
-    if (!forest.nodeById.has(groupId)) continue;
-    const hit = [...(bucket.configs ?? []), ...(bucket.apps ?? [])].some(
-      (item) => itemKey(item) === filterKey
-    );
-    if (hit) matches.add(groupId);
-  }
-
-  const include = new Set(matches);
-  const autoExpand = new Set();
-
-  const stack = [...matches];
-  const seen = new Set(matches);
-  while (stack.length) {
-    const id = stack.pop();
-    for (const parent of forest.parentsOf.get(id) ?? []) {
-      include.add(parent);
-      autoExpand.add(parent);
-      if (seen.has(parent)) continue;
-      seen.add(parent);
-      stack.push(parent);
-    }
-  }
-
-  return { include, matches, autoExpand };
-}
-
 // --- Rendering -----------------------------------------------------------
 
 function dot(kind, direct, below) {
@@ -241,11 +202,39 @@ function highlight(name, query) {
   return fragment;
 }
 
+const INTENT_TEXT = {
+  required: "Required",
+  available: "Available",
+  availableWithoutEnrollment: "Available",
+  uninstall: "Uninstall"
+};
+
+/** Märket på en rad när en app är vald: Assigned · Required, Inherits, Excluded. */
+function reachBadge(reached, intent, nameOf) {
+  const span = document.createElement("span");
+  span.className = `reach-badge ${reached.kind}`;
+  if (reached.kind === "direct") {
+    span.textContent = intent ? `Assigned · ${INTENT_TEXT[intent] ?? intent}` : "Assigned";
+    span.title = "Assigned directly to this group";
+  } else if (reached.kind === "inherited") {
+    span.textContent = intent ? `Inherits · ${INTENT_TEXT[intent] ?? intent}` : "Inherits";
+    span.title = `Members are covered through the parent group ${nameOf(reached.via)}`;
+  } else {
+    span.textContent = "Excluded";
+    span.title = reached.via
+      ? `Excluded through the parent group ${nameOf(reached.via)} — exclusion wins over assignment`
+      : reached.assigned
+        ? "Both assigned and excluded here — exclusion wins"
+        : "Excluded on this group — members do not get it";
+  }
+  return span;
+}
+
 /**
  * @param {HTMLElement} container
  * @param {Row[]} rows
  */
-export function renderRows(container, rows, { forest, flags, selectedId, query = "", health = null }) {
+export function renderRows(container, rows, { forest, flags, selectedId, query = "", health = null, reach = null }) {
   const fragment = document.createDocumentFragment();
 
   for (const row of rows) {
@@ -287,6 +276,12 @@ export function renderRows(container, rows, { forest, flags, selectedId, query =
       badge.title = "The group sits under several parents and is shown in more places";
       el.append(badge);
     }
+
+    // Vald app eller konfiguration: hur den når just den här gruppen.
+    const reached = reach?.byGroup.get(row.id);
+    // Ärvda får avsikten från gruppen de ärver av: "Inherits · Uninstall" är inte samma sak som Required.
+    if (reached) el.append(reachBadge(reached, reach.intents.get(reached.via ?? row.id), reach.nameOf));
+    if (reach && !reached) el.classList.add("unreached");
 
     if (row.cycle) {
       const badge = document.createElement("span");

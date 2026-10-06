@@ -21,6 +21,7 @@ import {
 } from "../../graph/devices.js";
 import { URLS, portalLinkButton, openDeviceSearch } from "../portal.js";
 import { matchesPlatform, platformFromOs, platformLabel } from "../../common/platforms.js";
+import { loadFresh, updatingText, updateFailedText } from "../swr.js";
 
 const state = {
   /** named = namnet matchar mönstren; multiple = alla konton med flera enheter. */
@@ -394,17 +395,35 @@ function draw() {
   if (hadFocus) split.list.querySelector(".licence-search")?.focus();
 }
 
+/** Löpnummer: bara den senaste hämtningens svar ritas. */
+let loadSeq = 0;
+
 async function load({ force = false } = {}) {
-  state.loading = true;
+  const seq = ++loadSeq;
   state.error = null;
+  // Finns det redan något att visa står det kvar medan det nya hämtas.
+  state.loading = !state.data;
   draw();
 
-  const response = await ctx.send({ type: "devices", force });
+  const apply = (response, { revalidated, previous }) => {
+    if (seq !== loadSeq) return false;
+    state.loading = false;
+    if (response?.ok) {
+      state.data = response.data;
+      ctx.setStatus(null);
+    } else if (revalidated) {
+      // Omhämtningen misslyckades: det sparade står kvar, med besked om det.
+      ctx.setStatus(updateFailedText(previous, response?.error));
+    } else {
+      state.error = response?.error ?? "The service worker did not respond.";
+    }
+    draw();
+  };
 
-  state.loading = false;
-  if (!response?.ok) state.error = response?.error ?? "The service worker did not respond.";
-  else state.data = response.data;
-  draw();
+  if (force) return apply(await ctx.send({ type: "devices", force: true }), { revalidated: Boolean(state.data), previous: state.data });
+  await loadFresh(ctx.send, { type: "devices" }, apply, {
+    onUpdating: (previous) => ctx.setStatus(updatingText(previous))
+  });
 }
 
 export const accountsModule = {
@@ -421,6 +440,11 @@ export const accountsModule = {
   update(context) {
     ctx = context;
     draw();
+  },
+
+  /** Fliken laddades i bakgrunden men fick fel — hämta på nytt när den visas. */
+  failed() {
+    return Boolean(state.error);
   },
 
   refresh(context) {

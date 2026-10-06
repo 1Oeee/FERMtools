@@ -1,0 +1,110 @@
+# Dev-bygget: det senaste från varje push till en gren som inte är main,
+# som nedladdning under Actions — inte som en release. Releases-sidan har
+# bara de riktiga versionerna (Inu+ 0.24 …), som release.yml skapar.
+#
+# Var: Actions → Dev build → senaste körningen. Överst står allt som gjorts
+# sedan förra riktiga releasen; längst ner, under Artifacts, ligger paketet
+# "inuplus-dev". Äldre dev-paket tas bort, så det finns bara ett.
+#
+# Paketet har samma version som manifest.json, plus ett version_name som
+# visas på edge://extensions — t.ex. "0.25 dev (a1b2c3d)" — så att det syns
+# vilket bygge som är inladdat.
+
+name: Dev build
+
+on:
+  push:
+    # Bara grenfilter: taggpushar (även "dev", som arbetsflödet flyttar) startar det inte.
+    branches-ignore: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write # för att ta bort den gamla dev-releasen
+  actions: write # för att ta bort äldre dev-paket
+
+# Bara den senaste pushen räknas — en äldre som fortfarande kör avbryts.
+concurrency:
+  group: dev-release
+  cancel-in-progress: true
+
+jobs:
+  dev:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Hela historiken och taggarna: texten räknar commits sedan förra releasen.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Tester
+        run: node tests/run.mjs
+
+      - name: Bygg paket
+        id: build
+        # Samma innehåll som release.yml packar, plus version_name. Filerna
+        # läggs upp som de är: GitHub zippar artefakten vid nedladdning.
+        run: |
+          set -euo pipefail
+          version=$(jq -r .version manifest.json)
+          short=$(git rev-parse --short HEAD)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "short=$short" >> "$GITHUB_OUTPUT"
+
+          mkdir -p dist/package
+          cp -r manifest.json managed_schema.json src tests dist/package/
+          [[ -d icons ]] && cp -r icons dist/package/
+          find dist/package/tests -name '*.mjs' -delete
+          jq --arg name "$version dev ($short)" '.version_name = $name' manifest.json > dist/package/manifest.json
+
+      - uses: actions/upload-artifact@v4
+        id: upload
+        with:
+          name: inuplus-dev
+          path: dist/package/
+          if-no-files-found: error
+
+      - name: Sammanfattning
+        # Allt sedan förra riktiga releasen (taggen v<version>), nyast först,
+        # och den översta posten i CHANGELOG.md — överst på körningens sida.
+        env:
+          BRANCH: ${{ github.ref_name }}
+          VERSION: ${{ steps.build.outputs.version }}
+          SHORT: ${{ steps.build.outputs.short }}
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+        run: |
+          set -euo pipefail
+          last=$(git describe --tags --match 'v[0-9]*' --abbrev=0 2>/dev/null || true)
+          range=${last:+$last..}HEAD
+          {
+            echo "## Inu+ dev ($VERSION · $SHORT)"
+            echo
+            echo "**Branch:** \`$BRANCH\` · **Download:** [inuplus-dev]($ARTIFACT_URL)"
+            echo
+            echo "Unzip, then on \`edge://extensions\` (Developer mode on) choose **Load unpacked**."
+            echo "To update: replace the folder's contents and press the reload arrow on the extension's card."
+            echo
+            echo "### Changes since ${last:-the first commit}"
+            git log "$range" --no-merges --format='- %s (%h)'
+            echo
+            echo "### Changelog (top entry)"
+            awk '/^## /{n++} n==1' CHANGELOG.md | sed 's/^## /#### /; s/^### /##### /'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Städa
+        # Bara det senaste dev-paketet ska finnas kvar. Den gamla dev-releasen
+        # (från när dev-bygget låg under Releases) tas bort med sin tagg.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KEEP: ${{ steps.upload.outputs.artifact-id }}
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?name=inuplus-dev" --jq '.artifacts[].id' |
+            while read -r id; do
+              [[ "$id" == "$KEEP" ]] && continue
+              gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$id" && echo "Tog bort dev-paket $id"
+            done
+          gh release delete dev --yes --cleanup-tag 2>/dev/null && echo "Tog bort dev-releasen" || true

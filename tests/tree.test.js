@@ -1,5 +1,6 @@
 import { buildForest, pathToNode } from "../src/tree/build.js";
 import { computeFlags, hasAnything } from "../src/tree/rollup.js";
+import { itemReach, matchingItems } from "../src/tree/reach.js";
 
 /** Minimal testram — inga beroenden, körs i webbläsaren. */
 const tests = [];
@@ -176,4 +177,67 @@ test("grupp helt utan tilldelningar får inga pluppar", () => {
   const flags = computeFlags(f, new Map());
   assert.notOk(hasAnything(flags.get("a")), "a");
   assert.notOk(hasAnything(flags.get("b")), "b");
+});
+
+// --- itemReach: vart en app når ------------------------------------------
+
+const spotify = { kind: "app", id: "spotify", name: "Spotify" };
+const isSpotify = (item) => item.id === "spotify";
+
+test("app: tilldelad grupp, nästlade grupper under ärver, förfäder fälls ut", () => {
+  // skola → ipads → vagn1, vagn2; skola → pc
+  const f = buildForest(
+    [g("skola"), g("ipads"), g("vagn1"), g("vagn2"), g("pc")],
+    edges({ skola: ["ipads", "pc"], ipads: ["vagn1", "vagn2"] })
+  );
+  const r = itemReach(f, new Map([["ipads", { apps: [spotify] }]]), isSpotify);
+  assert.equal(r.reach.get("ipads").kind, "direct", "ipads");
+  assert.equal(r.reach.get("vagn1").kind, "inherited", "vagn1");
+  assert.equal(r.reach.get("vagn1").via, "ipads", "vagn1 ärver via ipads");
+  assert.notOk(r.reach.has("skola"), "föräldern får den inte");
+  assert.notOk(r.reach.has("pc"), "syskonet får den inte");
+  assert.ok(r.include.has("skola") && !r.include.has("pc"), "bara vägen dit visas");
+  assert.ok(r.autoExpand.has("skola") && r.autoExpand.has("ipads"), "utfällt ner till de som ärver");
+  assert.same(r.counts, { direct: 1, inherited: 2, excluded: 0 }, "antal");
+});
+
+test("app: undantag vinner, även nedåt och även på en tilldelad grupp", () => {
+  const f = buildForest(
+    [g("alla"), g("skola"), g("vagn"), g("pc")],
+    edges({ alla: ["skola", "pc"], skola: ["vagn"] })
+  );
+  const r = itemReach(
+    f,
+    new Map([
+      ["alla", { apps: [spotify] }],
+      ["skola", { excludedBy: [spotify] }],
+      ["pc", { apps: [spotify], excludedBy: [spotify] }]
+    ]),
+    isSpotify
+  );
+  assert.equal(r.reach.get("skola").kind, "excluded", "skola undantagen");
+  assert.equal(r.reach.get("vagn").kind, "excluded", "vagn under undantaget");
+  assert.equal(r.reach.get("vagn").via, "skola", "vagn via skola");
+  assert.equal(r.reach.get("pc").kind, "excluded", "tilldelad och undantagen");
+  assert.ok(r.reach.get("pc").assigned, "pc var också tilldelad");
+  assert.same(r.counts, { direct: 1, inherited: 0, excluded: 3 }, "antal");
+});
+
+test("app: cykel och flera föräldrar terminerar och räknas en gång", () => {
+  const f = buildForest([g("a"), g("b"), g("c")], edges({ a: ["b", "c"], b: ["c"], c: ["a"] }));
+  const r = itemReach(f, new Map([["a", { apps: [spotify] }]]), isSpotify);
+  assert.same(r.counts, { direct: 1, inherited: 2, excluded: 0 }, "antal");
+});
+
+test("app-sökning: namn som börjar med söktexten först, sedan flest grupper", () => {
+  const items = [
+    { key: "app:1", name: "Spotify Premium", kind: "app", groups: 1 },
+    { key: "app:2", name: "Music – Spotify", kind: "app", groups: 9 },
+    { key: "app:3", name: "Spotify", kind: "app", groups: 4 },
+    { key: "app:4", name: "Teams", kind: "app", groups: 20 }
+  ];
+  const { shown, total } = matchingItems(items, "spot");
+  assert.same(shown.map((i) => i.key), ["app:3", "app:1", "app:2"], "ordning");
+  assert.equal(total, 3, "antal");
+  assert.equal(matchingItems(items, "  ").total, 0, "tom söktext");
 });

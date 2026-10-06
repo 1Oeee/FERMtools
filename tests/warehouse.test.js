@@ -3,6 +3,8 @@
 
 import { test, assert } from "./tree.test.js";
 import { createDemoClient } from "../src/demo/client.js";
+import * as demoTenant from "../src/demo/tenant.js";
+import { fetchMemberIndex } from "../src/graph/groups.js";
 import {
   feedRoot,
   regionOf,
@@ -434,4 +436,51 @@ test("datalagret: hela kedjan mot demotenanten", async () => {
   assert.ok(table.cols.includes("MacMDM"), "Mac");
   const sum = table.rows.reduce((n, row) => n + table.rowTotals.get(row), 0);
   assert.equal(sum, managed.length, "radsummorna går jämnt upp");
+});
+
+test("rapport: valda extrakolumner hamnar efter de fasta, kommunen står kvar i I", () => {
+  const rows = [{ name: "T-1", org: "Tierp", type: "IPad", deviceGroups: ["Vagn 1"], ownership: "Corporate" }];
+  const extra = [
+    { header: "Device groups", width: 36, value: (d) => d.deviceGroups.join(", ") },
+    { header: "Ownership", width: 18, value: (d) => d.ownership }
+  ];
+  const sheet = reportSheet(rows, { orgLabel: "Kommun", types: ["IPad"], typeOf: (d) => d.type, note: "", extra });
+  const header = Number(sheet.autoFilter.match(/^A(\d+):/)[1]);
+  const at = (col, row) => {
+    const cell = sheet.grid[row - 1]?.[col.charCodeAt(0) - 65];
+    return cell !== null && typeof cell === "object" ? cell.value : cell;
+  };
+  assert.equal(at("I", header), "Kommun", "kommunen kvar i I");
+  assert.equal(at("K", header), "Device groups", "första extrakolumnen i K");
+  assert.equal(at("L", header + 1), "Corporate", "andra extrakolumnens värde");
+  assert.equal(at("N", 2), "Kommun", "sammanfattningen flyttar ut till N");
+  assert.ok(sheet.autoFilter.startsWith(`A${header}:L`), "filtret täcker extrakolumnerna");
+});
+
+test("enheter: Entra-id, ägarskap, kryptering och registreringsprofil ur Graph", () => {
+  const device = fromGraph({
+    deviceName: "IPAD-1",
+    azureADDeviceId: "ABCDEF00-0000-4000-8000-000000000001",
+    managedDeviceOwnerType: "company",
+    isEncrypted: true,
+    enrollmentProfileName: "Skolans iPads"
+  });
+  assert.equal(device.entraDeviceId, "abcdef00-0000-4000-8000-000000000001", "Entra-id i gemener");
+  assert.equal(device.ownership, "Corporate", "ägarskap");
+  assert.equal(device.encrypted, true, "krypterad");
+  assert.equal(device.enrollmentProfile, "Skolans iPads", "profil");
+  assert.equal(fromGraph({ azureADDeviceId: "00000000-0000-0000-0000-000000000000" }).entraDeviceId, null, "nollor = ingen Entra-enhet");
+});
+
+test("grupperna: enheter och användare kopplas till grupperna de ligger i (demo)", async () => {
+  const index = await fetchMemberIndex(createDemoClient(), demoTenant.groups.map((g) => g.id));
+  const devices = new Map(index.devices);
+  const users = new Map(index.users);
+  const ipad = demoTenant.managedDevices.find((d) => /ipad/i.test(d.model));
+  const name = (id) => demoTenant.groups.find((g) => g.id === id)?.displayName;
+  assert.ok(devices.get(ipad.azureADDeviceId)?.length, "iPaden ligger i en grupp");
+  assert.ok(/iPads/.test(name(devices.get(ipad.azureADDeviceId)[0])), "en iPad-grupp");
+  assert.ok(users.get(ipad.userId)?.length, "användaren ligger i en grupp");
+  const filtered = filterDevices([{ name: "x", state: "Managed", groupText: "Intune - Vagn 7" }], { query: "vagn 7" });
+  assert.equal(filtered.length, 1, "sökningen träffar gruppnamn");
 });

@@ -18,6 +18,7 @@ import {
   fetchChildEdges,
   fetchMembers,
   fetchComposition,
+  fetchMemberIndex,
   lookupGroups
 } from "../graph/groups.js";
 import { fetchAssignments } from "../graph/assignments.js";
@@ -168,9 +169,8 @@ chrome.storage.onChanged.addListener(async (changes, area) => {
 
 // Första starten: öppna en välkomstflik med förklaringen. Där väljer
 // användaren mellan att godkänna och att prova demot först.
-chrome.runtime.onInstalled.addListener(({ reason }) => {
-  if (reason === "install") chrome.tabs.create({ url: chrome.runtime.getURL("src/page/page.html") });
-});
+// Ingen flik öppnas vid installationen. Inu+ väntar som ett blad i portalens
+// meny tills någon klickar på det; samtyckesfrågan visas då, där.
 
 // Tre klienter, tre behov. Portalen har olika Graph-tokens för katalog och
 // för device management, och en helt egen token mot Intunes backend.
@@ -251,8 +251,8 @@ async function tenantFor(settings) {
  * nyckeln visades den förra tenantens träd i upp till en kvart efter ett
  * katalogbyte i portalen.
  */
-async function cachedFor(key, settings, tenant, sameSettings = () => true) {
-  const cached = await readCache(key);
+async function cachedFor(key, settings, tenant, sameSettings = () => true, stale = false) {
+  const cached = await readCache(key, { stale });
   if (!cached || cached.demo !== settings.demo || !sameSettings(cached)) return null;
   return tenant && cached.tenant === tenant ? cached : null;
 }
@@ -276,8 +276,11 @@ async function sameTenantAfter(settings, tenant) {
  */
 const DATA_SETTINGS = ["prefix", "demo", "consent", "authMode", "msalClientId", "msalTenant", "warehouseUrl", "summarySource"];
 
-const CACHE_KEYS = () => [CACHE_KEY, CONNECTIONS_KEY, HEALTH_KEY, SCORE_KEY, DEVICES_KEY, WAREHOUSE_KEY, APPS_KEY];
-const clearAllCaches = () => Promise.all(CACHE_KEYS().map(clearCache));
+const CACHE_KEYS = () => [CACHE_KEY, CONNECTIONS_KEY, HEALTH_KEY, SCORE_KEY, DEVICES_KEY, WAREHOUSE_KEY, APPS_KEY, MEMBERS_KEY];
+const clearAllCaches = () => {
+  appDevicesCache.clear();
+  return Promise.all(CACHE_KEYS().map(clearCache));
+};
 
 function broadcast(message) {
   chrome.runtime.sendMessage(message, () => void chrome.runtime.lastError);
@@ -358,12 +361,12 @@ async function ensureTokens() {
   ]);
 }
 
-async function loadTree({ force = false } = {}) {
+async function loadTree({ force = false, stale = false } = {}) {
   const settings = await readSettings();
   const tenant = await tenantFor(settings);
 
   if (!force) {
-    const cached = await cachedFor(CACHE_KEY, settings, tenant, (c) => c.prefix === settings.prefix);
+    const cached = await cachedFor(CACHE_KEY, settings, tenant, (c) => c.prefix === settings.prefix, stale);
     if (cached) return cached;
   }
 
@@ -424,12 +427,12 @@ async function loadTree({ force = false } = {}) {
   });
 }
 
-async function loadConnections({ force = false } = {}) {
+async function loadConnections({ force = false, stale = false } = {}) {
   const settings = await readSettings();
   const tenant = await tenantFor(settings);
 
   if (!force) {
-    const cached = await cachedFor(CONNECTIONS_KEY, settings, tenant);
+    const cached = await cachedFor(CONNECTIONS_KEY, settings, tenant, undefined, stale);
     if (cached) return cached;
   }
 
@@ -465,12 +468,12 @@ const HEALTH_KEY = "health-data";
  * vilka okända grupp-id som är borttagna, och anslutningarna. Själva reglerna
  * körs i sidan — här hämtas bara underlaget.
  */
-async function loadHealth({ force = false } = {}) {
+async function loadHealth({ force = false, stale = false } = {}) {
   const settings = await readSettings();
   const tenant = await tenantFor(settings);
 
   if (!force) {
-    const cached = await cachedFor(HEALTH_KEY, settings, tenant, (c) => c.prefix === settings.prefix);
+    const cached = await cachedFor(HEALTH_KEY, settings, tenant, (c) => c.prefix === settings.prefix, stale);
     if (cached) return cached;
   }
 
@@ -526,17 +529,51 @@ async function loadHealth({ force = false } = {}) {
 }
 
 const DEVICES_KEY = "devices-data";
+const MEMBERS_KEY = "member-index";
+const membersFlight = singleFlight();
+
+/**
+ * Vilka av trädets grupper varje enhet och användare ligger i — för Reports
+ * gruppkolumner. Hämtas först när en sådan kolumn slås på: ett anrop per
+ * grupp, i klump, som hälsokontrollens medlemsläsning.
+ */
+async function loadMemberIndex({ force = false, stale = false } = {}) {
+  const settings = await readSettings();
+  const tenant = await tenantFor(settings);
+
+  if (!force) {
+    const cached = await cachedFor(MEMBERS_KEY, settings, tenant, (c) => c.prefix === settings.prefix, stale);
+    if (cached) return cached;
+  }
+
+  return membersFlight(modeKey(settings, tenant), async () => {
+    const tree = await loadTree();
+    const clients = clientsFor(settings);
+    if (!settings.demo) await ensureTokens();
+
+    const index = await fetchMemberIndex(
+      clients.groups,
+      tree.groups.map((g) => g.id),
+      (done, total) => broadcast({ type: "progress", stage: "warehouse", detail: `groups ${done}/${total}` })
+    );
+    await sameTenantAfter(settings, tenant);
+
+    const payload = { ...index, prefix: settings.prefix, demo: settings.demo, tenant, fetchedAt: Date.now() };
+    await writeCache(MEMBERS_KEY, payload);
+    return payload;
+  });
+}
 
 /**
  * Alla hanterade enheter, för Shared accounts. Hämtas först när fliken
  * öppnas — i en skolkommun är det tusentals enheter, och trädet behöver dem inte.
  */
-async function loadDevices({ force = false } = {}) {
+async function loadDevices({ force = false, stale = false } = {}) {
   const settings = await readSettings();
   const tenant = await tenantFor(settings);
 
   if (!force) {
-    const cached = await cachedFor(DEVICES_KEY, settings, tenant);
+    const cached = await cachedFor(DEVICES_KEY, settings, tenant, undefined, stale);
     if (cached) return cached;
   }
 
@@ -560,11 +597,11 @@ const APPS_KEY = "detected-apps";
 const appsFlight = singleFlight();
 
 /** Appinventeringen, en gång per kvart och tenant — den är stor och ändras sällan. */
-async function loadDetectedApps({ force = false } = {}) {
+async function loadDetectedApps({ force = false, stale = false } = {}) {
   const settings = await readSettings();
   const tenant = await tenantFor(settings);
   if (!force) {
-    const cached = await cachedFor(APPS_KEY, settings, tenant);
+    const cached = await cachedFor(APPS_KEY, settings, tenant, undefined, stale);
     if (cached) return cached;
   }
   return appsFlight(modeKey(settings, tenant), async () => {
@@ -580,6 +617,28 @@ async function loadDetectedApps({ force = false } = {}) {
   });
 }
 
+/**
+ * Enheterna per app i appfiltret, i minnet så länge servicearbetaren lever.
+ * Samma app frågas annars om varje gång den bockas i. Nyckeln innehåller
+ * läget och appens versioner, så en ny inventering ger nya frågor.
+ */
+const appDevicesCache = new Map();
+const APP_DEVICES_TTL_MS = 15 * 60 * 1000;
+
+async function appDevicesFor(settings, tenant, app, clients, force) {
+  const key = `${modeKey(settings, tenant)}|${app.ids.join(",")}`;
+  const hit = appDevicesCache.get(key);
+  if (!force && hit && Date.now() - hit.at < APP_DEVICES_TTL_MS) return hit.promise;
+  const promise = fetchAppDevices(clients.apps, clients.backend, app.ids);
+  const entry = { at: Date.now(), promise };
+  appDevicesCache.set(key, entry);
+  // Ett misslyckat svar sparas inte — nästa försök frågar om.
+  promise.catch(() => {
+    if (appDevicesCache.get(key) === entry) appDevicesCache.delete(key);
+  });
+  return promise;
+}
+
 /** Demots flöde. Demoklienten svarar på sökvägen, värden spelar ingen roll. */
 const DEMO_FEED = { root: "https://fef.demo.manage.microsoft.com/ReportingService/DataWarehouseFEService", apiVersion: "v1.0", from: "demo" };
 
@@ -593,13 +652,13 @@ const DEMO_FEED = { root: "https://fef.demo.manage.microsoft.com/ReportingServic
  * get_data_warehouse, som portalen aldrig hämtar — i praktiken inloggningsläget
  * med en egen app-registrering.
  */
-async function loadWarehouse({ force = false } = {}) {
+async function loadWarehouse({ force = false, stale = false } = {}) {
   const settings = await readSettings();
   const tenant = await tenantFor(settings);
   const source = settings.summarySource === "warehouse" ? "warehouse" : "graph";
 
   if (!force) {
-    const cached = await cachedFor(WAREHOUSE_KEY, settings, tenant, (c) => c.source === source);
+    const cached = await cachedFor(WAREHOUSE_KEY, settings, tenant, (c) => c.source === source, stale);
     if (cached) return cached;
   }
 
@@ -745,12 +804,12 @@ const SCORE_KEY = "score-data";
  * Poängens underlag: tenantens inställningar och enhetsinventariet, plus
  * policyerna som trädet redan hämtat. Själva granskningarna körs i sidan.
  */
-async function loadScore({ force = false } = {}) {
+async function loadScore({ force = false, stale = false } = {}) {
   const settings = await readSettings();
   const tenant = await tenantFor(settings);
 
   if (!force) {
-    const cached = await cachedFor(SCORE_KEY, settings, tenant);
+    const cached = await cachedFor(SCORE_KEY, settings, tenant, undefined, stale);
     if (cached) return cached;
   }
 
@@ -819,7 +878,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     tree: async () => {
       try {
-        return { ok: true, data: await loadTree({ force: Boolean(message.force) }) };
+        return { ok: true, data: await loadTree({ force: Boolean(message.force), stale: Boolean(message.stale) }) };
       } catch (e) {
         return { ok: false, error: e.message ?? String(e), status: e.status ?? 0 };
       }
@@ -827,7 +886,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     connections: async () => {
       try {
-        return { ok: true, data: await loadConnections({ force: Boolean(message.force) }) };
+        return { ok: true, data: await loadConnections({ force: Boolean(message.force), stale: Boolean(message.stale) }) };
       } catch (e) {
         return { ok: false, error: e.message ?? String(e) };
       }
@@ -835,7 +894,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     devices: async () => {
       try {
-        return { ok: true, data: await loadDevices({ force: Boolean(message.force) }) };
+        return { ok: true, data: await loadDevices({ force: Boolean(message.force), stale: Boolean(message.stale) }) };
       } catch (e) {
         return { ok: false, error: e.message ?? String(e) };
       }
@@ -844,21 +903,36 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // Reports: appinventeringen (Discovered apps), och enheterna som har vissa appar.
     "detected-apps": async () => {
       try {
-        return { ok: true, data: await loadDetectedApps({ force: Boolean(message.force) }) };
+        return { ok: true, data: await loadDetectedApps({ force: Boolean(message.force), stale: Boolean(message.stale) }) };
       } catch (e) {
         return { ok: false, error: readable(e) };
       }
     },
 
+    // Svaret är per app, så att sidan kan spara varje app för sig och slå
+    // ihop urvalet själv — att bocka ur och i en app kostar då inget anrop.
     "app-devices": async () => {
       try {
         const settings = await readSettings();
         if (!settings.demo) await ensureTokens();
+        const tenant = await tenantFor(settings);
         const { apps } = await loadDetectedApps();
-        const wanted = new Set((message.names ?? []).map((n) => String(n).toLocaleLowerCase("sv")));
-        const ids = apps.filter((a) => wanted.has(a.name.toLocaleLowerCase("sv"))).flatMap((a) => a.ids);
         const clients = clientsFor(settings);
-        return { ok: true, deviceIds: await fetchAppDevices(clients.apps, clients.backend, ids) };
+        const wanted = new Set((message.names ?? []).map((n) => String(n).toLocaleLowerCase("sv")));
+        const chosen = apps.filter((a) => wanted.has(a.name.toLocaleLowerCase("sv")));
+        const lists = await Promise.all(
+          chosen.map((app) => appDevicesFor(settings, tenant, app, clients, Boolean(message.force)))
+        );
+        const byName = Object.fromEntries(chosen.map((app, i) => [app.name, lists[i]]));
+        return { ok: true, byName, deviceIds: [...new Set(lists.flat())] };
+      } catch (e) {
+        return { ok: false, error: readable(e) };
+      }
+    },
+
+    "member-index": async () => {
+      try {
+        return { ok: true, data: await loadMemberIndex({ force: Boolean(message.force), stale: Boolean(message.stale) }) };
       } catch (e) {
         return { ok: false, error: readable(e) };
       }
@@ -866,7 +940,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     warehouse: async () => {
       try {
-        return { ok: true, data: await loadWarehouse({ force: Boolean(message.force) }) };
+        return { ok: true, data: await loadWarehouse({ force: Boolean(message.force), stale: Boolean(message.stale) }) };
       } catch (e) {
         return { ok: false, error: e.message ?? String(e), code: e.code ?? null, portalPage: PORTAL_PAGE };
       }
@@ -874,7 +948,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     health: async () => {
       try {
-        return { ok: true, data: await loadHealth({ force: Boolean(message.force) }) };
+        return { ok: true, data: await loadHealth({ force: Boolean(message.force), stale: Boolean(message.stale) }) };
       } catch (e) {
         return { ok: false, error: e.message ?? String(e) };
       }
@@ -882,7 +956,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     score: async () => {
       try {
-        return { ok: true, data: await loadScore({ force: Boolean(message.force) }) };
+        return { ok: true, data: await loadScore({ force: Boolean(message.force), stale: Boolean(message.stale) }) };
       } catch (e) {
         return { ok: false, error: e.message ?? String(e) };
       }

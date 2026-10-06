@@ -4,6 +4,62 @@ Version scheme: `0.1`, `0.2`, `0.3` … One step per delivered batch of work.
 The version lives in `manifest.json` and must always match the top entry here.
 `1.0` when the extension is stable enough to use daily without reservations.
 
+## 0.25 — 2026-10-06
+
+Snappier: tabs are ready before you click them, saved data shows at once
+while fresh data loads on top, and answers already fetched are reused
+instead of asked for again.
+
+### All tabs
+
+- **Saved data first, fresh data on top.** Every tab shows the last data it
+  fetched straight away — however old — and fetches again in the background.
+  The status row says "Showing data from 12 min ago — updating …", and the
+  new data replaces the old when it arrives. The tree keeps what is expanded,
+  selected and searched. If the update fails, the saved data stays with a note
+  saying so. Data fetched within the last minute is not fetched again.
+
+- **Every tab loads in the background.** Once the tab you opened is ready, the
+  others are set up one at a time while the browser is idle — Connections,
+  Score, Licenses, Shared accounts, Reports, Health check — so switching tabs
+  shows the finished view instead of starting a fetch. A tab is only preloaded
+  when its permissions are already there; one that failed in the background
+  tries again when you open it.
+
+### Page
+
+- **Settings open inside Inu+.** ⚙ shows Settings in place of the tab, with
+  **← Back** (or Esc, or any tab) to return — no separate browser tab to find
+  your way back from. They follow the portal's theme like the rest of the page.
+- **Nothing pops up on install.** Inu+ waits in the portal's left rail until
+  you open it; the first-run choice is shown then, on the page.
+
+### Group Tree
+
+- **Search for an app and see where it goes.** Type an app or configuration
+  (Spotify, a Wi-Fi profile …) in the search box and pick it from the chips
+  under the toolbar. The tree shows every group it reaches: **Assigned ·
+  Required** where it is assigned, **Inherits** on the nested groups below —
+  their members get it too — and **Excluded** where an exclusion stops it,
+  including below an excluded group. A line above the tree counts them.
+
+### Reports
+
+- **Choose the device list's columns.** A **Columns** menu on the device list
+  adds or removes information: enrolled date, management state, encryption,
+  ownership, enrollment profile, display name — and where the device sits in
+  the group tree: **Device groups**, **Place in tree** (the path down to its
+  group) and **User's groups**. The groups are read from Entra the first time
+  such a column is turned on; then search finds devices by group name too. The
+  choice is remembered and follows into the export.
+- **The installed-app filter remembers what it fetched.** Each app's devices
+  are kept per app, so unticking and ticking Spotify again, or adding a second
+  app, is instant and only asks for what is new. ⟳ fetches them fresh.
+- **App versions are queried in parallel** (four at a time) instead of one
+  after another, so an app with many versions comes back much faster.
+- **The app inventory is read in the background** as soon as the devices are
+  in, so the Installed app menu opens already filled in.
+
 ## 0.24 — 2026-10-06
 
 Reports can be narrowed by OS version.

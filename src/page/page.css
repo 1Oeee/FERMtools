@@ -2423,3 +2423,182 @@ button.wh-jump:disabled {
   gap: 10px;
   align-items: center;
 }
+
+/* --- Tradet: vart en app nar --- */
+
+.tree-reach {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 14px 8px;
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+}
+
+.reach-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  font-size: 12px;
+}
+
+.reach-kind {
+  padding: 0 6px;
+  border-radius: 9px;
+  color: #fff;
+  font-size: 11px;
+}
+
+.reach-kind.app {
+  background: var(--app);
+}
+
+.reach-kind.config {
+  background: var(--config);
+}
+
+.reach-count {
+  color: var(--muted);
+}
+
+.reach-count.excluded {
+  color: var(--bad);
+}
+
+.reach-count.global {
+  color: var(--warn);
+}
+
+.reach-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 2px 9px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.reach-chip:hover {
+  background: var(--hover);
+}
+
+.reach-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--app);
+}
+
+.reach-chip.config .reach-dot {
+  background: var(--config);
+}
+
+/* Markeringen pa raden: tilldelad, arvd eller undantagen. Alltid med ord, aldrig bara farg. */
+.reach-badge {
+  flex: 0 0 auto;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.reach-badge.direct {
+  border-color: var(--app);
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.reach-badge.inherited {
+  border-style: dashed;
+  color: var(--muted);
+}
+
+.reach-badge.excluded {
+  border-color: var(--bad);
+  color: var(--bad);
+}
+
+/* Forfader som bara visas for att na traffarna. */
+.row.unreached .name {
+  color: var(--muted);
+}
+
+/* --- Reports: kolumnvalet --- */
+
+.wh-card-head .wh-columns {
+  margin-left: auto;
+}
+
+.wh-card-head .wh-columns + select.wh-size {
+  margin-left: 0;
+}
+
+/* Förankrad i pillrets högerkant, som appväljaren — pillret står längst till höger. */
+.wh-menu-right {
+  left: auto;
+  right: 0;
+  max-height: 380px;
+}
+
+.wh-menu-head {
+  padding: 8px 12px 2px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.wh-menu-reset {
+  margin: 6px 12px 4px;
+}
+
+.wh-path {
+  white-space: nowrap;
+}
+
+/* --- Installningar inne i Inu+ --- */
+
+#module[hidden],
+.settings-view[hidden] {
+  display: none;
+}
+
+.settings-view {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.settings-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.settings-bar h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.settings-view iframe {
+  flex: 1;
+  width: 100%;
+  border: 0;
+  background: var(--bg);
+}
+
+.icon.active {
+  background: var(--selected);
+}
