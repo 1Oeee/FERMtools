@@ -588,7 +588,7 @@ There are two release channels:
 | Channel | When | Where |
 | --- | --- | --- |
 | **Release** (`Inu+ 0.24`) | Push to `main` with a new version | Chrome Web Store + GitHub release `v<version>`, marked Latest |
-| **Dev** (`Inu+ dev`) | Every push to any other branch | One rolling GitHub pre-release, tag `dev`, replaced each time |
+| **Dev** | Every push to any other branch | A download under **Actions → Dev build** — never on the Releases page |
 
 A new version goes out like this:
 
@@ -601,15 +601,15 @@ tag and the GitHub release with the zip file.
 
 ### Dev builds
 
-`.github/workflows/dev.yml` runs the tests and publishes the newest work as a
-single pre-release, **Inu+ dev**, on every push to a branch other than `main`.
-The previous dev release is deleted and recreated, so there is only ever one.
-Its description lists every commit since the last real release and the top
-`CHANGELOG.md` entry, and it carries `inuplus-dev.zip`: unzip, **Load
-unpacked**. The packaged manifest gets a `version_name` such as
+`.github/workflows/dev.yml` runs the tests and packages the newest work on
+every push to a branch other than `main`. It is **not** a release: open
+**Actions → Dev build → the latest run**. The top of the run page lists every
+commit since the last real release and the top `CHANGELOG.md` entry; the
+package, `inuplus-dev`, is under **Artifacts** at the bottom — download,
+unzip, **Load unpacked**. Older dev packages are deleted, so only the newest
+is kept. The packaged manifest gets a `version_name` such as
 `0.25 dev (a1b2c3d)`, so `edge://extensions` shows which build is loaded. Dev
-builds never touch the Chrome Web Store, and as pre-releases they never take
-the Latest badge from the real release.
+builds never touch the Chrome Web Store or the Releases page.
 
 The first version is uploaded by hand in the Developer Dashboard — the API can
 only update an extension that already exists. The workflow then needs:
