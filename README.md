@@ -22,7 +22,8 @@ flat lists make it hard to see what goes where.
 - **Your own permissions.** It sees exactly what your account can see, nothing
   more.
 
-Current version: **0.25** — see the [changelog](CHANGELOG.md).
+**[Get Inu+ from the Chrome Web Store](https://chromewebstore.google.com/detail/inu+/oalgghjpilfemfcneeelcpjiiookipng)** — works in Chrome and
+Microsoft Edge. Current version: **0.25** — see the [changelog](CHANGELOG.md).
 
 ## Contents
 
@@ -55,26 +56,24 @@ macOS) applies to every tab.
 
 ### Install
 
-Inu+ needs no build step and no installed tools. You load the folder as it is.
+1. Open **[Inu+ in the Chrome Web Store](https://chromewebstore.google.com/detail/inu+/oalgghjpilfemfcneeelcpjiiookipng)** and click **Add to
+   Chrome**. In Microsoft Edge, first click **Allow** when Edge asks about
+   extensions from other stores, then **Add to Chrome**.
+2. Open [intune.microsoft.com](https://intune.microsoft.com) and sign in.
+3. Click **Inu+** in the left rail, directly under **Home**.
 
-1. Get the extension:
-   - **A release:** download the zip from the latest
-     [release](https://github.com/1Oeee/FERMtools/releases) and unzip it, or
-   - **The newest development build:** see [Dev builds](#dev-builds), or
-   - **The source:** clone this repository.
-2. Open `edge://extensions` (or `chrome://extensions`) and turn on **Developer
-   mode**.
-3. Click **Load unpacked** and choose the folder that contains `manifest.json`.
-4. Open [intune.microsoft.com](https://intune.microsoft.com) and sign in.
-5. Click **Inu+** in the left rail, directly under **Home**.
+That's it. Installing opens nothing by itself — Inu+ waits in the portal's left
+rail until you click it. Updates arrive automatically from the store.
 
-Installing opens nothing by itself: Inu+ waits in the portal's left rail until
-you click it. The extension's toolbar icon also takes you there — to your portal
-tab, or a new one. **⧉** at the top of the page opens Inu+ in a tab of its own,
-which is handy if you want it open while you work in the portal.
+The extension's toolbar icon also takes you to Inu+, in your portal tab or a new
+one. **⧉** at the top of the page opens Inu+ in a tab of its own, which is handy
+if you want it open while you work in the portal.
 
-Releases are also submitted to the Chrome Web Store, which Edge can install from
-as well.
+**Testing a version that isn't in the store yet?** Download the newest
+[dev build](#dev-builds), unzip it, turn on **Developer mode** on
+`edge://extensions` (or `chrome://extensions`), click **Load unpacked** and
+choose the folder with `manifest.json`. Remove the store version first, or
+you'll have two Inu+ entries.
 
 ### First run
 
@@ -331,10 +330,10 @@ logged under its own name.
 
 1. Entra admin center → **App registrations** → **New registration**. Name it,
    for example, *Inu+*. Single tenant is fine.
-2. **Authentication** → **Add a platform** → **Single-page application**. Use
-   the redirect URI shown in Inu+'s Settings
-   (`https://<extension-id>.chromiumapp.org/`). A store install and an unpacked
-   copy have different IDs; add both if both are used.
+2. **Authentication** → **Add a platform** → **Single-page application**, with
+   the redirect URI `https://oalgghjpilfemfcneeelcpjiiookipng.chromiumapp.org/`
+   for the store version. Inu+'s Settings show the exact value for your install;
+   an unpacked copy has a different ID, so add its URI too if you use one.
 3. **API permissions** → **Microsoft Graph** → **Delegated**, then **Grant admin
    consent**. All are read-only; leave out what you don't want Inu+ to see, and
    that part of the page stays grey.
@@ -360,13 +359,17 @@ value set by policy is locked in Settings. For Edge, for example with an Intune
 script or custom profile:
 
 ```
-HKLM\Software\Policies\Microsoft\Edge\3rdparty\extensions\<extension-id>\policy
+HKLM\Software\Policies\Microsoft\Edge\3rdparty\extensions\oalgghjpilfemfcneeelcpjiiookipng\policy
   authMode      = "msal"
   msalClientId  = "<client id>"
   msalTenant    = "<tenant id>"
 ```
 
-For Chrome, use `HKLM\Software\Policies\Google\Chrome\3rdparty\extensions\<extension-id>\policy`.
+For Chrome, use `HKLM\Software\Policies\Google\Chrome\3rdparty\extensions\oalgghjpilfemfcneeelcpjiiookipng\policy`.
+To roll Inu+ out to every admin's browser at the same time, add it to the
+browser's force-install list (`ExtensionInstallForcelist`) as
+`oalgghjpilfemfcneeelcpjiiookipng;https://clients2.google.com/service/update2/crx`
+— Edge needs the Chrome Web Store update URL to install from that store.
 
 ## Settings
 
@@ -490,7 +493,7 @@ build checks it.
 
 | Channel | When | Where |
 | --- | --- | --- |
-| **Release** | A push to `main` with a new version | Chrome Web Store, and a GitHub release `v<version>` with the zip |
+| **Release** | A push to `main` with a new version | [Chrome Web Store](https://chromewebstore.google.com/detail/inu+/oalgghjpilfemfcneeelcpjiiookipng), and a GitHub release `v<version>` with the zip |
 | **Dev build** | Every push to any other branch | A download under Actions — never on the Releases page |
 
 **To release:** raise `version` in `manifest.json`, add the entry to
