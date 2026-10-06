@@ -574,15 +574,25 @@ export function complianceLabel(state) {
  *
  * @param {object[]} devices
  * @param {{ managedOnly?: boolean, manufacturers?: string[]|null, models?: string[]|null,
- *           compliance?: ""|"compliant"|"noncompliant", platform?: string, query?: string }} filter
- *   manufacturers och models null = alla.
+ *           osVersions?: string[]|null, compliance?: ""|"compliant"|"noncompliant", platform?: string,
+ *           query?: string }} filter
+ *   manufacturers, models och osVersions null = alla.
  */
 export function filterDevices(
   devices,
-  { managedOnly = true, manufacturers = null, models = null, compliance = "", platform = "", query = "" } = {}
+  {
+    managedOnly = true,
+    manufacturers = null,
+    models = null,
+    osVersions = null,
+    compliance = "",
+    platform = "",
+    query = ""
+  } = {}
 ) {
   const wanted = manufacturers ? new Set(manufacturers.map((m) => m.toLowerCase())) : null;
   const wantedModels = models ? new Set(models) : null;
+  const wantedVersions = osVersions ? new Set(osVersions) : null;
   const needle = query.trim().toLocaleLowerCase("sv");
 
   return devices.filter((device) => {
@@ -590,6 +600,7 @@ export function filterDevices(
     // Samma namn som i listan manufacturersIn() ger — en tom tillverkare heter Unknown där.
     if (wanted && !wanted.has(String(device.manufacturer || UNKNOWN).toLowerCase())) return false;
     if (wantedModels && !wantedModels.has(device.model || UNKNOWN)) return false;
+    if (wantedVersions && !wantedVersions.has(device.osVersion || UNKNOWN)) return false;
     if (compliance && complianceOf(device) !== compliance) return false;
     if (platform) {
       const own = platformOfType(device.type);
@@ -610,6 +621,21 @@ export function modelsIn(devices) {
   const counts = new Map();
   for (const device of devices) {
     const name = device.model || UNKNOWN;
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => (a[0] === UNKNOWN) - (b[0] === UNKNOWN) || a[0].localeCompare(b[0], "sv", { numeric: true, sensitivity: "base" }))
+    .map(([name, count]) => ({ name, count }));
+}
+
+/**
+ * OS-versionerna i datat i versionsordning — 17.6.1, 17.7, 18.0 … 18.10 —
+ * inte efter antal och inte som text, där 18.10 hade hamnat före 18.2.
+ */
+export function osVersionsIn(devices) {
+  const counts = new Map();
+  for (const device of devices) {
+    const name = device.osVersion || UNKNOWN;
     counts.set(name, (counts.get(name) ?? 0) + 1);
   }
   return [...counts.entries()]

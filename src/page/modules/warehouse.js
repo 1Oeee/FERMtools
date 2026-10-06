@@ -27,6 +27,7 @@ import {
   filterDevices,
   manufacturersIn,
   modelsIn,
+  osVersionsIn,
   complianceOf,
   complianceLabel,
   pivot,
@@ -52,6 +53,7 @@ const state = {
   /** Urvalet. null = alla. Bara hanterade enheter räknas, som i Excel-frågan. */
   manufacturers: null,
   models: null,
+  osVersions: null,
   orgs: null,
   types: null,
   /** "" = alla, "compliant" eller "noncompliant". */
@@ -100,7 +102,7 @@ async function loadView() {
     const stored = (await chrome.storage.local.get(VIEW_KEY))?.[VIEW_KEY] ?? {};
     if (["", "compliant", "noncompliant"].includes(stored.compliance)) state.compliance = stored.compliance;
     if (PAGE_SIZES.includes(stored.pageSize)) state.pageSize = stored.pageSize;
-    for (const key of ["manufacturers", "models", "orgs", "types"]) {
+    for (const key of ["manufacturers", "models", "osVersions", "orgs", "types"]) {
       if (Array.isArray(stored[key])) state[key] = stored[key];
     }
   } catch {
@@ -109,8 +111,8 @@ async function loadView() {
 }
 
 function saveView() {
-  const { manufacturers, models, orgs, types, compliance, pageSize } = state;
-  chrome.storage.local.set({ [VIEW_KEY]: { manufacturers, models, orgs, types, compliance, pageSize } }).catch(() => {});
+  const { manufacturers, models, osVersions, orgs, types, compliance, pageSize } = state;
+  chrome.storage.local.set({ [VIEW_KEY]: { manufacturers, models, osVersions, orgs, types, compliance, pageSize } }).catch(() => {});
 }
 
 // --- Underlaget -----------------------------------------------------------
@@ -125,13 +127,18 @@ function withOrgs(devices) {
  * Urvalet i två steg. `base` är allt utom klienttypen — rutorna räknas på
  * den, så att en vald typ inte får de andra att försvinna. `rows` är det som
  * visas under rutorna och exporteras.
+ *
+ * @param {string|null} skip ett filter att räkna utan (state-nyckeln) — det
+ *   filtrets meny listar vad resten av urvalet innehåller.
  */
-function select(all) {
-  const orgs = state.orgs ? new Set(state.orgs) : null;
+function select(all, skip = null) {
+  const pick = (key) => (key === skip ? null : state[key]);
+  const orgs = pick("orgs") ? new Set(state.orgs) : null;
   const base = filterDevices(all, {
-    manufacturers: state.manufacturers,
-    models: state.models,
-    compliance: state.compliance,
+    manufacturers: pick("manufacturers"),
+    models: pick("models"),
+    osVersions: pick("osVersions"),
+    compliance: pick("compliance") ?? "",
     platform: ctx.platform,
     query: state.query
   })
@@ -142,20 +149,55 @@ function select(all) {
   return { base, rows: types ? base.filter((device) => types.has(typeOf(device))) : base };
 }
 
+/** Flervalsfiltren, i den ordning de står. `list` ger menyns val ur en enhetslista. */
+const FACETS = [
+  { key: "manufacturers", list: manufacturersIn },
+  { key: "models", list: modelsIn },
+  { key: "osVersions", list: osVersionsIn },
+  { key: "orgs", list: (rows) => countsOf(rows, (d) => d.org) }
+];
+
+/**
+ * Varje filtermeny listar det som finns i resten av urvalet — klienttypen och
+ * alla andra filter, men inte filtret självt (då kunde man bara välja det man
+ * redan valt). Väljer man IPad listas iPadernas modeller och versioner; väljer
+ * man en version listas modellerna som har den.
+ *
+ * Val släpps aldrig av sig själva: ett val som inte finns i resten av urvalet
+ * står kvar sist i listan med (0), så att det syns och går att bocka ur.
+ *
+ * @returns {{ [key: string]: { name: string, count: number }[], compliance: Map<string, number> }}
+ */
+function facetsOf(all) {
+  const compliance = countsOf(select(all, "compliance").rows, complianceOf);
+  const facets = { compliance: new Map(compliance.map((c) => [c.name, c.count])) };
+  for (const { key, list } of FACETS) {
+    const items = list(select(all, key).rows);
+    const present = new Set(items.map((item) => item.name));
+    const missing = (state[key] ?? []).filter((name) => !present.has(name));
+    facets[key] = [...items, ...missing.map((name) => ({ name, count: 0 }))];
+  }
+  return facets;
+}
+
 function formatDate(iso) {
   return iso ? new Date(iso).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short" }) : "";
 }
 
 /** Urvalet i ord — överst i Excel-bladet, så att man ser vad filen innehåller. */
 function selectionText() {
+  // Samma ordning som filtren på sidan.
   const parts = [
-    `${orgLabel()}: ${state.orgs ? state.orgs.join(", ") || "none" : "all"}`,
     `Client type: ${state.types ? state.types.join(", ") || "none" : "all"}`,
-    `Model: ${state.models ? state.models.join(", ") || "none" : "all"}`,
     `Manufacturer: ${state.manufacturers ? state.manufacturers.join(", ") || "none" : "all"}`,
-    `Compliance: ${{ compliant: "compliant", noncompliant: "not compliant" }[state.compliance] ?? "all"}`
+    `Model: ${state.models ? state.models.join(", ") || "none" : "all"}`,
+    `OS version: ${state.osVersions ? state.osVersions.join(", ") || "none" : "all"}`
   ];
   if (state.apps) parts.push(`Has app: ${state.apps.join(" or ")}`);
+  parts.push(
+    `Compliance: ${{ compliant: "compliant", noncompliant: "not compliant" }[state.compliance] ?? "all"}`,
+    `${orgLabel()}: ${state.orgs ? state.orgs.join(", ") || "none" : "all"}`
+  );
   if (ctx.platform) parts.push(`Platform: ${platformLabel(ctx.platform)}`);
   if (state.query.trim()) parts.push(`Search: “${state.query.trim()}”`);
   return parts.join(" · ");
@@ -514,21 +556,24 @@ function renderCommandBar(total) {
   exportButton.addEventListener("click", exportXlsx);
   bar.append(exportButton);
 
-  const reset = el("button", "wh-command", "Clear selection");
+  // Står alltid på samma plats, vid hoppen, och är avstängd när inget filter är satt.
+  const reset = el("button", "wh-command");
   reset.type = "button";
-  reset.hidden = !(state.orgs || state.types || state.manufacturers || state.models || state.compliance || state.apps || state.query);
+  reset.title = "Clear every filter, the client-type tiles and the search";
+  reset.append(el("span", "wh-command-icon", "✕"), "Reset filters");
+  reset.disabled = !(state.orgs || state.types || state.manufacturers || state.models || state.osVersions || state.compliance || state.apps || state.query);
   reset.addEventListener("click", () => {
-    state.orgs = state.types = state.manufacturers = state.models = state.apps = null;
+    state.orgs = state.types = state.manufacturers = state.models = state.osVersions = state.apps = null;
     ui.appDevices = null;
     ui.appError = null;
     state.compliance = "";
     state.query = "";
     changed();
   });
-  bar.append(reset);
 
   // Hopp till avsnitten — sidan är lång när listorna har tusentals rader.
   const jumps = el("nav", "wh-jumps");
+  jumps.append(reset);
   for (const [id, label] of [
     ["overview", "Overview"],
     ["devices", `Devices (${number(total)})`]
@@ -546,7 +591,8 @@ function renderCommandBar(total) {
  * Ett val av flera, som menypiller — samma form och bredd som de andra
  * pillren, i stället för en rullgardin som sträcker ut sig.
  * @param {string} key state-nyckeln
- * @param {[string, string][]} options [värde, text]; det första är "alla"
+ * @param {[string, string, number?][]} options [värde, text, antal]; det första är "alla".
+ *   Antalet visas i menyn, inte i pillret.
  */
 function singlePill(key, label, options, title = "") {
   const box = el("details", `wh-pill wh-pill-menu${state[key] ? " wh-pill-set" : ""}`);
@@ -558,7 +604,7 @@ function singlePill(key, label, options, title = "") {
 
   const menu = el("div", "wh-menu");
   menu.setAttribute("role", "radiogroup");
-  for (const [value, text] of options) {
+  for (const [value, text, count] of options) {
     const row = el("label", "wh-menu-item");
     const input = el("input");
     input.type = "radio";
@@ -569,7 +615,7 @@ function singlePill(key, label, options, title = "") {
       box.open = false;
       changed();
     });
-    row.append(input, text);
+    row.append(input, count == null ? text : `${text} (${number(count)})`);
     menu.append(row);
   }
   box.append(menu);
@@ -799,7 +845,7 @@ function countsOf(rows, of) {
     .map(([name, count]) => ({ name, count }));
 }
 
-function renderFilters(all) {
+function renderFilters(facets) {
   const row = el("div", "wh-filters");
 
   const search = el("input", "wh-search");
@@ -819,21 +865,22 @@ function renderFilters(all) {
 
   row.append(
     search,
-    multiPill("orgs", orgLabel(), countsOf(all, (d) => d.org)),
-    multiPill("models", "Model", modelsIn(state.data?.devices ?? [])),
-    multiPill("manufacturers", "Manufacturer", manufacturersIn(state.data?.devices ?? [])),
+    multiPill("manufacturers", "Manufacturer", facets.manufacturers),
+    multiPill("models", "Model", facets.models),
+    multiPill("osVersions", "OS version", facets.osVersions),
     appPill(),
     singlePill(
       "compliance",
       "Compliance",
       [
-        ["", "All"],
-        ["compliant", "Compliant"],
-        ["noncompliant", "Not compliant"]
+        ["", "All", [...facets.compliance.values()].reduce((sum, n) => sum + n, 0)],
+        ["compliant", "Compliant", facets.compliance.get("compliant") ?? 0],
+        ["noncompliant", "Not compliant", facets.compliance.get("noncompliant") ?? 0]
       ],
       "Not compliant includes devices in their grace period, in conflict and with errors. " +
         "Devices Intune has not evaluated yet are only under All."
-    )
+    ),
+    multiPill("orgs", orgLabel(), facets.orgs)
   );
   return row;
 }
@@ -909,6 +956,7 @@ function draw() {
   // Färgerna räknas på allt hämtat, så att ett urval inte målar om något.
   ui.series = seriesFor(state.data.devices, TYPE.of);
   const all = withOrgs(state.data.devices);
+  const facets = facetsOf(all);
   const { base, rows } = select(all);
   ui.base = base;
   ui.rows = rows;
@@ -920,7 +968,7 @@ function draw() {
   const hadFocus = host.querySelector(".wh-search") === document.activeElement;
   const page = el("div", "wh-page");
   const top = el("div", "wh-top");
-  top.append(renderCommandBar(rows.length), renderFilters(all));
+  top.append(renderCommandBar(rows.length), renderFilters(facets));
   page.append(top);
 
   const content = el("div", "wh-content");

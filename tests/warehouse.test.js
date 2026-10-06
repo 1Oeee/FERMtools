@@ -29,6 +29,7 @@ import {
   filterDevices,
   manufacturersIn,
   modelsIn,
+  osVersionsIn,
   complianceOf,
   complianceLabel,
   platformOfType,
@@ -321,6 +322,29 @@ test("rapport: modellfiltret, generationerna i följd", () => {
   assert.equal(modelsIn(devices).find((m) => m.name === "iPad (6th generation)").count, 2, "antal");
   assert.equal(filterDevices(devices, { models: ["iPad (6th generation)", "iPad (10th generation)"] }).length, 3, "flera modeller");
   assert.equal(filterDevices(devices, { models: [UNKNOWN] }).length, 1, "enheter utan modell");
+});
+
+test("rapport: OS-versionsfiltret, versionerna i följd", () => {
+  const devices = ["18.10", "17.6.1", "18.2", null, "17.6.1", "18.0"].map((osVersion, i) => ({
+    name: `D${i}`,
+    model: "iPad (9th generation)",
+    osVersion,
+    state: "Managed",
+    type: "IPad"
+  }));
+  assert.same(
+    osVersionsIn(devices).map((v) => v.name),
+    ["17.6.1", "18.0", "18.2", "18.10", UNKNOWN],
+    "18.2 före 18.10 — och Unknown sist"
+  );
+  assert.equal(osVersionsIn(devices).find((v) => v.name === "17.6.1").count, 2, "antal");
+  assert.equal(filterDevices(devices, { osVersions: ["17.6.1", "18.10"] }).length, 3, "flera versioner");
+  assert.equal(filterDevices(devices, { osVersions: [UNKNOWN] }).length, 1, "enheter utan version");
+  assert.equal(
+    filterDevices(devices, { osVersions: ["18.0"], models: ["iPad (9th generation)"] }).length,
+    1,
+    "ihop med modellfiltret"
+  );
 });
 
 test("rapport: efterlevnadsfiltret — kompatibla och inte kompatibla", () => {

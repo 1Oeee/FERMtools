@@ -357,7 +357,7 @@ the device and primary-user lists, 50 rows per page.
 - **Select what you want, then export it.** Filter by municipality (the pill, or
   click a name in the overview), click one or more **client-type tiles** to show
   only those (Total resets), and narrow by **model** (iPad (5th generation), (6th)
-  … in order), manufacturer, **installed app** and **compliance** (compliant / not
+  … in order), **OS version** (18.2 before 18.10), manufacturer, **installed app** and **compliance** (compliant / not
   compliant — the latter includes grace period, conflict and error), or search.
   Everything below the tiles and the export follows the selection. Only managed
   devices are counted.
