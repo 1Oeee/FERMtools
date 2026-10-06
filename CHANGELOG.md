@@ -4,6 +4,27 @@ Version scheme: `0.1`, `0.2`, `0.3` … One step per delivered batch of work.
 The version lives in `manifest.json` and must always match the top entry here.
 `1.0` when the extension is stable enough to use daily without reservations.
 
+## 0.26 — 2026-10-06
+
+Tighter boundaries, from a security review.
+
+### Security
+
+- **Only Inu+'s own pages can control it.** The scripts Inu+ places in the
+  portal may only hand over tokens and say which portal page is open. Settings,
+  consent, sign-in and data fetches are refused from anywhere else.
+- **Intune service addresses are only learned from portal tabs.** Another tab
+  that happens to call Intune's backend (Company Portal on the web, say) can no
+  longer teach Inu+ an address.
+- **The release workflow only gets write access where it needs it.** Building
+  and testing read; only publishing, which creates the tag and release, writes.
+- The demo portal's title says it is the Inu+ demo.
+
+### Docs
+
+- The README installs from the Chrome Web Store, and uses the store ID in the
+  sign-in redirect URI and the policy keys.
+
 ## 0.25 — 2026-10-06
 
 Snappier: tabs are ready before you click them, saved data shows at once
