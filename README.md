@@ -23,7 +23,7 @@ flat lists make it hard to see what goes where.
   more.
 
 **[Get Inu+ from the Chrome Web Store](https://chromewebstore.google.com/detail/inu+/oalgghjpilfemfcneeelcpjiiookipng)** — works in Chrome and
-Microsoft Edge. Current version: **0.25** — see the [changelog](CHANGELOG.md).
+Microsoft Edge. Current version: **0.26** — see the [changelog](CHANGELOG.md).
 
 ## Contents
 

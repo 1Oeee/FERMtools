@@ -98,5 +98,7 @@ No. All code is in the package.
 - Privacy policy URL: https://github.com/1Oeee/FERMtools/blob/main/PRIVACY.md (works once PRIVACY.md is pushed to main)
 
 ## Assets still needed
-- Done: store/screenshot-*.png (1280x800) and store/promo-tile-440x280.png
-- Optionally add store/screenshot-4-consent.png (the first-run consent panel) to show reviewers the disclosure
+- Screenshots (1280x800) are not kept in the repo. Generate them from demo mode
+  with `node tests/screenshots.mjs`; they land in `store/`, which is git-ignored.
+- Promo tile 440x280 with the name **Inu+** (the old AidTune images are gone).
+- Optionally a screenshot of the first-run consent panel, to show reviewers the disclosure
